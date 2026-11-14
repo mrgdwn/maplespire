@@ -82,6 +82,10 @@ type EnemyEntity = {
   lastGoldenThreshold: number;
   mutations: MutationId[];
   mechanic: BiomeMechanicId | null;
+  flawTimer: number;
+  flawCooldown: number;
+  flawRing: Phaser.GameObjects.Arc | null;
+  flawText: Phaser.GameObjects.Text | null;
 };
 
 type ProjectileEntity = {
@@ -186,6 +190,7 @@ export class DungeonScene extends Scene {
   private wolfTimer: number = 0;
   private runeZapTimer: number = 0;
   private meteorTimer: number = 0;
+  private tribulationTimer: number = 0;
   private volatileSoulTimer: number = 0;
   private battleMomentumTimer: number = 0;
   private battleMomentumStacks: number = 0;
@@ -242,6 +247,11 @@ export class DungeonScene extends Scene {
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.phase !== 'combat' || this.enemies.length === 0) return;
+      const flawed = this.getFlawedEnemy();
+      if (flawed && this.triggerMeridianShatter(flawed)) {
+        this.emitHud();
+        return;
+      }
       this.attackTimer += 0.22;
       this.skillTimer = Math.max(0, this.skillTimer - 0.25);
       this.spawnFloatingText(pointer.x, pointer.y - 10, '+HASTE!', '#fde047', 11);
@@ -250,9 +260,21 @@ export class DungeonScene extends Scene {
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
       if (this.phase !== 'combat') return;
       if (event.code === 'KeyQ') {
+        const flawed = this.getFlawedEnemy();
+        if (flawed && this.triggerMeridianShatter(flawed)) {
+          this.emitHud();
+          return;
+        }
         this.triggerActiveSkill();
       } else if (event.code === 'KeyE' || event.code === 'Space') {
         event.preventDefault();
+        if (event.code === 'Space') {
+          const flawed = this.getFlawedEnemy();
+          if (flawed && this.triggerMeridianShatter(flawed)) {
+            this.emitHud();
+            return;
+          }
+        }
         this.triggerDash();
       } else if (event.code === 'KeyW') {
         this.triggerPotion();
@@ -485,6 +507,8 @@ export class DungeonScene extends Scene {
       e.hpBg.destroy();
       e.hpFill.destroy();
       e.nameText.destroy();
+      e.flawRing?.destroy();
+      e.flawText?.destroy();
     }
     this.enemies = [];
 
@@ -540,6 +564,7 @@ export class DungeonScene extends Scene {
     this.wolfTimer = 0;
     this.runeZapTimer = 0;
     this.meteorTimer = 0;
+    this.tribulationTimer = 0;
     this.volatileSoulTimer = 0;
     this.battleMomentumTimer = 0;
     this.battleMomentumStacks = 0;
@@ -649,15 +674,19 @@ export class DungeonScene extends Scene {
     }
     this.applyFloorStartShieldsAndPassives();
 
+    const isMountHuaSummit = floorNum >= 25 && floorNum % 10 === 5;
     if (
       isCultLeaderFloor(floorNum) ||
-      isRandomMiniBossFloor(floorNum, this.runConfig?.seed ?? 1)
+      isRandomMiniBossFloor(floorNum, this.runConfig?.seed ?? 1) ||
+      isMountHuaSummit
     ) {
       this.totalWavesOnFloor = 1;
       this.phase = 'paused';
       const baseCount = isCultLeaderFloor(floorNum)
         ? Math.min(3, Math.max(1, Math.floor(floorNum / 10)))
-        : 1;
+        : isMountHuaSummit
+          ? 2
+          : 1;
       const count = Math.max(baseCount, computeBossRouletteCount(floorNum, this.draftedBuffIds));
       this.callbacks?.onRequestRoulette(floorNum, count, this.lastBossMutations);
       this.emitHud();
@@ -679,9 +708,12 @@ export class DungeonScene extends Scene {
     const baseBiomeId = this.runConfig?.biomeId ?? this.activeBiome.id;
     const runSeed = this.runConfig?.seed ?? 1;
     const isCultLeader = isCultLeaderFloor(this.floor);
+    const isMountHuaSummit = !isCultLeader && this.floor >= 25 && this.floor % 10 === 5;
     const label = isCultLeader
       ? `CULT LEADER (F${this.floor}): ${getEndBossNameForFloor(baseBiomeId, this.floor, runSeed)}`
-      : `HALL MASTER AMBUSH: ${getMiniBossForFloor(baseBiomeId, this.floor, runSeed).name}`;
+      : isMountHuaSummit
+        ? `⚔️ MOUNT HUA SUMMIT (F${this.floor}): DUAL HALL MASTERS!`
+        : `HALL MASTER AMBUSH: ${getMiniBossForFloor(baseBiomeId, this.floor, runSeed).name}`;
     this.spawnFloatingText(this.scale.width / 2, this.groundY - 150, label, '#f97316', 22);
     soundFX.playBossRoar();
     this.emitHud();
@@ -692,7 +724,8 @@ export class DungeonScene extends Scene {
     const hpMult = computeEnemySpawnHpMult(this.draftedBuffIds);
     const runSeed = this.runConfig?.seed ?? 1;
     const isCultLeader = isCultLeaderFloor(this.floor);
-    const isMiniBoss = isRandomMiniBossFloor(this.floor, runSeed);
+    const isMountHuaSummit = !isCultLeader && this.floor >= 25 && this.floor % 10 === 5;
+    const isMiniBoss = isRandomMiniBossFloor(this.floor, runSeed) || isMountHuaSummit;
     const bracket = Math.floor((this.floor - 1) / 10);
     const realmHpMult =
       this.floor <= 10
@@ -740,7 +773,34 @@ export class DungeonScene extends Scene {
         ? `${getEndBossNameForFloor(baseBiomeId, this.floor, runSeed)} (F${this.floor})`
         : miniBossSpec.name;
 
-      if (this.currentBossMutations.includes('twin_soul')) {
+      if (isMountHuaSummit) {
+        const secondSpec = getMiniBossForFloor(baseBiomeId, this.floor + 2, runSeed + 7919);
+        this.spawnBossEntity(
+          miniBossSpec.name,
+          w - 195,
+          Math.round(baseHp * 0.85 * hpMult),
+          baseAtk,
+          false,
+          false,
+          miniBossSpec
+        );
+        this.spawnBossEntity(
+          secondSpec.name,
+          w - 95,
+          Math.round(baseHp * 0.85 * hpMult),
+          baseAtk,
+          false,
+          false,
+          secondSpec
+        );
+        this.spawnFloatingText(
+          w / 2,
+          this.groundY - 155,
+          '⚔️ MOUNT HUA SUMMIT: DUAL HALL MASTERS!',
+          '#fde047',
+          19
+        );
+      } else if (this.currentBossMutations.includes('twin_soul')) {
         this.spawnBossEntity(
           name,
           w - 160,
@@ -859,6 +919,10 @@ export class DungeonScene extends Scene {
         lastGoldenThreshold: 100,
         mutations: [],
         mechanic: null,
+        flawTimer: 0,
+        flawCooldown: isElite ? 2.6 + this.rng() * 1.6 : 4.2 + this.rng() * 2.5,
+        flawRing: null,
+        flawText: null,
       });
     }
   }
@@ -949,6 +1013,10 @@ export class DungeonScene extends Scene {
       lastGoldenThreshold: 100,
       mutations: [...mutations],
       mechanic: isEndBoss ? this.activeBiome.mechanicId : (miniBossSpec?.mechanicId ?? this.activeBiome.mechanicId),
+      flawTimer: 0,
+      flawCooldown: isEndBoss ? 2.4 : 2.8,
+      flawRing: null,
+      flawText: null,
     });
   }
 
@@ -1099,6 +1167,45 @@ export class DungeonScene extends Scene {
           this.castWuxiaActiveArt(art.id, false);
         } else {
           this.wuxiaArtTimers[art.id] = curTimer;
+        }
+      }
+
+      // Nine-Heavens Tribulation Lightning (periodic sky lightning pillars)
+      const tribStacks = loadout.enlightenmentCounts['enlighten_tribulation_thunder'] ?? 0;
+      if (tribStacks > 0) {
+        this.tribulationTimer += dt;
+        if (this.tribulationTimer >= 3.5) {
+          this.tribulationTimer = 0;
+          const pillarDmg = Math.max(
+            1,
+            Math.round(this.stats.atk * 2.6 * tribStacks * this.stats.allDamageMult)
+          );
+          const leadTarget = this.getClosestEnemy() ?? this.enemies[0];
+          if (leadTarget) {
+            soundFX.playSpell();
+            this.cameras.main.shake(105, 0.005);
+            this.spawnFloatingText(
+              leadTarget.sprite.x,
+              this.groundY - 140,
+              `🌩️ TRIBULATION THUNDER (×${tribStacks})!`,
+              '#c084fc',
+              16
+            );
+            this.spawnQiShockwaveRing(
+              leadTarget.sprite.x,
+              leadTarget.sprite.y,
+              0xc084fc,
+              180,
+              260
+            );
+            for (const e of [...this.enemies]) {
+              if (Math.abs(e.sprite.x - leadTarget.sprite.x) <= 185) {
+                this.spawnHitSpark(e.sprite.x, e.sprite.y, true, 0xc084fc);
+                this.damageEnemy(e, pillarDmg, true, 'TRIBULATION');
+                if (e.hp > 0) e.stunTimer = Math.max(e.stunTimer, 0.45);
+              }
+            }
+          }
         }
       }
     }
@@ -2092,20 +2199,31 @@ export class DungeonScene extends Scene {
       return;
     }
 
+    const duguStacks =
+      computeWuxiaLoadout(this.draftedBuffIds, this.floor).enlightenmentCounts[
+        'enlighten_sword_intent'
+      ] ?? 0;
+
     // Permafrost Armor hit-shield check
-    if (enemy.hitShield > 0) {
-      enemy.hitShield -= 1;
+    if (enemy.hitShield > 0 && labelTag !== 'SHATTER') {
+      const shieldBreak = 1 + duguStacks;
+      enemy.hitShield = Math.max(0, enemy.hitShield - shieldBreak);
       this.spawnFloatingText(
         enemy.sprite.x,
         enemy.sprite.y - 34,
-        `ICE SHIELD (${enemy.hitShield})`,
-        '#67e8f9',
+        duguStacks > 0
+          ? `⚔️ SHIELD SHATTER -${shieldBreak} (${enemy.hitShield})`
+          : `ICE SHIELD (${enemy.hitShield})`,
+        duguStacks > 0 ? '#fde047' : '#67e8f9',
         12
       );
       return;
     }
 
     let dmg = rawDamage;
+    if ((enemy.isBoss || enemy.isMiniBoss) && duguStacks > 0) {
+      dmg *= 1 + 0.15 * duguStacks;
+    }
     if (enemy.mutations.includes('golden_gilded')) dmg *= 1.15;
     if (enemy.chillTimer > 0 && this.draftedBuffIds.includes('silver_frostbite_aura')) dmg *= 1.12;
     if (enemy.isBoss && this.draftedBuffIds.includes('prism_war_titan_cleave')) dmg *= 1.25;
@@ -2317,6 +2435,10 @@ export class DungeonScene extends Scene {
     enemy.hpBg.destroy();
     enemy.hpFill.destroy();
     enemy.nameText.destroy();
+    enemy.flawRing?.destroy();
+    enemy.flawRing = null;
+    enemy.flawText?.destroy();
+    enemy.flawText = null;
     this.enemies.splice(idx, 1);
 
     if (this.draftedBuffIds.includes('silver_battle_momentum')) {
@@ -2479,6 +2601,107 @@ export class DungeonScene extends Scene {
     const ratio = Math.max(0, Math.min(1, e.hp / e.maxHp));
     e.hpFill.width = (e.isBoss ? 96 : 46) * ratio;
     e.nameText.setPosition(e.sprite.x, barY - 14);
+
+    // Interactive Qi Flaw exposure & tracking
+    if (e.flawTimer > 0) {
+      e.flawTimer = Math.max(0, e.flawTimer - dt);
+      if (e.flawRing) {
+        e.flawRing.setPosition(e.sprite.x, e.sprite.y);
+        const pulse = 1 + Math.sin(this.elapsedRunMs * 0.015) * 0.14;
+        e.flawRing.setScale(pulse);
+      }
+      if (e.flawText) {
+        e.flawText.setPosition(e.sprite.x, barY - 30);
+      }
+      if (e.flawTimer <= 0) {
+        e.flawRing?.destroy();
+        e.flawRing = null;
+        e.flawText?.destroy();
+        e.flawText = null;
+        e.flawCooldown = e.isBoss ? 4.2 + this.rng() * 2.2 : 6.0 + this.rng() * 2.5;
+      }
+    } else if (
+      (e.isBoss || e.isMiniBoss || this.floor >= 20) &&
+      e.sprite.x <= (this.scale.width || 1024) - 40
+    ) {
+      e.flawCooldown -= dt;
+      if (e.flawCooldown <= 0) {
+        e.flawTimer = 2.6;
+        e.flawRing = this.add
+          .circle(e.sprite.x, e.sprite.y, e.isBoss ? 34 : 24, 0xfef08a, 0.14)
+          .setStrokeStyle(3, 0xef4444)
+          .setDepth(11);
+        e.flawText = this.add
+          .text(e.sprite.x, barY - 30, '🎯 QI FLAW! [CLICK / Q]', {
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            fontStyle: 'bold',
+            color: '#fef08a',
+            stroke: '#7f1d1d',
+            strokeThickness: 4,
+          })
+          .setOrigin(0.5)
+          .setDepth(12);
+      }
+    }
+  }
+
+  private getFlawedEnemy(): EnemyEntity | null {
+    let best: EnemyEntity | null = null;
+    for (const e of this.enemies) {
+      if (e.hp > 0 && e.flawTimer > 0) {
+        if (!best || (e.isBoss && !best.isBoss) || e.hp > best.hp) {
+          best = e;
+        }
+      }
+    }
+    return best;
+  }
+
+  private triggerMeridianShatter(target: EnemyEntity): boolean {
+    if (!this.stats || this.phase !== 'combat' || target.flawTimer <= 0 || target.hp <= 0) {
+      return false;
+    }
+    target.flawTimer = 0;
+    target.flawCooldown = target.isBoss ? 4.8 : 6.2;
+    target.flawRing?.destroy();
+    target.flawRing = null;
+    target.flawText?.destroy();
+    target.flawText = null;
+
+    target.hitShield = Math.max(0, target.hitShield - 3);
+    target.stunTimer = Math.max(target.stunTimer, 1.4);
+
+    // Refund 50% of active martial art cooldowns & Dantian Burst cooldown
+    this.skillTimer *= 0.5;
+    for (const key of Object.keys(this.wuxiaArtTimers)) {
+      const cur = this.wuxiaArtTimers[key] ?? 0;
+      this.wuxiaArtTimers[key] = cur * 0.5;
+    }
+
+    const bonusGold = 8 * this.floor;
+    this.goldCollected += bonusGold;
+    if (target.isBoss) this.shardsCollected += 1;
+
+    soundFX.playBossRoar();
+    this.playHeroAttackAnimation('thief', 1.45);
+    this.cameras.main.shake(140, 0.008);
+    this.spawnSlashVfx(target.sprite.x, target.sprite.y, 0xef4444, 1.85);
+    this.spawnQiShockwaveRing(target.sprite.x, target.sprite.y, 0xfde047, 175, 260);
+    this.spawnFloatingText(
+      target.sprite.x,
+      target.sprite.y - 84,
+      `⚡ MERIDIAN SHATTER! 3.5x CRIT (+${bonusGold}g)`,
+      '#fef08a',
+      16
+    );
+
+    const shatterDmg = Math.max(
+      1,
+      Math.round(this.stats.atk * 3.5 * this.stats.allDamageMult * this.stats.critDmg)
+    );
+    this.damageEnemy(target, shatterDmg, true, 'SHATTER');
+    return true;
   }
 
   private damageHero(rawAtk: number, attacker: EnemyEntity | null): void {
@@ -2567,7 +2790,7 @@ export class DungeonScene extends Scene {
     }
   }
 
-  private castWuxiaActiveArt(artId: string, isBurst = false): void {
+  private castWuxiaActiveArt(artId: string, isBurst = false, isMutualMirror = false): void {
     if (this.phase !== 'combat' || !this.stats || this.enemies.length === 0) return;
     const art = getWuxiaActiveArtById(artId);
     if (!art) return;
@@ -3123,6 +3346,25 @@ export class DungeonScene extends Scene {
         );
       }
     }
+
+    // Left-Right Mutual Hands (enlighten_qi_surge) double-cast chance
+    if (!isMutualMirror) {
+      const mutualStacks = loadout.enlightenmentCounts['enlighten_qi_surge'] ?? 0;
+      if (mutualStacks > 0 && this.rng() < Math.min(0.75, mutualStacks * 0.25)) {
+        this.spawnFloatingText(
+          this.heroX + 18,
+          this.groundY - 122,
+          '☯️ MUTUAL HANDS DOUBLE-CAST!',
+          '#fef08a',
+          14
+        );
+        this.time.delayedCall(180, () => {
+          if (this.phase === 'combat' && this.enemies.length > 0) {
+            this.castWuxiaActiveArt(artId, isBurst, true);
+          }
+        });
+      }
+    }
   }
 
   public triggerActiveSkill(): void {
@@ -3354,8 +3596,14 @@ export class DungeonScene extends Scene {
             15
           );
           this.spawnRelicAcquisitionBanner(
-            '🎁 SECT RELIC SPOILS UNSEALED!',
-            `Floor ${this.floor} ${isCultLeaderFloor(this.floor) ? 'Supreme Cult Relic' : 'Hall Master Rare Gear'} + +4 Shards banked`
+            isCultLeaderFloor(this.floor)
+              ? '🌟 LEGENDARY JIN YONG RELIC SECURED!'
+              : this.floor >= 25 && this.floor % 10 === 5
+                ? '⚔️ MOUNT HUA SUMMIT RELIC CHESTS UNSEALED!'
+                : '🎁 SECT RELIC SPOILS UNSEALED!',
+            isCultLeaderFloor(this.floor)
+              ? `Floor ${this.floor} Cult Leader Trophy • Purify at Run End (+4 Shards)`
+              : `Floor ${this.floor} Hall Master Gear (35% Legendary chance!) + 4 Shards`
           );
         }
         l.sprite.destroy();
@@ -3410,8 +3658,14 @@ export class DungeonScene extends Scene {
     if (collectedChest) {
       soundFX.playVictory();
       this.spawnRelicAcquisitionBanner(
-        '🎁 SECT RELIC SPOILS UNSEALED!',
-        `Floor ${this.floor} ${isCultLeaderFloor(this.floor) ? 'Supreme Cult Relic' : 'Hall Master Rare Gear'} + +4 Shards banked`
+        isCultLeaderFloor(this.floor)
+          ? '🌟 LEGENDARY JIN YONG RELIC SECURED!'
+          : this.floor >= 25 && this.floor % 10 === 5
+            ? '⚔️ MOUNT HUA SUMMIT RELIC CHESTS UNSEALED!'
+            : '🎁 SECT RELIC SPOILS UNSEALED!',
+        isCultLeaderFloor(this.floor)
+          ? `Floor ${this.floor} Cult Leader Trophy • Purify at Run End (+4 Shards)`
+          : `Floor ${this.floor} Hall Master Gear (35% Legendary chance!) + 4 Shards`
       );
     }
 

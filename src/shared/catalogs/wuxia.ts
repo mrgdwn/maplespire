@@ -709,12 +709,13 @@ export const WUXIA_ENLIGHTENMENT_SCROLLS: readonly WuxiaEnlightenmentScroll[] = 
   {
     id: 'enlighten_qi_surge',
     kind: 'enlightenment',
-    name: 'Dantian Breakthrough',
-    shortName: 'Dantian Surge',
-    icon: '✨',
+    name: 'Left-Right Mutual Hands (左右互搏)',
+    shortName: 'Mutual Hands',
+    icon: '☯️',
     colorHex: 0xfbbf24,
-    description: 'High-Realm Cultivation: +16% ATK & +12% Max HP (stackable).',
-    bonusStats: { atkPct: 0.16, hpPct: 0.12 },
+    description:
+      'Zhou Botong’s Dual-Mind Technique: +14% ATK & +5% CDR per stack, plus +25% chance/stack (max 75%) to DOUBLE-CAST Martial Arts!',
+    bonusStats: { atkPct: 0.14, cooldownReduction: 0.05 },
   },
   {
     id: 'enlighten_meridian_haste',
@@ -739,12 +740,13 @@ export const WUXIA_ENLIGHTENMENT_SCROLLS: readonly WuxiaEnlightenmentScroll[] = 
   {
     id: 'enlighten_sword_intent',
     kind: 'enlightenment',
-    name: 'Heart-Sword Shattering Intent',
-    shortName: 'Heart-Sword',
+    name: 'Dugu Nine Swords — Shield-Breaker (獨孤九劍)',
+    shortName: 'Dugu Po-Qi',
     icon: '⚔️',
     colorHex: 0xc084fc,
-    description: 'High-Realm Cultivation: +40% Crit DMG & +10% Crit Chance (stackable).',
-    bonusStats: { critDamage: 0.4, critChance: 0.1 },
+    description:
+      'Dugu Nine Swords Po-Qi Form: +12% ATK, +8% Crit & +25% Crit DMG, plus every attack shatters +1 extra Boss Hit-Shield layer per stack!',
+    bonusStats: { atkPct: 0.12, critDamage: 0.25, critChance: 0.08 },
   },
   {
     id: 'enlighten_blood_lotus',
@@ -779,12 +781,13 @@ export const WUXIA_ENLIGHTENMENT_SCROLLS: readonly WuxiaEnlightenmentScroll[] = 
   {
     id: 'enlighten_tribulation_thunder',
     kind: 'enlightenment',
-    name: 'Heavenly Tribulation Tempering',
+    name: 'Nine-Heavens Tribulation Lightning (九天雷劫)',
     shortName: 'Tribulation Bolt',
     icon: '🌩️',
     colorHex: 0xa855f7,
-    description: 'Sect Tribulation: +24% ATK, +35% Crit DMG & +8% Skill Haste.',
-    bonusStats: { atkPct: 0.24, critDamage: 0.35, cooldownReduction: 0.08 },
+    description:
+      'Sect Tribulation: +18% ATK, +7% Crit Rate, +25% Crit DMG & calls a Heaven Lightning Pillar every 3.5s (260% ATK × stacks AoE)!',
+    bonusStats: { atkPct: 0.18, critDamage: 0.25, critChance: 0.07 },
   },
   {
     id: 'enlighten_treasury',

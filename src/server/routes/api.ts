@@ -365,18 +365,41 @@ api.post('/run/complete', async (c) => {
       }
     }
 
-    let legendaryDrop: GearItem | null = null;
+    const legendaryDrops: GearItem[] = [];
     const bossBracketsCleared =
       outcome === 'died' ? Math.floor(Math.max(0, floorReached - 1) / 10) : Math.floor(floorReached / 10);
-    if (bossBracketsCleared >= 1 || (outcome === 'cleared' && mode === 'daily')) {
-      legendaryDrop = createLegendaryGearItem(rng, classId, !greedGamblePurified, 'f10');
-      keptDrops.push(legendaryDrop);
+    const totalBossLegendaries =
+      bossBracketsCleared >= 1
+        ? bossBracketsCleared
+        : outcome === 'cleared' && mode === 'daily'
+          ? 1
+          : 0;
+    for (let b = 1; b <= totalBossLegendaries; b++) {
+      const bossFloor = Math.max(10, b * 10);
+      const isCursed = b === 1 ? !greedGamblePurified : rng() >= 0.65;
+      legendaryDrops.push(
+        createLegendaryGearItem(rng, classId, isCursed, `b${bossFloor}`, bossFloor)
+      );
     }
+    for (let f = 6; f <= clearedFloors; f++) {
+      if (
+        !isCultLeaderFloor(f) &&
+        (isRandomMiniBossFloor(f, dropSeed) || (f >= 25 && f % 10 === 5))
+      ) {
+        if (rng() < 0.35) {
+          legendaryDrops.push(
+            createLegendaryGearItem(rng, classId, rng() >= 0.65, `mb${f}`, f)
+          );
+        }
+      }
+    }
+    const legendaryDrop: GearItem | null = legendaryDrops[legendaryDrops.length - 1] ?? null;
+    const allKeptDrops = [...legendaryDrops, ...keptDrops];
 
     const currentClass = profile.classes[classId];
     const expResult = awardClassExp(currentClass, expGained);
 
-    const nextInventory = [...keptDrops, ...profile.inventory].slice(0, 60);
+    const nextInventory = [...allKeptDrops, ...profile.inventory].slice(0, 60);
     const totalShardsBanked = shardsBankedBase + autoDismantledShards;
 
     profile = {
@@ -457,7 +480,7 @@ api.post('/run/complete', async (c) => {
         lootForfeited,
         newLevel: expResult.updated.level,
         leveledUp: expResult.leveledUp,
-        drops: keptDrops,
+        drops: allKeptDrops,
         autoDismantledCount,
         autoDismantledShards,
         legendaryDrop,

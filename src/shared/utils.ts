@@ -159,7 +159,6 @@ export const createGearItem = (
   const def = getClassDefinition(classId);
   const tierMult = tier === 'rare' ? 1.5 : 1.0;
   const baseStatBonus = Math.round((6 + floorLevel * 2.2) * tierMult);
-  const maxSockets: 0 | 1 = tier === 'rare' && slot === 'weapon' ? 1 : 0;
 
   let name = slot === 'weapon' ? `Basic ${def.weaponLabel}` : NORMAL_NAMES[slot];
   let affixText = 'Standard sect disciple attire.';
@@ -184,7 +183,7 @@ export const createGearItem = (
     baseStatBonus,
     affixText,
     sockets: [],
-    maxSockets,
+    maxSockets: 0,
     legendaryId: null,
     isCursed: false,
   };
@@ -194,25 +193,29 @@ export const createLegendaryGearItem = (
   rng: () => number,
   classId: ClassId,
   isCursed: boolean,
-  idSuffix: string
+  idSuffix: string,
+  floorLevel = 10
 ): GearItem => {
   const pool = getLegendariesForClass(classId);
-  const chosen = pool[Math.floor(rng() * pool.length)] ?? pool[0];
+  const weapons = pool.filter((item) => item.slot === 'weapon');
+  const rollPool = weapons.length > 0 && rng() < 0.5 ? weapons : pool;
+  const chosen = rollPool[Math.floor(rng() * rollPool.length)] ?? pool[0];
   if (!chosen) {
     throw new Error(`No legendaries defined for class ${classId}`);
   }
-  const maxSockets: 0 | 2 = chosen.slot === 'weapon' ? 2 : 0;
+  const scaledFloor = Math.max(10, floorLevel);
+  const baseStatBonus = Math.round(42 + Math.max(0, scaledFloor - 10) * 2.8);
   return {
     id: `leg_${Date.now().toString(36)}_${idSuffix}`,
     name: chosen.name,
     slot: chosen.slot,
     classId,
     tier: 'legendary',
-    level: 10,
-    baseStatBonus: 42,
+    level: scaledFloor,
+    baseStatBonus,
     affixText: chosen.signatureText,
     sockets: [],
-    maxSockets,
+    maxSockets: 0,
     legendaryId: chosen.id,
     isCursed,
   };
@@ -350,13 +353,7 @@ export const parseGearItem = (raw: unknown): GearItem | null => {
     return null;
   }
   const sockets: ElementId[] = [];
-  if (Array.isArray(raw.sockets)) {
-    for (const s of raw.sockets) {
-      if (isElementId(s)) sockets.push(s);
-    }
-  }
-  const rawMax = raw.maxSockets;
-  const maxSockets: 0 | 1 | 2 = rawMax === 2 ? 2 : rawMax === 1 ? 1 : 0;
+  const maxSockets: 0 | 1 | 2 = 0;
   const legendaryId = isString(raw.legendaryId) ? raw.legendaryId : null;
   const isCursed = isBoolean(raw.isCursed) ? raw.isCursed : false;
 

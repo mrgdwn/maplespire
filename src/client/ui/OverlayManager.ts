@@ -36,10 +36,7 @@ import {
   getJobAdvancementTitle,
 } from '../../shared/catalogs/classes.ts';
 import {
-  ELEMENT_CATALOG,
-  HYBRID_ELEMENTS,
   LEGENDARY_CATALOG,
-  getHybridElement,
   getLegendaryById,
 } from '../../shared/catalogs/legendaries.ts';
 import type {
@@ -758,8 +755,17 @@ export class OverlayManager {
       );
       const rightTags = this.el('div', 'row-wrap');
       rightTags.appendChild(this.el('span', 'pill', `+${slotLvl * 10}%`));
+      if (item) {
+        rightTags.appendChild(
+          this.el(
+            'span',
+            `pill ${item.tier === 'legendary' ? 'pill-gold' : item.tier === 'rare' ? 'pill-shard' : ''}`,
+            item.tier === 'legendary' ? '🌟 LEGENDARY' : item.tier.toUpperCase()
+          )
+        );
+      }
       if (item?.isCursed) {
-        rightTags.appendChild(this.el('span', 'pill', 'CURSED'));
+        rightTags.appendChild(this.el('span', 'pill pill-core', 'CURSED'));
       }
       row.appendChild(rightTags);
       box.appendChild(row);
@@ -769,31 +775,6 @@ export class OverlayManager {
           box.appendChild(
             this.el('div', 'muted', `⚠️ ${leg.cursedName}: ${leg.cursedText}`)
           );
-        }
-        if (item.maxSockets > 0) {
-          const hybrid = getHybridElement(item.sockets);
-          const socketRow = this.el('div', 'row-wrap');
-          socketRow.appendChild(
-            this.el(
-              'span',
-              'muted',
-              `💎 ${item.sockets.length}/${item.maxSockets}${item.sockets.length > 0 ? `: ${item.sockets.join('+').toUpperCase()}` : ''}${hybrid ? ` [${hybrid.name}]` : ''}`
-            )
-          );
-          for (const elem of ELEMENT_CATALOG) {
-            const sockBtn = this.el('button', 'btn btn-sm', `${elem.id.slice(0, 3).toUpperCase()} 15💎`);
-            sockBtn.title = `Socket ${elem.name} Gem (15 Shards)`;
-            sockBtn.disabled = p.shards < 15;
-            sockBtn.addEventListener('click', () => {
-              void this.sendCampAction({
-                action: 'socket_element',
-                itemId: item.id,
-                elementId: elem.id,
-              });
-            });
-            socketRow.appendChild(sockBtn);
-          }
-          box.appendChild(socketRow);
         }
       }
       eqBox.appendChild(box);
@@ -1185,17 +1166,7 @@ export class OverlayManager {
       grid.appendChild(card);
     }
 
-    // Hybrid elements footer in codex
-    const hybCard = this.el('div', 'card');
-    hybCard.style.marginTop = '10px';
-    hybCard.appendChild(this.el('strong', '', 'Weapon Dual-Socket Hybrid Synergies (Legendary Weapons)'));
-    for (const h of HYBRID_ELEMENTS) {
-      hybCard.appendChild(
-        this.el('div', 'muted', `${h.name} (${h.elements[0]} + ${h.elements[1]}): ${h.effectText}`)
-      );
-    }
     container.appendChild(grid);
-    container.appendChild(hybCard);
   }
 
   private renderLeaderboardTab(container: HTMLElement): void {
@@ -1821,7 +1792,9 @@ export class OverlayManager {
   }
 
   public handleRunEnded(payload: RunEndPayload): void {
-    if (payload.outcome === 'cleared' && payload.mode === 'daily') {
+    const clearedFloors =
+      payload.outcome === 'died' ? Math.max(0, payload.floorReached - 1) : payload.floorReached;
+    if (clearedFloors >= 10 || (payload.outcome === 'cleared' && payload.mode === 'daily')) {
       this.openGreedGambleModal(payload);
       return;
     }
@@ -1833,11 +1806,14 @@ export class OverlayManager {
     const backdrop = this.el('div', 'modal-backdrop');
     const box = this.el('div', 'modal-box');
     const bannerHost = this.el('div', 'astryx-block-slot');
+    const clearedFloors =
+      payload.outcome === 'died' ? Math.max(0, payload.floorReached - 1) : payload.floorReached;
+    const bossCount = Math.max(1, Math.floor(clearedFloors / 10));
     mountAstryxModalBanner(bannerHost, {
       status: 'warning',
-      title: '🏛️ Altar of Fate — Floor 10 Greed Gamble',
-      description: `You conquered Floor 10! Guaranteed Unique Sect Relic (${getRelicLineageLabel(payload.classId)}). Roll Free Purification (50/50) for Pristine, or gain a Tuned Cursed Relic.`,
-      badgeText: '50 / 50',
+      title: '🏛️ Altar of Fate — Legendary Relic Purification',
+      description: `You vanquished ${bossCount} Cult Leader${bossCount > 1 ? 's' : ''}! Guaranteed Legendary Sect Relic (${getRelicLineageLabel(payload.classId)}). Roll Free Purification (50/50) for Pristine, or claim it Cursed with full power.`,
+      badgeText: '🌟 LEGENDARY',
       badgeTier: 'gold',
     });
     box.appendChild(bannerHost);
@@ -1932,16 +1908,34 @@ export class OverlayManager {
       }
     }
 
-    let legendaryDrop: GearItem | null = null;
-    if (cultLeadersDefeated >= 1 || (payload.outcome === 'cleared' && payload.mode === 'daily')) {
-      legendaryDrop = createLegendaryGearItem(
-        rng,
-        payload.classId,
-        !payload.greedGamblePurified,
-        'f10'
+    const legendaryDrops: GearItem[] = [];
+    const totalBossLegendaries =
+      cultLeadersDefeated >= 1
+        ? cultLeadersDefeated
+        : payload.outcome === 'cleared' && payload.mode === 'daily'
+          ? 1
+          : 0;
+    for (let b = 1; b <= totalBossLegendaries; b++) {
+      const bossFloor = Math.max(10, b * 10);
+      const isCursed = b === 1 ? !payload.greedGamblePurified : rng() >= 0.65;
+      legendaryDrops.push(
+        createLegendaryGearItem(rng, payload.classId, isCursed, `b${bossFloor}`, bossFloor)
       );
-      keptDrops.push(legendaryDrop);
     }
+    for (let f = 6; f <= clearedFloors; f++) {
+      if (
+        !isCultLeaderFloor(f) &&
+        (isRandomMiniBossFloor(f, dropSeed) || (f >= 25 && f % 10 === 5))
+      ) {
+        if (rng() < 0.35) {
+          legendaryDrops.push(
+            createLegendaryGearItem(rng, payload.classId, rng() >= 0.65, `mb${f}`, f)
+          );
+        }
+      }
+    }
+    const legendaryDrop: GearItem | null = legendaryDrops[legendaryDrops.length - 1] ?? null;
+    const allKeptDrops = [...legendaryDrops, ...keptDrops];
 
     const expResult = awardClassExp(p.classes[payload.classId], expGained);
     const shardsBanked = shardsBase + autoDismantledShards;
@@ -1957,7 +1951,7 @@ export class OverlayManager {
         ...p.classes,
         [payload.classId]: expResult.updated,
       },
-      inventory: [...keptDrops, ...p.inventory].slice(0, 60),
+      inventory: [...allKeptDrops, ...p.inventory].slice(0, 60),
     };
     this.state.profile = nextProfile;
     this.saveLocalProfile(nextProfile);
@@ -1972,7 +1966,7 @@ export class OverlayManager {
       lootForfeited,
       newLevel: expResult.updated.level,
       leveledUp: expResult.leveledUp,
-      drops: keptDrops,
+      drops: allKeptDrops,
       autoDismantledCount,
       autoDismantledShards,
       legendaryDrop,
