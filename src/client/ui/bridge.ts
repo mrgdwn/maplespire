@@ -32,6 +32,8 @@ export type RunHudSnapshot = {
   skillCooldownPct: number;
   skillReady: boolean;
   skillName: string;
+  dashCooldownPct: number;
+  dashReady: boolean;
   potionCharges: number;
   potionDisabledReason: string | null;
   speedMult: 1 | 2;
@@ -69,6 +71,7 @@ export type DungeonBridge = {
   startRun: (payload: RunStartPayload) => void;
   stopToIdle: () => void;
   triggerActiveSkill: () => void;
+  triggerDash: () => void;
   triggerPotion: () => void;
   toggleSpeed: () => 1 | 2;
   toggleAutoSkill: () => boolean;

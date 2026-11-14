@@ -75,7 +75,7 @@ import type {
 
 type CampTab = 'roster' | 'buildings' | 'codex' | 'leaderboard';
 
-const LOCAL_PROFILE_KEY = 'mapledelve_local_profile';
+const LOCAL_PROFILE_KEY = 'maplespire_local_profile';
 
 export class OverlayManager {
   private root: HTMLElement;
@@ -468,7 +468,7 @@ export class OverlayManager {
     // Header
     const header = this.el('div', 'camp-header');
     const leftGroup = this.el('div', 'camp-title-group');
-    leftGroup.appendChild(this.el('span', 'camp-logo', 'MAPLEDELVE'));
+    leftGroup.appendChild(this.el('span', 'camp-logo', 'MAPLESPIRE'));
     leftGroup.appendChild(this.el('span', 'pill', `u/${p.username}`));
     leftGroup.appendChild(
       this.el(
@@ -1194,11 +1194,17 @@ export class OverlayManager {
     const bottom = this.el('div', 'hud-bottom');
     const controls = this.el('div', 'row-wrap');
 
-    const skillBtn = this.el('button', 'btn btn-sm btn-primary', '⚡ Skill');
+    const skillBtn = this.el('button', 'btn btn-sm btn-primary', '⚡ Skill [Q]');
     skillBtn.id = 'hud-skill-btn';
     skillBtn.style.minWidth = '140px';
     skillBtn.addEventListener('click', () => {
       this.bridge?.triggerActiveSkill();
+    });
+
+    const dashBtn = this.el('button', 'btn btn-sm btn-primary', '💨 Dash [Space]');
+    dashBtn.id = 'hud-dash-btn';
+    dashBtn.addEventListener('click', () => {
+      this.bridge?.triggerDash();
     });
 
     const autoBtn = this.el('button', 'btn btn-sm btn-green', 'Auto: ON');
@@ -1208,7 +1214,7 @@ export class OverlayManager {
       autoBtn.textContent = `Auto: ${next ? 'ON' : 'OFF'}`;
     });
 
-    const potBtn = this.el('button', 'btn btn-sm btn-purple', '🧪 Potion (1)');
+    const potBtn = this.el('button', 'btn btn-sm btn-purple', '🧪 Potion [W] (1)');
     potBtn.id = 'hud-pot-btn';
     potBtn.addEventListener('click', () => {
       this.bridge?.triggerPotion();
@@ -1221,10 +1227,14 @@ export class OverlayManager {
       spdBtn.textContent = `${next}x Speed`;
     });
 
+    const tapTip = this.el('span', 'pill', '👆 Click arena: +Haste!');
+
     controls.appendChild(skillBtn);
+    controls.appendChild(dashBtn);
     controls.appendChild(autoBtn);
     controls.appendChild(potBtn);
     controls.appendChild(spdBtn);
+    controls.appendChild(tapTip);
 
     const buffStrip = this.el('div', 'buff-strip');
     buffStrip.id = 'hud-buffs';
@@ -1280,8 +1290,16 @@ export class OverlayManager {
     if (skillBtn instanceof HTMLButtonElement) {
       skillBtn.disabled = !hud.skillReady;
       skillBtn.textContent = hud.skillReady
-        ? `⚡ ${hud.skillName}`
+        ? `⚡ ${hud.skillName} [Q]`
         : `⏳ ${Math.ceil(hud.skillCooldownPct * 10)}s`;
+    }
+
+    const dashBtn = document.getElementById('hud-dash-btn');
+    if (dashBtn instanceof HTMLButtonElement) {
+      dashBtn.disabled = !hud.dashReady;
+      dashBtn.textContent = hud.dashReady
+        ? '💨 Dash [Space]'
+        : `💨 ${Math.ceil(hud.dashCooldownPct * 5)}s`;
     }
 
     const potBtn = document.getElementById('hud-pot-btn');
@@ -1289,7 +1307,7 @@ export class OverlayManager {
       potBtn.disabled = hud.potionCharges <= 0 || hud.potionDisabledReason !== null;
       potBtn.textContent = hud.potionDisabledReason
         ? `🚫 ${hud.potionDisabledReason}`
-        : `🧪 Potion (${hud.potionCharges})`;
+        : `🧪 Potion [W] (${hud.potionCharges})`;
     }
 
     const buffStrip = document.getElementById('hud-buffs');

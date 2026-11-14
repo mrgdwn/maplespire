@@ -835,7 +835,7 @@ api.post('/share-comment', async (c) => {
   const timeSec = (durationMs / 1000).toFixed(1);
 
   const lines = [
-    `**MapleDelve Daily Report (${dateKey}) — u/${username}**`,
+    `**MapleSpire Daily Report (${dateKey}) — u/${username}**`,
     `- **Class:** ${clsDef.name} | **Result:** ${outcomeText} in ${timeSec}s`,
     `- **Biome:** ${biome.name}${mutNames ? ` (${mutNames})` : ''}`,
     `- **Gold Banked:** ${goldBanked}g`,
@@ -873,7 +873,7 @@ api.post('/share-comment', async (c) => {
       type: 'share_comment',
       posted: true,
       commentText,
-      message: 'Posted your MapleDelve build to Reddit comments!',
+      message: 'Posted your MapleSpire build to Reddit comments!',
     });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : 'Unable to post comment';

@@ -54,7 +54,7 @@ export const daysBetweenUtc = (earlierDateKey: string, laterDateKey: string): nu
 export const getDailyChallengeConfig = (
   dateKey: string
 ): { seed: number; biomeId: BiomeId; bountyClass: ClassId } => {
-  const seed = hashString(`mapledelve:${dateKey}`);
+  const seed = hashString(`maplespire:${dateKey}`);
   const rng = mulberry32(seed);
   const biomeIndex = Math.floor(rng() * BIOME_CATALOG.length);
   const classIndex = Math.floor(rng() * CLASS_IDS.length);

@@ -1,6 +1,6 @@
-# MapleDelve
+# MapleSpire
 
-**MapleDelve** is a 2D pixel-art side-scrolling auto-battler roguelite / daily grind RPG built for the **Reddit Daily Game Competition 2026** using [Devvit Web](https://developers.reddit.com/docs/capabilities/devvit-web/devvit_web_overview), Phaser, Hono, Vite, and TypeScript.
+**MapleSpire** is a 2D pixel-art side-scrolling auto-battler roguelite / daily grind RPG built for the **Reddit Daily Game Competition 2026** using [Devvit Web](https://developers.reddit.com/docs/capabilities/devvit-web/devvit_web_overview), Phaser, Hono, Vite, and TypeScript.
 
 See [docs/GDD.md](docs/GDD.md) for the full Game Design Document.
 

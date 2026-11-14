@@ -1,4 +1,4 @@
-# Game Design Document: *MapleDelve* (Working Title)
+# Game Design Document: *MapleSpire*
 
 ## 1. Game Overview & Core Loop
 * **Genre:** Side-Scrolling Auto-Battler Roguelite / Daily Grind RPG

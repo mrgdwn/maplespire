@@ -3,7 +3,7 @@ import { AUTO, Game } from 'phaser';
 import { DungeonScene } from './scenes/DungeonScene.ts';
 import { OverlayManager } from './ui/OverlayManager.ts';
 
-export const startMapleDelve = (): void => {
+export const startMapleSpire = (): void => {
   const uiRoot = document.getElementById('ui-layer');
   if (!uiRoot) return;
 
@@ -41,5 +41,5 @@ export const startMapleDelve = (): void => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  startMapleDelve();
+  startMapleSpire();
 });

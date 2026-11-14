@@ -182,6 +182,7 @@ export class DungeonScene extends Scene {
       startRun: (payload) => this.startRun(payload),
       stopToIdle: () => this.stopToIdle(),
       triggerActiveSkill: () => this.triggerActiveSkill(),
+      triggerDash: () => this.triggerDash(),
       triggerPotion: () => this.triggerPotion(),
       toggleSpeed: () => this.toggleSpeed(),
       toggleAutoSkill: () => this.toggleAutoSkill(),
@@ -201,11 +202,31 @@ export class DungeonScene extends Scene {
       this.refreshLayout(gameSize.width, gameSize.height);
     });
 
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.phase !== 'combat' || this.enemies.length === 0) return;
+      this.attackTimer += 0.22;
+      this.skillTimer = Math.max(0, this.skillTimer - 0.25);
+      this.spawnFloatingText(pointer.x, pointer.y - 10, '+HASTE!', '#fde047', 11);
+    });
+
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
+      if (this.phase !== 'combat') return;
+      if (event.code === 'KeyQ') {
+        this.triggerActiveSkill();
+      } else if (event.code === 'KeyE' || event.code === 'Space') {
+        event.preventDefault();
+        this.triggerDash();
+      } else if (event.code === 'KeyW') {
+        this.triggerPotion();
+      }
+    });
+
     if (this.callbacks) {
       this.callbacks.onRegisterBridge({
         startRun: (payload) => this.startRun(payload),
         stopToIdle: () => this.stopToIdle(),
         triggerActiveSkill: () => this.triggerActiveSkill(),
+        triggerDash: () => this.triggerDash(),
         triggerPotion: () => this.triggerPotion(),
         toggleSpeed: () => this.toggleSpeed(),
         toggleAutoSkill: () => this.toggleAutoSkill(),
@@ -556,7 +577,8 @@ export class DungeonScene extends Scene {
       return;
     }
 
-    const mobCount = this.floor === 7 ? 5 : 3 + Math.min(2, Math.floor(this.floor / 3));
+    const mobCount =
+      this.floor === 1 ? 2 : this.floor === 7 ? 5 : 3 + Math.min(2, Math.floor(this.floor / 4));
     for (let i = 0; i < mobCount; i++) {
       const kindIdx = Math.floor(this.rng() * 3);
       const textureKey = `mob_${kindIdx}`;
@@ -564,10 +586,10 @@ export class DungeonScene extends Scene {
       const mobName = this.activeBiome.mobNames[kindIdx] ?? 'Monster';
       const isElite = this.floor === 7 && i === mobCount - 1;
       const maxHp = Math.round(
-        (58 + this.floor * 32 + this.waveIndex * 14) * (isElite ? 2.2 : 1) * hpMult
+        (42 + this.floor * 26 + this.waveIndex * 10) * (isElite ? 2.1 : 1) * hpMult
       );
-      const atk = Math.round((8 + this.floor * 2.4) * (isElite ? 1.4 : 1));
-      const x = w - 85 - i * 62;
+      const atk = Math.round((6 + this.floor * 2.0) * (isElite ? 1.35 : 1));
+      const x = w - 75 - i * 95;
       const y = this.groundY - 24;
 
       const sprite = this.add.image(x, y, textureKey).setTint(tint).setDepth(6);
@@ -1129,6 +1151,10 @@ export class DungeonScene extends Scene {
           if (dist <= (p.isWave ? 54 : 36)) {
             p.hitIds.add(e.id);
             this.damageEnemy(e, p.damage, p.isCrit);
+            if (!e.mutations.includes('juggernaut') && e.hp > 0) {
+              const push = (this.stats?.knockbackPower ?? 16) * 0.45;
+              e.sprite.x = Math.min((this.scale.width || 1024) - 55, e.sprite.x + push);
+            }
             if (p.applyRoot) e.rootTimer = Math.max(e.rootTimer, this.isEquippedLegendaryCursed('bow_wep_worldtree') ? 1 : 2);
             if (p.applyChill) e.chillTimer = Math.max(e.chillTimer, 3);
             p.pierceLeft -= 1;
@@ -1547,6 +1573,7 @@ export class DungeonScene extends Scene {
     this.skillTimer = Math.max(2.5, def.activeSkillCooldownSec * cdMult);
 
     const skillMult = (1 + this.stats.skillPowerPct / 100) * this.stats.allDamageMult;
+    const critMult = this.stats.critDmg;
     const skillName = isUltimate ? def.activeSkillUltimateName : def.activeSkillName;
     this.spawnFloatingText(this.heroX + 40, this.groundY - 105, skillName.toUpperCase(), '#38bdf8', 16);
 
@@ -1554,7 +1581,7 @@ export class DungeonScene extends Scene {
       soundFX.playBossRoar();
       const mult = isUltimate ? 4.5 : 2.5;
       for (const e of [...this.enemies]) {
-        this.damageEnemy(e, this.stats.atk * mult * skillMult, true, 'SLAM');
+        this.damageEnemy(e, this.stats.atk * mult * skillMult * critMult, true, 'SLAM');
         e.stunTimer = Math.max(e.stunTimer, 1.4);
       }
     } else if (clsId === 'mage') {
@@ -1564,15 +1591,23 @@ export class DungeonScene extends Scene {
       for (let pass = 0; pass < echoes; pass++) {
         const power = pass === 0 ? mult : mult * 0.65;
         for (const e of [...this.enemies]) {
-          this.damageEnemy(e, this.stats.atk * power * skillMult, true, 'NOVA');
+          this.damageEnemy(e, this.stats.atk * power * skillMult * critMult, true, 'NOVA');
         }
       }
     } else if (clsId === 'thief') {
       soundFX.playCrit();
+      this.invulnHitsLeft = Math.max(this.invulnHitsLeft, 2);
       const hits = isUltimate ? 8 : 4;
       for (let i = 0; i < hits; i++) {
         const t = this.enemies[i % Math.max(1, this.enemies.length)];
-        if (t) this.damageEnemy(t, this.stats.atk * 0.85 * skillMult, true, 'SHADOW');
+        if (t) {
+          t.bleedStacks = Math.min(5, t.bleedStacks + 1);
+          t.bleedTimer = 3;
+          this.damageEnemy(t, this.stats.atk * 0.85 * skillMult * critMult, true, 'SHADOW');
+          if (!t.mutations.includes('juggernaut') && t.hp > 0) {
+            t.sprite.x = Math.min((this.scale.width || 1024) - 55, t.sprite.x + 45);
+          }
+        }
       }
     } else {
       soundFX.playArrow();
@@ -1584,7 +1619,7 @@ export class DungeonScene extends Scene {
           this.groundY - 56 + (i % 4) * 14,
           640,
           (i % 3 - 1) * 18,
-          this.stats.atk * 0.85 * skillMult,
+          this.stats.atk * 0.85 * skillMult * critMult,
           true,
           2,
           false,
@@ -1604,6 +1639,42 @@ export class DungeonScene extends Scene {
     this.potionCooldown = 10;
     this.healHero(this.stats.maxHp * 0.35, true);
     soundFX.playDraft();
+    this.emitHud();
+  }
+
+  public triggerDash(): void {
+    if (this.phase !== 'combat' || !this.stats || this.dashCooldown > 0) return;
+
+    const cdMult = 1 - this.stats.cooldownReductionPct / 100;
+    this.dashCooldown = Math.max(2.0, 5 * cdMult);
+    this.invulnHitsLeft = Math.max(this.invulnHitsLeft, 1);
+
+    soundFX.playSwing();
+    this.spawnFloatingText(this.heroX + 20, this.groundY - 96, '💨 EVASIVE DASH!', '#38bdf8', 15);
+
+    if (this.heroSprite) {
+      this.tweens.add({
+        targets: this.heroSprite,
+        x: this.heroX - 24,
+        duration: 90,
+        yoyo: true,
+      });
+    }
+
+    for (const e of [...this.enemies]) {
+      if (e.sprite.x - this.heroX <= 180) {
+        if (!e.mutations.includes('juggernaut')) {
+          e.sprite.x = Math.min((this.scale.width || 1024) - 55, e.sprite.x + 110);
+        }
+        e.stunTimer = Math.max(e.stunTimer, 0.6);
+      }
+    }
+
+    const closest = this.getClosestEnemy();
+    if (closest) {
+      this.damageEnemy(closest, this.stats.atk * 0.9 * this.stats.allDamageMult, false, 'COUNTER');
+    }
+
     this.emitHud();
   }
 
@@ -1730,8 +1801,9 @@ export class DungeonScene extends Scene {
     this.floorsCleared += 1;
     if (this.fastingFloorsLeft > 0) this.fastingFloorsLeft -= 1;
 
-    if (this.draftedBuffIds.includes('silver_second_wind') && this.stats) {
-      this.healHero(this.stats.maxHp * 0.12, true);
+    if (this.stats) {
+      const recoveryPct = this.draftedBuffIds.includes('silver_second_wind') ? 0.27 : 0.15;
+      this.healHero(this.stats.maxHp * recoveryPct, true);
     }
 
     if (this.floor >= 10) {
@@ -1819,7 +1891,9 @@ export class DungeonScene extends Scene {
     const boss = this.enemies.find((e) => e.isBoss);
 
     const mutNames = this.currentBossMutations.map((m) => getMutationById(m).id);
-    const totalCd = Math.max(2.5, def.activeSkillCooldownSec * (1 - this.stats.cooldownReductionPct / 100));
+    const cdMult = 1 - this.stats.cooldownReductionPct / 100;
+    const totalCd = Math.max(2.5, def.activeSkillCooldownSec * cdMult);
+    const totalDashCd = Math.max(2.0, 5 * cdMult);
 
     this.callbacks?.onHudUpdate({
       floor: this.floor,
@@ -1841,6 +1915,8 @@ export class DungeonScene extends Scene {
       skillCooldownPct: Math.min(1, Math.max(0, this.skillTimer / totalCd)),
       skillReady: this.skillTimer <= 0,
       skillName: clsLvl >= 60 ? def.activeSkillUltimateName : def.activeSkillName,
+      dashCooldownPct: Math.min(1, Math.max(0, this.dashCooldown / totalDashCd)),
+      dashReady: this.dashCooldown <= 0,
       potionCharges: this.potionCharges,
       potionDisabledReason: this.fastingFloorsLeft > 0 ? `Fasting Vow (${this.fastingFloorsLeft}f)` : null,
       speedMult: this.speedMult,

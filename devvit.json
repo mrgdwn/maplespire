@@ -21,7 +21,7 @@
     "items": [
       {
         "label": "Create a new post",
-        "description": "MapleDelve - Daily Side-Scrolling Auto-Battler Roguelite",
+        "description": "MapleSpire - Daily Side-Scrolling Auto-Battler Roguelite",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-create"
