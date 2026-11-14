@@ -65,6 +65,7 @@ import {
   parseLeaderboardEntry,
   parsePlayerProfile,
 } from '../../shared/utils.ts';
+import { renderHeroPaperdollCanvas } from '../fx/pixelArt.ts';
 import { soundFX } from '../fx/sound.ts';
 import type {
   AppState,
@@ -503,25 +504,25 @@ export class OverlayManager {
       this.el(
         'div',
         '',
-        `🗺️ Today (${daily.dateKey}): ${biome.name} — F4: ${biome.miniBossName} -> F10: ${biome.endBossName} [${biome.mechanicName}]`
+        `🗺️ ${biome.name} • ${biome.miniBossName} / ${biome.endBossName} (${biome.mechanicName})`
       )
     );
-    strip.appendChild(
-      this.el(
-        'span',
-        'pill pill-bounty',
-        `2x BOUNTY: ${bountyCls.name.toUpperCase()} (+2x EXP, +25% Gold)`
-      )
+    const bountyPill = this.el(
+      'span',
+      'pill pill-bounty',
+      `🎯 2x ${bountyCls.name}`
     );
+    bountyPill.title = 'Daily Bounty Class: +2x Class EXP & +25% Gold';
+    strip.appendChild(bountyPill);
     wrap.appendChild(strip);
 
     // Tabs
     const tabs = this.el('div', 'camp-tabs');
     const tabDefs: readonly { id: CampTab; label: string }[] = [
-      { id: 'roster', label: '⚔️ Roster & Gear' },
-      { id: 'buildings', label: '🏰 Camp Buildings' },
-      { id: 'codex', label: '📖 Codex (48 Legendaries)' },
-      { id: 'leaderboard', label: '🏆 Daily Leaderboard' },
+      { id: 'roster', label: '⚔️ Roster' },
+      { id: 'buildings', label: '🏰 Camp' },
+      { id: 'codex', label: '📖 Codex' },
+      { id: 'leaderboard', label: '🏆 Ranks' },
     ];
     for (const td of tabDefs) {
       const btn = this.el(
@@ -591,13 +592,12 @@ export class OverlayManager {
     const p = this.state.profile;
     const links = computeLinkSkillBonuses(p.classes);
 
-    container.appendChild(
-      this.el(
-        'div',
-        'muted',
-        `Account Link Skills Active: +${links.maxHpPct}% Max HP • +${links.skillDmgPct}% Skill DMG • +${links.critRatePct}% Crit Rate • +${links.attackSpeedPct}% Attack Speed`
-      )
+    const linkBar = this.el(
+      'div',
+      'muted',
+      `Links: +${links.maxHpPct}% HP • +${links.skillDmgPct}% Skill • +${links.critRatePct}% Crit • +${links.attackSpeedPct}% AS`
     );
+    container.appendChild(linkBar);
 
     const grid = this.el('div', 'grid-4');
     grid.style.marginTop = '8px';
@@ -609,61 +609,94 @@ export class OverlayManager {
       const isSelected = p.selectedClass === def.id;
       const isBounty = this.state.daily.bountyClass === def.id;
 
-      const card = this.el('div', `card ${isSelected ? 'selected' : ''}`);
+      const card = this.el('div', `card class-selector ${isSelected ? 'selected' : ''}`);
+      card.title = `Link Skill: ${def.linkSkillDesc}`;
+      card.addEventListener('click', () => {
+        if (!isSelected) {
+          void this.sendCampAction({ action: 'select_class', classId: def.id });
+        }
+      });
+
+      const headRow = this.el('div', 'class-card-head');
+      const miniCanvas = document.createElement('canvas');
+      miniCanvas.width = 44;
+      miniCanvas.height = 44;
+      miniCanvas.className = 'paperdoll-mini';
+      renderHeroPaperdollCanvas(miniCanvas, def.id, prog.equipped);
+      headRow.appendChild(miniCanvas);
+
+      const infoCol = this.el('div', 'class-card-info');
       const top = this.el('div', 'row-between');
-      const title = this.el('span', 'class-name', `${def.name} (Lv.${prog.level})`);
+      const title = this.el('span', 'class-name', `${def.name} Lv.${prog.level}`);
       title.style.color = def.colorHex;
       top.appendChild(title);
-      if (isBounty) top.appendChild(this.el('span', 'pill pill-bounty', '2x'));
-      card.appendChild(top);
+      if (isBounty) {
+        top.appendChild(this.el('span', 'pill pill-bounty', '2x'));
+      } else if (isSelected) {
+        top.appendChild(this.el('span', 'pill pill-gold', '✓'));
+      }
+      infoCol.appendChild(top);
+      infoCol.appendChild(this.el('div', 'muted', `${job.title} • ${prog.exp}/${nextExp}`));
 
-      card.appendChild(this.el('div', 'muted', `${job.title} • ${def.weaponLabel}`));
       const track = this.el('div', 'bar-track');
       const fill = this.el('div', 'bar-fill');
       fill.style.width = `${Math.min(100, Math.round((prog.exp / nextExp) * 100))}%`;
       track.appendChild(fill);
-      card.appendChild(track);
+      infoCol.appendChild(track);
 
-      card.appendChild(this.el('div', 'muted', `EXP ${prog.exp}/${nextExp} • Link: ${def.linkSkillDesc}`));
-
-      const selectBtn = this.el(
-        'button',
-        `btn btn-sm ${isSelected ? 'btn-gold' : ''}`,
-        isSelected ? '✓ Active Hero' : `Select ${def.name}`
-      );
-      selectBtn.disabled = isSelected;
-      selectBtn.addEventListener('click', () => {
-        void this.sendCampAction({ action: 'select_class', classId: def.id });
-      });
-      card.appendChild(selectBtn);
+      headRow.appendChild(infoCol);
+      card.appendChild(headRow);
       grid.appendChild(card);
     }
     container.appendChild(grid);
 
-    // Selected class stats + equipped gear + inventory
+    // Selected class paperdoll + stats + equipped gear + inventory
     const selId = p.selectedClass;
     const selProg = p.classes[selId];
+    const selDef = getClassDefinition(selId);
+    const selJob = getJobAdvancementTitle(selProg.level);
     const stats = computeHeroCombatStats(p, selId, [], 0, 0);
 
     const split = this.el('div', 'grid-2');
-    split.style.marginTop = '12px';
+    split.style.marginTop = '10px';
 
-    // Equipped column
+    // Equipped column with visual Paperdoll Showcase
     const eqBox = this.el('div', 'card');
-    eqBox.appendChild(
-      this.el(
-        'div',
-        'class-name',
-        `${getClassDefinition(selId).name} Gear & Combat Stats`
-      )
-    );
-    eqBox.appendChild(
-      this.el(
-        'div',
-        'muted',
-        `HP ${stats.maxHp} • ATK ${stats.atk} • SPD ${stats.attackSpeed}/s • ARM ${stats.armor} • CRIT ${Math.round(stats.critRate * 100)}% (${Math.round(stats.critDmg * 100)}%) • DODGE ${Math.round(stats.dodgeRate * 100)}%`
-      )
-    );
+    const showcase = this.el('div', 'paperdoll-showcase');
+    const stageCanvas = document.createElement('canvas');
+    stageCanvas.width = 92;
+    stageCanvas.height = 92;
+    stageCanvas.className = 'paperdoll-stage';
+    renderHeroPaperdollCanvas(stageCanvas, selId, selProg.equipped);
+    showcase.appendChild(stageCanvas);
+
+    const metaCol = this.el('div', 'paperdoll-meta');
+    const heroTitle = this.el('div', 'class-name', `${selDef.name} Lv.${selProg.level} • ${selJob.title}`);
+    heroTitle.style.color = selDef.colorHex;
+    metaCol.appendChild(heroTitle);
+
+    const statGrid = this.el('div', 'stat-grid');
+    const statItems: readonly string[] = [
+      `❤️ ${stats.maxHp} HP`,
+      `⚔️ ${stats.atk} ATK`,
+      `⚡ ${stats.attackSpeed}/s`,
+      `🛡️ ${stats.armor} ARM`,
+      `💥 ${Math.round(stats.critRate * 100)}% CRIT`,
+      `💨 ${Math.round(stats.dodgeRate * 100)}% DODGE`,
+    ];
+    for (const sText of statItems) {
+      statGrid.appendChild(this.el('span', 'pill', sText));
+    }
+    metaCol.appendChild(statGrid);
+    showcase.appendChild(metaCol);
+    eqBox.appendChild(showcase);
+
+    const slotIcons: Record<GearSlot, string> = {
+      weapon: '⚔️',
+      headgear: '🪖',
+      top: '🛡️',
+      cape: '🧣',
+    };
 
     for (const slot of GEAR_SLOTS) {
       const item = selProg.equipped[slot];
@@ -677,12 +710,15 @@ export class OverlayManager {
         this.el(
           'strong',
           '',
-          `${slot.toUpperCase()} [+${slotLvl * 10}%]: ${item ? item.name : 'Empty'}`
+          `${slotIcons[slot]} ${item ? item.name : `Empty ${slot}`}`
         )
       );
+      const rightTags = this.el('div', 'row-wrap');
+      rightTags.appendChild(this.el('span', 'pill', `+${slotLvl * 10}%`));
       if (item?.isCursed) {
-        row.appendChild(this.el('span', 'pill', 'CURSED'));
+        rightTags.appendChild(this.el('span', 'pill', 'CURSED'));
       }
+      row.appendChild(rightTags);
       box.appendChild(row);
       if (item) {
         box.appendChild(this.el('div', 'muted', `+${item.baseStatBonus} Power • ${item.affixText}`));
@@ -690,7 +726,7 @@ export class OverlayManager {
           const leg = getLegendaryById(item.legendaryId);
           if (leg) {
             box.appendChild(
-              this.el('div', 'muted', `Penalty (${leg.cursedName}): ${leg.cursedText}`)
+              this.el('div', 'muted', `⚠️ ${leg.cursedName}: ${leg.cursedText}`)
             );
           }
         }
@@ -701,11 +737,12 @@ export class OverlayManager {
             this.el(
               'span',
               'muted',
-              `Sockets (${item.sockets.length}/${item.maxSockets}): ${item.sockets.length > 0 ? item.sockets.join(' + ').toUpperCase() : 'Empty'}${hybrid ? ` [${hybrid.name}!]` : ''}`
+              `💎 ${item.sockets.length}/${item.maxSockets}${item.sockets.length > 0 ? `: ${item.sockets.join('+').toUpperCase()}` : ''}${hybrid ? ` [${hybrid.name}]` : ''}`
             )
           );
           for (const elem of ELEMENT_CATALOG) {
-            const sockBtn = this.el('button', 'btn btn-sm', `${elem.id.slice(0, 3).toUpperCase()} (15💎)`);
+            const sockBtn = this.el('button', 'btn btn-sm', `${elem.id.slice(0, 3).toUpperCase()} 15💎`);
+            sockBtn.title = `Socket ${elem.name} Gem (15 Shards)`;
             sockBtn.disabled = p.shards < 15;
             sockBtn.addEventListener('click', () => {
               void this.sendCampAction({
@@ -1214,27 +1251,24 @@ export class OverlayManager {
       autoBtn.textContent = `Auto: ${next ? 'ON' : 'OFF'}`;
     });
 
-    const potBtn = this.el('button', 'btn btn-sm btn-purple', '🧪 Potion [W] (1)');
+    const potBtn = this.el('button', 'btn btn-sm btn-purple', '🧪 [W] (1)');
     potBtn.id = 'hud-pot-btn';
     potBtn.addEventListener('click', () => {
       this.bridge?.triggerPotion();
     });
 
-    const spdBtn = this.el('button', 'btn btn-sm', '1x Speed');
+    const spdBtn = this.el('button', 'btn btn-sm', '1x');
     spdBtn.id = 'hud-spd-btn';
     spdBtn.addEventListener('click', () => {
       const next = this.bridge?.toggleSpeed() ?? 1;
-      spdBtn.textContent = `${next}x Speed`;
+      spdBtn.textContent = `${next}x`;
     });
-
-    const tapTip = this.el('span', 'pill', '👆 Click arena: +Haste!');
 
     controls.appendChild(skillBtn);
     controls.appendChild(dashBtn);
     controls.appendChild(autoBtn);
     controls.appendChild(potBtn);
     controls.appendChild(spdBtn);
-    controls.appendChild(tapTip);
 
     const buffStrip = this.el('div', 'buff-strip');
     buffStrip.id = 'hud-buffs';
@@ -1307,16 +1341,24 @@ export class OverlayManager {
       potBtn.disabled = hud.potionCharges <= 0 || hud.potionDisabledReason !== null;
       potBtn.textContent = hud.potionDisabledReason
         ? `🚫 ${hud.potionDisabledReason}`
-        : `🧪 Potion [W] (${hud.potionCharges})`;
+        : `🧪 (${hud.potionCharges})`;
     }
 
     const buffStrip = document.getElementById('hud-buffs');
     if (buffStrip) {
       buffStrip.innerHTML = '';
-      for (const id of hud.draftedBuffIds.slice(-8)) {
+      const counts = new Map<string, number>();
+      for (const id of hud.draftedBuffIds) {
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+      const uniqueIds = [...counts.keys()].slice(-12);
+      for (const id of uniqueIds) {
         const b = getBuffById(id);
         if (!b) continue;
-        buffStrip.appendChild(this.el('span', 'buff-chip', `${b.icon} ${b.name}`));
+        const stacks = counts.get(id) ?? 1;
+        const chip = this.el('span', `buff-chip tier-${b.tier}`, `${b.icon}${stacks > 1 ? ` ×${stacks}` : ''}`);
+        chip.title = `${b.name} (${b.tier.toUpperCase()}): ${b.description}`;
+        buffStrip.appendChild(chip);
       }
     }
     void this.lastHud;

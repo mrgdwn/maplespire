@@ -23,7 +23,7 @@ import type {
   MutationId,
 } from '../../shared/types.ts';
 import { mulberry32 } from '../../shared/utils.ts';
-import { registerPixelTextures } from '../fx/pixelArt.ts';
+import { getGearVisualStyle, registerPixelTextures } from '../fx/pixelArt.ts';
 import { soundFX } from '../fx/sound.ts';
 import type {
   DungeonBridge,
@@ -82,6 +82,9 @@ type ProjectileEntity = {
   applyRoot: boolean;
   applyChill: boolean;
   isWave: boolean;
+  isChainProc: boolean;
+  dropFalconLoot: boolean;
+  labelTag: string | null;
   life: number;
 };
 
@@ -119,6 +122,13 @@ export class DungeonScene extends Scene {
   private floorTrim: Phaser.GameObjects.Rectangle | null = null;
 
   private heroSprite: Phaser.GameObjects.Image | null = null;
+  private heroCapeSprite: Phaser.GameObjects.Image | null = null;
+  private heroTopSprite: Phaser.GameObjects.Image | null = null;
+  private heroHelmSprite: Phaser.GameObjects.Image | null = null;
+  private heroWeaponSprite: Phaser.GameObjects.Image | null = null;
+  private weaponAngle: number = 0;
+  private weaponSwingOffsetX: number = 0;
+  private weaponSwingOffsetY: number = 0;
   private heroAura: Phaser.GameObjects.Arc | null = null;
   private heroGlow: Phaser.GameObjects.Arc | null = null;
   private hawkSprite: Phaser.GameObjects.Image | null = null;
@@ -304,24 +314,69 @@ export class DungeonScene extends Scene {
   private createHeroDisplay(classId: ClassId, level: number): void {
     this.heroAura?.destroy();
     this.heroGlow?.destroy();
+    this.heroCapeSprite?.destroy();
     this.heroSprite?.destroy();
+    this.heroTopSprite?.destroy();
+    this.heroHelmSprite?.destroy();
+    this.heroWeaponSprite?.destroy();
     this.hawkSprite?.destroy();
     this.wolfSprite?.destroy();
     for (const book of this.runeBooks) book.destroy();
     this.runeBooks = [];
+    this.weaponAngle = 0;
+    this.weaponSwingOffsetX = 0;
+    this.weaponSwingOffsetY = 0;
 
+    const equipped = this.runConfig?.profile.classes[classId].equipped ?? {
+      weapon: null,
+      headgear: null,
+      top: null,
+      cape: null,
+    };
+    const gearStyle = getGearVisualStyle(classId, equipped);
     const clsColor = getClassDefinition(classId).colorInt;
+
     this.heroAura = this.add
       .circle(this.heroX, this.groundY - 28, 36, clsColor, level >= 60 ? 0.28 : level >= 35 ? 0.16 : 0.08)
       .setDepth(4);
 
     this.heroGlow = this.add
-      .circle(this.heroX + 14, this.groundY - 24, 14, 0xfef08a, level >= 15 ? 0.25 : 0)
-      .setDepth(4);
+      .circle(
+        this.heroX + 16,
+        this.groundY - 26,
+        15,
+        gearStyle.weaponGlowTint ?? 0xfef08a,
+        gearStyle.weaponGlowTint ? 0.34 : level >= 15 ? 0.22 : 0
+      )
+      .setDepth(4.5);
+
+    this.heroCapeSprite = this.add
+      .image(this.heroX, this.groundY - 28, 'gear_cape')
+      .setTint(gearStyle.capeTint)
+      .setVisible(gearStyle.hasCape)
+      .setDepth(5);
 
     this.heroSprite = this.add
       .image(this.heroX, this.groundY - 28, `hero_${classId}`)
       .setDepth(6);
+
+    this.heroTopSprite = this.add
+      .image(this.heroX, this.groundY - 28, `gear_top_${classId}`)
+      .setTint(gearStyle.topTint)
+      .setVisible(gearStyle.hasTop)
+      .setDepth(6.2);
+
+    this.heroHelmSprite = this.add
+      .image(this.heroX, this.groundY - 28, `gear_head_${classId}`)
+      .setTint(gearStyle.headTint)
+      .setVisible(gearStyle.hasHead)
+      .setDepth(6.4);
+
+    this.heroWeaponSprite = this.add
+      .image(this.heroX + 16, this.groundY - 26, `gear_wep_${classId}`)
+      .setTint(gearStyle.weaponTint)
+      .setVisible(gearStyle.hasWeapon)
+      .setDepth(6.6);
 
     if (classId === 'bowman') {
       this.hawkSprite = this.add
@@ -353,6 +408,7 @@ export class DungeonScene extends Scene {
     }
     if (this.heroSprite) {
       this.heroSprite.setPosition(this.heroX, this.groundY - 28);
+      this.updateCompanionVisuals();
     }
     for (const e of this.enemies) {
       const ey = this.groundY - (e.isBoss && !e.isMiniBoss ? 44 : e.isBoss ? 34 : 24);
@@ -614,6 +670,7 @@ export class DungeonScene extends Scene {
           strokeThickness: 3,
         })
         .setOrigin(0.5)
+        .setVisible(isElite)
         .setDepth(9);
 
       this.enemies.push({
@@ -753,8 +810,10 @@ export class DungeonScene extends Scene {
       if (this.floorTile) this.floorTile.tilePositionX += 110 * dt;
       if (this.heroSprite) {
         this.heroSprite.y = this.groundY - 28 + Math.sin(this.elapsedRunMs * 0.015) * 4;
+        this.heroSprite.rotation = Math.sin(this.elapsedRunMs * 0.015) * 0.05;
       }
       if (this.walkTimer <= 0) {
+        if (this.heroSprite) this.heroSprite.rotation = 0;
         this.phase = 'combat';
         this.spawnWave();
       }
@@ -763,6 +822,10 @@ export class DungeonScene extends Scene {
     }
 
     if (this.phase === 'combat') {
+      if (this.heroSprite && !this.tweens.isTweening(this.heroSprite)) {
+        this.heroSprite.y = this.groundY - 28 + Math.sin(this.elapsedRunMs * 0.005) * 1.8;
+        this.heroSprite.rotation = 0;
+      }
       this.updateCombat(dt);
       this.updateProjectiles(dt);
       this.updateHazards(dt);
@@ -778,11 +841,32 @@ export class DungeonScene extends Scene {
   }
 
   private updateCompanionVisuals(): void {
-    if (this.heroAura && this.heroSprite) {
-      this.heroAura.setPosition(this.heroSprite.x, this.heroSprite.y);
-    }
-    if (this.heroGlow && this.heroSprite) {
-      this.heroGlow.setPosition(this.heroSprite.x + 14, this.heroSprite.y + 4);
+    if (this.heroSprite) {
+      const hx = this.heroSprite.x;
+      const hy = this.heroSprite.y;
+      const hRot = this.heroSprite.rotation;
+      if (this.heroAura) this.heroAura.setPosition(hx, hy);
+      if (this.heroGlow) {
+        this.heroGlow.setPosition(
+          hx + 16 + this.weaponSwingOffsetX,
+          hy - 2 + this.weaponSwingOffsetY
+        );
+      }
+      if (this.heroCapeSprite) {
+        const flutter = Math.sin(this.elapsedRunMs * 0.01) * 0.06;
+        this.heroCapeSprite.setPosition(hx, hy).setRotation(hRot + flutter);
+      }
+      if (this.heroTopSprite) {
+        this.heroTopSprite.setPosition(hx, hy).setRotation(hRot);
+      }
+      if (this.heroHelmSprite) {
+        this.heroHelmSprite.setPosition(hx, hy).setRotation(hRot);
+      }
+      if (this.heroWeaponSprite) {
+        this.heroWeaponSprite
+          .setPosition(hx + 16 + this.weaponSwingOffsetX, hy - 2 + this.weaponSwingOffsetY)
+          .setRotation(this.weaponAngle + hRot);
+      }
     }
     if (this.hawkSprite) {
       this.hawkSprite.setPosition(
@@ -862,9 +946,29 @@ export class DungeonScene extends Scene {
       this.runeZapTimer += dt;
       if (this.runeZapTimer >= 1.2 && this.enemies.length > 0) {
         this.runeZapTimer = 0;
-        const target = this.enemies[0];
-        if (target) {
-          this.damageEnemy(target, this.stats.atk * 0.65, false, 'RUNE');
+        const target = this.getClosestEnemy();
+        const book = this.runeBooks[0];
+        if (target && book) {
+          const vx = 560;
+          const travelSec = Math.max(0.08, (target.sprite.x - book.x) / vx);
+          const vy = (target.sprite.y - book.y) / travelSec;
+          this.spawnProjectile(
+            'proj_bolt',
+            book.x,
+            book.y,
+            vx,
+            vy,
+            this.stats.atk * 0.65,
+            false,
+            1,
+            false,
+            false,
+            false,
+            target.id,
+            false,
+            false,
+            'RUNE'
+          );
         }
       }
     }
@@ -876,7 +980,7 @@ export class DungeonScene extends Scene {
         this.hawkTimer += dt;
         if (this.hawkTimer >= 1.5 && this.enemies.length > 0) {
           this.hawkTimer = 0;
-          const target = this.enemies[0];
+          const target = this.getClosestEnemy();
           if (target) {
             const inherit = this.hasEquippedLegendary('bow_top_apexpredator')
               ? this.isEquippedLegendaryCursed('bow_top_apexpredator')
@@ -888,13 +992,39 @@ export class DungeonScene extends Scene {
               this.stats.atk *
               0.65 *
               (isCrit ? 1 + (this.stats.critDmg - 1) * inherit : 1);
-            this.damageEnemy(target, dmg, isCrit, 'HAWK');
-            if (this.hasEquippedLegendary('bow_cape_goldenfalcon')) {
-              const chance = this.isEquippedLegendaryCursed('bow_cape_goldenfalcon') ? 0.25 : 0.45;
-              if (this.rng() < chance) {
-                this.spawnLootDrop(target.sprite.x, target.sprite.y, this.rng() < 0.6 ? 'coin' : 'orb', 14);
-              }
+            const hx = this.hawkSprite ? this.hawkSprite.x : this.heroX - 24;
+            const hy = this.hawkSprite ? this.hawkSprite.y : this.groundY - 92;
+            const vx = 680;
+            const travelSec = Math.max(0.08, (target.sprite.x - hx) / vx);
+            const vy = (target.sprite.y - hy) / travelSec;
+            const dropFalconLoot =
+              this.hasEquippedLegendary('bow_cape_goldenfalcon') &&
+              this.rng() < (this.isEquippedLegendaryCursed('bow_cape_goldenfalcon') ? 0.25 : 0.45);
+            if (this.hawkSprite) {
+              this.tweens.add({
+                targets: this.hawkSprite,
+                scale: 1.28,
+                duration: 85,
+                yoyo: true,
+              });
             }
+            this.spawnProjectile(
+              'proj_hawk_feather',
+              hx + 10,
+              hy,
+              vx,
+              vy,
+              dmg,
+              isCrit,
+              1,
+              false,
+              false,
+              false,
+              target.id,
+              false,
+              dropFalconLoot,
+              'HAWK'
+            );
           }
         }
       }
@@ -904,9 +1034,32 @@ export class DungeonScene extends Scene {
         const interval = this.isEquippedLegendaryCursed('bow_head_beastmaster') ? 1.5 : 1.3;
         if (this.wolfTimer >= interval && this.enemies.length > 0) {
           this.wolfTimer = 0;
-          const target = this.enemies[0];
+          const target = this.getClosestEnemy();
           if (target) {
-            this.damageEnemy(target, this.stats.atk * 0.85, false, 'WOLF');
+            this.tweens.add({
+              targets: this.wolfSprite,
+              scaleX: 1.3,
+              scaleY: 0.85,
+              duration: 90,
+              yoyo: true,
+            });
+            this.spawnProjectile(
+              'proj_wolf_fang',
+              this.wolfSprite.x + 16,
+              this.groundY - 22,
+              640,
+              0,
+              this.stats.atk * 0.85,
+              false,
+              1,
+              false,
+              false,
+              false,
+              target.id,
+              false,
+              false,
+              'WOLF'
+            );
           }
         }
       }
@@ -960,19 +1113,177 @@ export class DungeonScene extends Scene {
     return best;
   }
 
+  private playHeroAttackAnimation(classId: ClassId, scaleMult = 1): void {
+    if (this.heroSprite) {
+      this.tweens.killTweensOf(this.heroSprite);
+      this.heroSprite.x = this.heroX;
+      this.tweens.add({
+        targets: this.heroSprite,
+        x: this.heroX + (classId === 'warrior' || classId === 'thief' ? 18 : 8) * scaleMult,
+        duration: 75,
+        yoyo: true,
+        ease: 'Quad.easeOut',
+      });
+    }
+
+    this.tweens.killTweensOf(this);
+    if (classId === 'warrior') {
+      this.weaponAngle = -0.85;
+      this.weaponSwingOffsetX = 4;
+      this.weaponSwingOffsetY = -8;
+      this.tweens.add({
+        targets: this,
+        weaponAngle: 1.25,
+        weaponSwingOffsetX: 18,
+        weaponSwingOffsetY: 8,
+        duration: 105,
+        ease: 'Cubic.easeOut',
+        yoyo: true,
+        onComplete: () => {
+          this.weaponAngle = 0;
+          this.weaponSwingOffsetX = 0;
+          this.weaponSwingOffsetY = 0;
+        },
+      });
+      this.spawnSlashVfx(this.heroX + 46, this.groundY - 28, 0xfef08a, 1.05 * scaleMult);
+    } else if (classId === 'mage') {
+      this.weaponAngle = -0.3;
+      this.weaponSwingOffsetX = 6;
+      this.weaponSwingOffsetY = -10;
+      this.tweens.add({
+        targets: this,
+        weaponAngle: 0.15,
+        weaponSwingOffsetX: 10,
+        weaponSwingOffsetY: -4,
+        duration: 110,
+        yoyo: true,
+        onComplete: () => {
+          this.weaponAngle = 0;
+          this.weaponSwingOffsetX = 0;
+          this.weaponSwingOffsetY = 0;
+        },
+      });
+      this.spawnHitSpark(this.heroX + 30, this.groundY - 36, false, 0x38bdf8);
+    } else if (classId === 'thief') {
+      this.weaponAngle = -0.5;
+      this.weaponSwingOffsetX = 16;
+      this.weaponSwingOffsetY = 0;
+      this.tweens.add({
+        targets: this,
+        weaponAngle: 0.85,
+        weaponSwingOffsetX: 22,
+        weaponSwingOffsetY: 4,
+        duration: 75,
+        yoyo: true,
+        onComplete: () => {
+          this.weaponAngle = 0;
+          this.weaponSwingOffsetX = 0;
+          this.weaponSwingOffsetY = 0;
+        },
+      });
+      this.spawnSlashVfx(this.heroX + 34, this.groundY - 28, 0xc084fc, 0.75 * scaleMult);
+    } else {
+      this.weaponAngle = -0.18;
+      this.weaponSwingOffsetX = -5;
+      this.weaponSwingOffsetY = 0;
+      this.tweens.add({
+        targets: this,
+        weaponAngle: 0.08,
+        weaponSwingOffsetX: 5,
+        weaponSwingOffsetY: 0,
+        duration: 85,
+        yoyo: true,
+        onComplete: () => {
+          this.weaponAngle = 0;
+          this.weaponSwingOffsetX = 0;
+          this.weaponSwingOffsetY = 0;
+        },
+      });
+    }
+  }
+
+  private spawnSlashVfx(x: number, y: number, tintHex: number, scale = 1): void {
+    const slash = this.add
+      .image(x, y, 'fx_slash_arc')
+      .setTint(tintHex)
+      .setScale(0.75 * scale)
+      .setAlpha(0.95)
+      .setDepth(10);
+    this.tweens.add({
+      targets: slash,
+      x: x + 16,
+      scale: 1.3 * scale,
+      alpha: 0,
+      duration: 160,
+      ease: 'Quad.easeOut',
+      onComplete: () => slash.destroy(),
+    });
+  }
+
+  private spawnHitSpark(x: number, y: number, isCrit: boolean, tintHex = 0xfef08a): void {
+    const spark = this.add
+      .image(x, y, 'fx_hit_spark')
+      .setTint(isCrit ? 0xfbbf24 : tintHex)
+      .setScale(isCrit ? 1.15 : 0.75)
+      .setDepth(11);
+    this.tweens.add({
+      targets: spark,
+      scale: isCrit ? 1.8 : 1.25,
+      rotation: 0.65,
+      alpha: 0,
+      duration: 140,
+      ease: 'Quad.easeOut',
+      onComplete: () => spark.destroy(),
+    });
+  }
+
+  private spawnLightningVfx(x1: number, y1: number, x2: number, y2: number, colorHex = 0x38bdf8): void {
+    const gfx = this.add.graphics().setDepth(11);
+    gfx.lineStyle(3, colorHex, 0.95);
+    gfx.beginPath();
+    gfx.moveTo(x1, y1);
+    const segments = 4;
+    for (let s = 1; s < segments; s++) {
+      const t = s / segments;
+      const mx = Phaser.Math.Linear(x1, x2, t) + (this.rng() - 0.5) * 18;
+      const my = Phaser.Math.Linear(y1, y2, t) + (this.rng() - 0.5) * 16;
+      gfx.lineTo(mx, my);
+    }
+    gfx.lineTo(x2, y2);
+    gfx.strokePath();
+    this.tweens.add({
+      targets: gfx,
+      alpha: 0,
+      duration: 170,
+      onComplete: () => gfx.destroy(),
+    });
+  }
+
+  private triggerStaticDischarge(originEnemy: EnemyEntity, atkMult = 0.8): void {
+    if (!this.stats) return;
+    const isCrit = this.rng() < this.stats.critRate;
+    const raw =
+      this.stats.atk *
+      atkMult *
+      this.stats.allDamageMult *
+      (isCrit ? this.stats.critDmg : 1);
+    const dmg = Math.max(1, Math.round(raw));
+
+    const others = this.enemies.filter(
+      (o) => o.id !== originEnemy.id && o.hp > 0 && Math.abs(o.sprite.x - originEnemy.sprite.x) <= 200
+    );
+    const targets = others.length > 0 ? others.slice(0, 2) : originEnemy.hp > 0 ? [originEnemy] : [];
+    for (const e of targets) {
+      this.spawnLightningVfx(originEnemy.sprite.x, originEnemy.sprite.y - 6, e.sprite.x, e.sprite.y, 0x38bdf8);
+      this.damageEnemy(e, dmg, isCrit, 'CHAIN');
+    }
+  }
+
   private performHeroAttack(target: EnemyEntity): void {
     if (!this.stats || !this.runConfig) return;
     this.attackCount += 1;
     const classId = this.runConfig.classId;
-
-    if (this.heroSprite) {
-      this.tweens.add({
-        targets: this.heroSprite,
-        x: this.heroX + (classId === 'warrior' || classId === 'thief' ? 18 : 6),
-        duration: 70,
-        yoyo: true,
-      });
-    }
+    this.playHeroAttackAnimation(classId, 1);
 
     const rollHit = (dmgMult: number, forceCrit: boolean = false): { dmg: number; isCrit: boolean } => {
       if (!this.stats) return { dmg: 10, isCrit: false };
@@ -999,14 +1310,26 @@ export class DungeonScene extends Scene {
       return { dmg: Math.max(1, Math.round(raw)), isCrit };
     };
 
+    const triggerStatic =
+      this.draftedBuffIds.includes('silver_static_discharge') && this.attackCount % 4 === 0;
+    const echoChance = this.draftedBuffIds.includes('silver_echo_strike')
+      ? this.hasEquippedLegendary('bow_cape_endlesssky')
+        ? this.isEquippedLegendaryCursed('bow_cape_endlesssky')
+          ? 0.375
+          : 0.5
+        : 0.25
+      : 0;
+    const echoProcs = echoChance > 0 && this.rng() < echoChance;
+
     if (classId === 'warrior') {
       soundFX.playSwing();
       const cleaveRange = this.draftedBuffIds.includes('prism_war_titan_cleave') ? 165 : 120;
       const { dmg, isCrit } = rollHit(1);
       for (const e of [...this.enemies]) {
         if (Math.abs(e.sprite.x - this.heroX) <= cleaveRange + 40) {
+          this.spawnHitSpark(e.sprite.x, e.sprite.y, isCrit);
           this.damageEnemy(e, dmg, isCrit);
-          if (!e.mutations.includes('juggernaut')) {
+          if (!e.mutations.includes('juggernaut') && e.hp > 0) {
             const pushedX = Math.min(this.scale.width - 55, e.sprite.x + this.stats.knockbackPower);
             if (pushedX >= this.scale.width - 60 && this.hasEquippedLegendary('war_wep_worldbreaker')) {
               this.damageEnemy(e, dmg, false, 'WALL SLAM');
@@ -1018,6 +1341,21 @@ export class DungeonScene extends Scene {
       if (this.hasEquippedLegendary('war_wep_ragnarok') && this.attackCount % 3 === 0) {
         this.spawnProjectile('proj_wave', this.heroX + 20, this.groundY - 34, 460, 0, dmg * 1.4, isCrit, 99, false, false, true);
       }
+      if (triggerStatic) {
+        this.triggerStaticDischarge(target);
+      }
+      if (echoProcs) {
+        this.time.delayedCall(90, () => {
+          if (this.phase !== 'combat' || !this.stats || !this.runConfig) return;
+          const echoTarget = this.getClosestEnemy();
+          if (!echoTarget) return;
+          this.playHeroAttackAnimation('warrior', 0.85);
+          soundFX.playSwing();
+          const echoHit = rollHit(0.75);
+          this.spawnHitSpark(echoTarget.sprite.x, echoTarget.sprite.y, echoHit.isCrit, 0x38bdf8);
+          this.damageEnemy(echoTarget, echoHit.dmg, echoHit.isCrit, 'ECHO');
+        });
+      }
     } else if (classId === 'mage') {
       soundFX.playSpell();
       const boltCount = this.hasEquippedLegendary('mage_wep_starlight')
@@ -1025,6 +1363,8 @@ export class DungeonScene extends Scene {
         : this.draftedBuffIds.includes('prism_mage_tri_elemental')
           ? 2
           : 1;
+      const vx = 520;
+      const baseVy = (target.sprite.y - (this.groundY - 28)) / Math.max(0.08, (target.sprite.x - (this.heroX + 24)) / vx);
       for (let i = 0; i < boltCount; i++) {
         const offset = i - (boltCount - 1) / 2;
         const { dmg, isCrit } = rollHit(i === 0 ? 1 : 0.65);
@@ -1032,15 +1372,16 @@ export class DungeonScene extends Scene {
           'proj_bolt',
           this.heroX + 24,
           this.groundY - 28 + offset * 12,
-          440,
-          offset * 24,
+          vx,
+          baseVy + offset * 24,
           dmg,
           isCrit,
           1,
           false,
           this.hasEquippedLegendary('mage_wep_glacial'),
           false,
-          target.id
+          target.id,
+          i === 0 && triggerStatic
         );
       }
       if (this.hasEquippedLegendary('mage_wep_abyssal') && this.rng() < 0.2) {
@@ -1049,6 +1390,35 @@ export class DungeonScene extends Scene {
         }
         this.spawnFloatingText(target.sprite.x, target.sprite.y - 45, 'VOID PULL!', '#c084fc', 14);
       }
+      if (echoProcs) {
+        this.time.delayedCall(90, () => {
+          if (this.phase !== 'combat' || !this.stats || !this.runConfig) return;
+          const echoTarget = this.getClosestEnemy();
+          if (!echoTarget) return;
+          soundFX.playSpell();
+          const echoHit = rollHit(0.75);
+          const evy =
+            (echoTarget.sprite.y - (this.groundY - 30)) /
+            Math.max(0.08, (echoTarget.sprite.x - (this.heroX + 24)) / vx);
+          this.spawnProjectile(
+            'proj_bolt',
+            this.heroX + 24,
+            this.groundY - 30,
+            vx,
+            evy,
+            echoHit.dmg,
+            echoHit.isCrit,
+            1,
+            false,
+            false,
+            false,
+            echoTarget.id,
+            false,
+            false,
+            'ECHO'
+          );
+        });
+      }
     } else if (classId === 'thief') {
       soundFX.playArrow();
       const pierce = this.hasEquippedLegendary('thief_head_bandana')
@@ -1056,11 +1426,74 @@ export class DungeonScene extends Scene {
           ? 2
           : 3
         : 1;
+      const vx = 620;
+      const starVy =
+        (target.sprite.y - (this.groundY - 28)) /
+        Math.max(0.08, (target.sprite.x - (this.heroX + 18)) / vx);
       const { dmg, isCrit } = rollHit(1);
-      this.spawnProjectile('proj_star', this.heroX + 18, this.groundY - 28, 560, 0, dmg, isCrit, pierce, false, false, false, target.id);
+      this.spawnProjectile(
+        'proj_star',
+        this.heroX + 18,
+        this.groundY - 28,
+        vx,
+        starVy,
+        dmg,
+        isCrit,
+        pierce,
+        false,
+        false,
+        false,
+        target.id,
+        triggerStatic
+      );
       if (this.draftedBuffIds.includes('prism_thief_shadow_partner') || (isCrit && this.hasEquippedLegendary('thief_wep_shadowfang'))) {
         const mult = this.isEquippedLegendaryCursed('thief_wep_shadowfang') ? 0.4 : 0.6;
-        this.spawnProjectile('proj_star', this.heroX + 8, this.groundY - 40, 560, 0, Math.round(dmg * mult), false, 1, false, false, false, target.id);
+        this.spawnProjectile(
+          'proj_star',
+          this.heroX + 8,
+          this.groundY - 40,
+          vx,
+          starVy,
+          Math.round(dmg * mult),
+          false,
+          1,
+          false,
+          false,
+          false,
+          target.id,
+          false,
+          false,
+          'SHADOW'
+        );
+      }
+      if (echoProcs) {
+        this.time.delayedCall(85, () => {
+          if (this.phase !== 'combat' || !this.stats || !this.runConfig) return;
+          const echoTarget = this.getClosestEnemy();
+          if (!echoTarget) return;
+          soundFX.playArrow();
+          const echoHit = rollHit(0.75);
+          const evy =
+            (echoTarget.sprite.y - (this.groundY - 28)) /
+            Math.max(0.08, (echoTarget.sprite.x - (this.heroX + 18)) / vx);
+          this.spawnProjectile(
+            'proj_star',
+            this.heroX + 18,
+            this.groundY - 28,
+            vx,
+            evy,
+            echoHit.dmg,
+            echoHit.isCrit,
+            1,
+            false,
+            false,
+            false,
+            echoTarget.id,
+            false,
+            false,
+            'ECHO'
+          );
+        });
       }
     } else {
       soundFX.playArrow();
@@ -1072,45 +1505,58 @@ export class DungeonScene extends Scene {
         this.draftedBuffIds.includes('prism_bow_snipers_mark') && this.attackCount % 3 === 0;
       const thunderInterval = this.isEquippedLegendaryCursed('bow_wep_thunderbird') ? 7 : 5;
       const isThunder = this.hasEquippedLegendary('bow_wep_thunderbird') && this.attackCount % thunderInterval === 0;
+      const vx = 680;
+      const baseVy =
+        (target.sprite.y - (this.groundY - 30)) /
+        Math.max(0.08, (target.sprite.x - (this.heroX + 24)) / vx);
 
       for (let i = 0; i < totalArrows; i++) {
         const { dmg, isCrit } = rollHit(i === 0 ? 1 : 0.6, guaranteedMark && i === 0);
-        const spreadVy = (i - (totalArrows - 1) / 2) * 32;
+        const spreadVy = (i - (totalArrows - 1) / 2) * 30;
         this.spawnProjectile(
           isThunder && i === 0 ? 'proj_lightning' : 'proj_arrow',
           this.heroX + 24,
           this.groundY - 30,
-          620,
-          spreadVy,
+          vx,
+          baseVy + spreadVy,
           dmg * (guaranteedMark && i === 0 ? 1.25 : 1),
           isCrit,
           isThunder && i === 0 ? 4 : this.draftedBuffIds.includes('prism_bow_split_arrow') ? 2 : 1,
           this.hasEquippedLegendary('bow_wep_worldtree') && this.rng() < 0.25,
           false,
           false,
-          target.id
+          target.id,
+          i === 0 && triggerStatic
         );
       }
-    }
-
-    // Silver Buff: Echo Strike (25% double strike)
-    if (this.draftedBuffIds.includes('silver_echo_strike')) {
-      const chance = this.hasEquippedLegendary('bow_cape_endlesssky')
-        ? this.isEquippedLegendaryCursed('bow_cape_endlesssky')
-          ? 0.375
-          : 0.5
-        : 0.25;
-      if (this.rng() < chance) {
-        const { dmg, isCrit } = rollHit(0.75);
-        this.damageEnemy(target, dmg, isCrit, 'ECHO');
-      }
-    }
-
-    // Silver Buff: Static Discharge (every 4th attack chains to 2 nearby foes)
-    if (this.draftedBuffIds.includes('silver_static_discharge') && this.attackCount % 4 === 0) {
-      const { dmg, isCrit } = rollHit(0.8);
-      for (const e of this.enemies.slice(0, 2)) {
-        this.damageEnemy(e, dmg, isCrit, 'CHAIN');
+      if (echoProcs) {
+        this.time.delayedCall(90, () => {
+          if (this.phase !== 'combat' || !this.stats || !this.runConfig) return;
+          const echoTarget = this.getClosestEnemy();
+          if (!echoTarget) return;
+          soundFX.playArrow();
+          const echoHit = rollHit(0.75);
+          const evy =
+            (echoTarget.sprite.y - (this.groundY - 30)) /
+            Math.max(0.08, (echoTarget.sprite.x - (this.heroX + 24)) / vx);
+          this.spawnProjectile(
+            'proj_arrow',
+            this.heroX + 24,
+            this.groundY - 30,
+            vx,
+            evy,
+            echoHit.dmg,
+            echoHit.isCrit,
+            1,
+            false,
+            false,
+            false,
+            echoTarget.id,
+            false,
+            false,
+            'ECHO'
+          );
+        });
       }
     }
   }
@@ -1127,9 +1573,19 @@ export class DungeonScene extends Scene {
     applyRoot: boolean,
     applyChill: boolean,
     isWave: boolean,
-    targetId: number | null = null
+    targetId: number | null = null,
+    isChainProc: boolean = false,
+    dropFalconLoot: boolean = false,
+    labelTag: string | null = null
   ): void {
     const sprite = this.add.image(x, y, textureKey).setDepth(7);
+    if (
+      textureKey === 'proj_arrow' ||
+      textureKey === 'proj_hawk_feather' ||
+      textureKey === 'proj_wolf_fang'
+    ) {
+      sprite.setRotation(Math.atan2(vy, vx));
+    }
     this.projectiles.push({
       sprite,
       targetId,
@@ -1142,6 +1598,9 @@ export class DungeonScene extends Scene {
       applyRoot,
       applyChill,
       isWave,
+      isChainProc,
+      dropFalconLoot,
+      labelTag,
       life: 2.2,
     });
   }
@@ -1154,6 +1613,13 @@ export class DungeonScene extends Scene {
       p.sprite.x += p.vx * dt;
       p.sprite.y += p.vy * dt;
 
+      const key = p.sprite.texture.key;
+      if (key === 'proj_star') {
+        p.sprite.rotation += 16 * dt;
+      } else if (key === 'proj_arrow' || key === 'proj_hawk_feather' || key === 'proj_wolf_fang') {
+        p.sprite.rotation = Math.atan2(p.vy, p.vx);
+      }
+
       let destroyed = p.life <= 0 || p.sprite.x > (this.scale.width || 1024) + 60;
       if (!destroyed) {
         for (const e of [...this.enemies]) {
@@ -1162,7 +1628,16 @@ export class DungeonScene extends Scene {
           const dy = Math.abs(p.sprite.y - e.sprite.y);
           if (dx <= (p.isWave ? 56 : 42) && dy <= 76) {
             p.hitIds.add(e.id);
-            this.damageEnemy(e, p.damage, p.isCrit);
+            this.spawnHitSpark(e.sprite.x, e.sprite.y, p.isCrit);
+            this.damageEnemy(e, p.damage, p.isCrit, p.labelTag);
+            if (p.isChainProc) {
+              p.isChainProc = false;
+              this.triggerStaticDischarge(e);
+            }
+            if (p.dropFalconLoot) {
+              p.dropFalconLoot = false;
+              this.spawnLootDrop(e.sprite.x, e.sprite.y, this.rng() < 0.6 ? 'coin' : 'orb', 14);
+            }
             if (!e.mutations.includes('juggernaut') && e.hp > 0) {
               const push = (this.stats?.knockbackPower ?? 16) * 0.45;
               e.sprite.x = Math.min((this.scale.width || 1024) - 55, e.sprite.x + push);
@@ -1240,6 +1715,13 @@ export class DungeonScene extends Scene {
     const finalDmg = Math.max(1, Math.round(dmg));
     enemy.hp = Math.max(0, enemy.hp - finalDmg);
 
+    if (enemy.sprite.active) {
+      enemy.sprite.setAlpha(0.55);
+      this.time.delayedCall(75, () => {
+        if (enemy.sprite.active) enemy.sprite.setAlpha(1);
+      });
+    }
+
     if (isCrit) {
       soundFX.playCrit();
       this.spawnFloatingText(
@@ -1259,6 +1741,8 @@ export class DungeonScene extends Scene {
         for (const other of [...this.enemies]) {
           if (other.id !== enemy.id && other.hp > 0 && Math.abs(other.sprite.x - enemy.sprite.x) <= 95) {
             other.hp = Math.max(0, other.hp - skyDmg);
+            this.spawnLightningVfx(other.sprite.x, other.sprite.y - 110, other.sprite.x, other.sprite.y, 0x38bdf8);
+            this.spawnHitSpark(other.sprite.x, other.sprite.y, false, 0x38bdf8);
             this.spawnFloatingText(other.sprite.x, other.sprite.y - 26, `ZAP! ${skyDmg}`, '#38bdf8', 13);
             if (other.hp <= 0) {
               this.killEnemy(other);
@@ -1311,6 +1795,7 @@ export class DungeonScene extends Scene {
         if (other) {
           const arcDmg = Math.max(1, Math.round(finalDmg * 0.4));
           other.hp = Math.max(0, other.hp - arcDmg);
+          this.spawnLightningVfx(enemy.sprite.x, enemy.sprite.y, other.sprite.x, other.sprite.y, 0x60a5fa);
           this.spawnFloatingText(other.sprite.x, other.sprite.y - 26, `ARC ${arcDmg}`, '#60a5fa', 12);
           if (other.hp <= 0) {
             this.killEnemy(other);
@@ -1375,6 +1860,16 @@ export class DungeonScene extends Scene {
 
     const ex = enemy.sprite.x;
     const ey = enemy.sprite.y;
+
+    this.spawnHitSpark(ex, ey, enemy.isBoss || enemy.isMiniBoss, 0xf8fafc);
+    const popRing = this.add.circle(ex, ey, enemy.isBoss ? 26 : 16, 0xf8fafc, 0.45).setDepth(10);
+    this.tweens.add({
+      targets: popRing,
+      scale: 2.1,
+      alpha: 0,
+      duration: 180,
+      onComplete: () => popRing.destroy(),
+    });
 
     enemy.sprite.destroy();
     enemy.hpBg.destroy();
@@ -1489,10 +1984,16 @@ export class DungeonScene extends Scene {
     if (this.draftedBuffIds.includes('silver_frostbite_aura') && e.sprite.x - this.heroX <= 165) {
       e.chillTimer = Math.max(e.chillTimer, 0.25);
     }
+    const baseY = this.groundY - (e.isBoss && !e.isMiniBoss ? 44 : e.isBoss ? 34 : 24);
     const meleeDist = this.heroX + 74;
     if (e.stunTimer <= 0 && e.rootTimer <= 0 && e.sprite.x > meleeDist) {
       const slow = e.chillTimer > 0 ? 0.75 : 1;
       e.sprite.x = Math.max(meleeDist, e.sprite.x - e.speed * slow * dt);
+      e.sprite.y = baseY - Math.abs(Math.sin(this.elapsedRunMs * 0.011 + e.id)) * 4.5;
+      e.sprite.rotation = Math.sin(this.elapsedRunMs * 0.011 + e.id) * 0.06;
+    } else if (!this.tweens.isTweening(e.sprite)) {
+      e.sprite.y = baseY;
+      e.sprite.rotation = 0;
     }
 
     if (e.stunTimer <= 0 && (e.sprite.x <= meleeDist + 16 || (e.isBoss && heroInRange))) {
@@ -1501,6 +2002,15 @@ export class DungeonScene extends Scene {
       e.atkTimer -= dt * enrageSpeed * chillSlow;
       if (e.atkTimer <= 0) {
         e.atkTimer = e.atkIntervalSec;
+        if (!this.tweens.isTweening(e.sprite)) {
+          this.tweens.add({
+            targets: e.sprite,
+            x: e.sprite.x - 16,
+            duration: 75,
+            yoyo: true,
+          });
+        }
+        this.spawnHitSpark(this.heroX + 12, this.groundY - 28, false, 0xf87171);
         this.damageHero(e.atk, e);
       }
     }
@@ -1618,13 +2128,15 @@ export class DungeonScene extends Scene {
     const critMult = this.stats.critDmg;
     const skillName = isUltimate ? def.activeSkillUltimateName : def.activeSkillName;
     this.spawnFloatingText(this.heroX + 40, this.groundY - 105, skillName.toUpperCase(), '#38bdf8', 16);
+    this.playHeroAttackAnimation(clsId, 1.3);
 
     if (clsId === 'warrior') {
       soundFX.playBossRoar();
       const mult = isUltimate ? 4.5 : 2.5;
       for (const e of [...this.enemies]) {
+        this.spawnHitSpark(e.sprite.x, e.sprite.y, true, 0xf97316);
         this.damageEnemy(e, this.stats.atk * mult * skillMult * critMult, true, 'SLAM');
-        e.stunTimer = Math.max(e.stunTimer, 1.4);
+        if (e.hp > 0) e.stunTimer = Math.max(e.stunTimer, 1.4);
       }
     } else if (clsId === 'mage') {
       soundFX.playSpell();
@@ -1633,6 +2145,7 @@ export class DungeonScene extends Scene {
       for (let pass = 0; pass < echoes; pass++) {
         const power = pass === 0 ? mult : mult * 0.65;
         for (const e of [...this.enemies]) {
+          this.spawnHitSpark(e.sprite.x, e.sprite.y, true, 0x38bdf8);
           this.damageEnemy(e, this.stats.atk * power * skillMult * critMult, true, 'NOVA');
         }
       }
@@ -1642,9 +2155,10 @@ export class DungeonScene extends Scene {
       const hits = isUltimate ? 8 : 4;
       for (let i = 0; i < hits; i++) {
         const t = this.enemies[i % Math.max(1, this.enemies.length)];
-        if (t) {
+        if (t && t.hp > 0) {
           t.bleedStacks = Math.min(5, t.bleedStacks + 1);
           t.bleedTimer = 3;
+          this.spawnSlashVfx(t.sprite.x, t.sprite.y, 0xc084fc, 0.9);
           this.damageEnemy(t, this.stats.atk * 0.85 * skillMult * critMult, true, 'SHADOW');
           if (!t.mutations.includes('juggernaut') && t.hp > 0) {
             t.sprite.x = Math.min((this.scale.width || 1024) - 55, t.sprite.x + 45);

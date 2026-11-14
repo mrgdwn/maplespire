@@ -230,10 +230,10 @@ body {
   border-color: #86efac;
 }
 
-/* Grids */
+/* Grids & Paperdoll */
 .grid-4 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(195px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
   gap: 8px;
 }
 
@@ -247,7 +247,7 @@ body {
   background: #1e293b;
   border: 2px solid #334155;
   border-radius: 8px;
-  padding: 9px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -256,6 +256,74 @@ body {
 .card.selected {
   border-color: #fbbf24;
   box-shadow: 0 0 0 1px #fbbf24;
+}
+
+.class-selector {
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+
+.class-selector:hover:not(.selected) {
+  border-color: #60a5fa;
+  transform: translateY(-1px);
+}
+
+.class-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.class-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.paperdoll-mini {
+  width: 44px;
+  height: 44px;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.paperdoll-showcase {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #0f172a 0%, #172554 100%);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.paperdoll-stage {
+  width: 92px;
+  height: 92px;
+  background: radial-gradient(circle at center, rgba(56, 189, 248, 0.16), #090d16 75%);
+  border: 2px solid #475569;
+  border-radius: 8px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.paperdoll-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .class-name {
@@ -332,20 +400,20 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  background: rgba(15, 23, 42, 0.86);
-  border-bottom: 2px solid #475569;
-  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.72);
+  border-bottom: 1px solid #334155;
+  padding: 6px 10px;
 }
 
 .hud-hp-box {
-  min-width: 180px;
+  min-width: 170px;
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
 .hud-boss-box {
-  min-width: 220px;
+  min-width: 210px;
   background: rgba(127, 29, 29, 0.65);
   border: 1px solid #f97316;
   border-radius: 6px;
@@ -362,24 +430,47 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  background: rgba(15, 23, 42, 0.9);
-  border-top: 2px solid #475569;
-  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.76);
+  border-top: 1px solid #334155;
+  padding: 6px 10px;
 }
 
 .buff-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  max-width: 48%;
+  max-width: 45%;
+  justify-content: flex-end;
 }
 
 .buff-chip {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 6px;
+  border-radius: 5px;
   background: #1e293b;
   border: 1px solid #475569;
+  cursor: help;
+}
+
+.buff-chip.tier-bronze {
+  border-color: #d97706;
+}
+
+.buff-chip.tier-silver {
+  border-color: #cbd5e1;
+}
+
+.buff-chip.tier-gold {
+  border-color: #facc15;
+}
+
+.buff-chip.tier-cursed {
+  border-color: #c084fc;
+}
+
+.buff-chip.tier-prismatic {
+  border-color: #38bdf8;
 }
 
 /* ================= MODALS ================= */
