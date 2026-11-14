@@ -235,3 +235,46 @@ As you climb deeper into the dungeon, Bronze buffs phase out and high-tier Silve
   * **Daily Class Bounty:** One random class gets **2x EXP & +25% Gold** each day.
   * **Rested Aura:** Missing days banks up to 3 days of **2x Loot** so players never feel punished for taking a break.
   * **7-Day Streak:** Awards 1 **Golden Ticket** (allows 1 extra bonus dungeon run whenever desired).
+
+---
+
+## 9. Finalized Combat Math, Job Advancements & Reddit Daily Competition Layer
+
+### 1. Daily UTC Reset & Deterministic Seed (`YYYY-MM-DD`)
+* Every day at `00:00 UTC`, the server hashes the `YYYY-MM-DD` date key to deterministically select **1 of 5 Biomes** and **1 of 4 2x Bounty Classes** so all Redditors face the same daily dungeon challenge.
+* **Run Modes:**
+  * **Official Daily Ranked Run (1/day + Golden Tickets):** Eligible for the **Daily Leaderboard** and the **Floor 10 Greed Gamble** (guaranteed Unique Named Legendary).
+  * **Practice / Grind Runs (Unlimited):** Available after completing the Daily Run; awards full EXP, Gold, Shards, and Normal/Rare gear drops up to Floor 10 so players can keep leveling their Roster & Link Skills.
+
+### 2. Concrete Base Stats, Combat Formulas & Active Skills
+* **Armor Mitigation:** $\text{Damage Taken Multiplier} = \frac{100}{100 + \max(0, \text{Effective Armor})}$
+* **Critical Strike Damage:** $\text{Crit Damage} = \text{Hit Damage} \times (1.5 + \text{Bonus Crit DMG})$
+* **Active Combat HUD:** Auto-walk and auto-attack paired with a clickable **Class Active / Ultimate Skill** (8–10s cooldown), **Healing Potion** (1 charge/floor, restores 35% Max HP, 10s cooldown, disabled during *Fasting Vow*), and **1x / 2x Speed** toggle.
+
+| Class | Base HP | Base ATK | ATK/s | Base Armor | Crit % | Crit DMG | Dodge % | Active Skill (Lv. 1 → Lv. 60 Ultimate) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Warrior** | 220 | 24 | 1.1 | 30 | 10% | 150% | 5% | **Earthshatter Slam** → **Berserker Cataclysm** (250%→450% AoE cleave + stun) |
+| **Mage** | 140 | 28 | 1.2 | 12 | 15% | 160% | 10% | **Arcane Nova** → **Genesis Meteor** (300%→520% screen-wide elemental blast) |
+| **Thief** | 150 | 20 | 1.8 | 15 | 25% | 175% | 20% | **Shadow Assault** → **Night Lord's Shuriken Storm** (4→8 rapid crit-boosted strikes + invuln dash) |
+| **Bowman** | 160 | 21 | 1.6 | 18 | 18% | 160% | 15% | **Arrow Rain** → **Phoenix Hurricane** (8→16 arrows + empowers Pet Hawk) |
+
+### 3. Job Advancements & 12 Prismatic Class Buffs
+* **Lv. 15 (1st Job Passive):**
+  * **Warrior (*Unyielding Grit*):** Regenerate 1.5% Max HP/sec and +20% Knockback.
+  * **Mage (*Elemental Resonance*):** Every 3rd cast applies random Burn, Chill, or Shock.
+  * **Thief (*Opportunist*):** +25% damage to bleeding, poisoned, or full-HP targets.
+  * **Bowman (*Hawk Eye Companion*):** Pet Hawk strikes every 1.5s for 60% ATK.
+* **Lv. 35 (2nd Job — 3 Prismatic Class Buffs each):**
+  * **Warrior:** *Blood Shield* (overhealing converts to shield), *Titan Cleave* (+40% AoE reach & +25% Boss DMG), *Undying Rage* (+1.5% ATK per 1% missing HP).
+  * **Mage:** *Tri-Elemental Mastery* (+35% Skill DMG & dual bolts), *Spell Echo* (30% chance to double-cast Active Skill), *Mana Barrier* (start each floor with 25% Max HP arcane shield).
+  * **Thief:** *Shadow Partner* (all attacks deal a 35% shadow echo hit), *Fatal Venom* (poison/bleed stacks tick 2x faster), *Coin Toss Barrage* (spend tiny Gold bursts for +40% Crit DMG).
+  * **Bowman:** *Split-Arrow Mastery* (+2 piercing arrows per shot), *Spectral Pack* (summons Spirit Wolf companion), *Sniper's Mark* (every 3rd shot deals guaranteed 200% Crit).
+* **Lv. 60 (3rd Job Ultimate):** Upgrades Active Skill into its Ultimate form and unlocks a floating pixel aura/cape.
+
+### 4. Camp Economy Formulas
+* **EXP Curve:** $\text{EXP to Next Level} = \lfloor 100 \times \text{Level}^{1.35} \rfloor$
+* **Blacksmith Slot Upgrade:** `+10% slot stats per level`. Cost: `10 + slotLevel * 6` Shards and `60 + slotLevel * 45` Gold.
+* **The Sanctum Purification:** Cleanse any Cursed Legendary into Pristine (`25 Shards + 2 Boss Cores`).
+* **Alchemy Altar Banish Slots:** Up to 5 slots (`100g → 250g → 500g → 1000g → 2000g`).
+* **Legion Board:** Infinite incremental nodes (`+1% Base ATK`, `+1% Max HP`, `+1% Gold Gain`, `+1% Crit DMG`), cost $\lfloor 50 \times 1.25^{\text{level}} \rfloor$ Gold.
+

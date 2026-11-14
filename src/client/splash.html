@@ -7,26 +7,66 @@
       name="viewport"
       content="initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, width=device-width, height=device-height, user-scalable=0"
     />
-    <title>devvit</title>
+    <title>MapleDelve — Daily Dungeon RPG</title>
   </head>
   <body class="app">
-    <img class="snoo" src="/snoo.png" alt="Snoo" />
-    <div class="content">
-      <h1 class="title" id="title"></h1>
-      <p class="description">
-        Edit <span class="code">src/client/splash.ts</span> to get started.
-      </p>
-    </div>
-    <div>
-      <button class="start-button" id="start-button">Start</button>
-    </div>
-    <footer class="footer">
-      <div class="docs-link" tabindex="0" id="docs-link">Docs</div>
-      <span class="divider">|</span>
-      <div class="docs-link" tabindex="0" id="playtest-link">r/Devvit</div>
-      <span class="divider">|</span>
-      <div class="docs-link" tabindex="0" id="discord-link">Discord</div>
-    </footer>
+    <main class="splash-card">
+      <header class="card-header">
+        <div class="brand-row">
+          <span class="pixel-badge">DAILY DUNGEON</span>
+          <span class="date-pill" id="date-pill">TODAY</span>
+        </div>
+        <h1 class="game-title">MAPLEDELVE</h1>
+        <p class="greeting" id="greeting">Greetings, Adventurer!</p>
+      </header>
+
+      <section class="biome-panel" id="biome-panel">
+        <div class="biome-row">
+          <div>
+            <div class="panel-label">TODAY'S BIOME</div>
+            <div class="biome-name" id="biome-name">Slime King's Bog</div>
+            <div class="biome-sub" id="biome-sub">Floor 4 -> Floor 10 Climax</div>
+          </div>
+          <div class="bounty-pill" id="bounty-pill">2x BOUNTY: WARRIOR</div>
+        </div>
+        <div class="boss-line" id="boss-line">
+          Mini-Boss: Royal Gel-Guard • End Boss: King Mush-Slime
+        </div>
+        <div class="mechanic-tip" id="mechanic-tip">
+          Mechanic: Mitosis — Splits into 2 at 50% HP
+        </div>
+      </section>
+
+      <section class="stats-grid">
+        <div class="stat-box">
+          <span class="stat-label">DELVES TODAY</span>
+          <span class="stat-val" id="stat-delves">0</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">FLOOR 10 CLEARS</span>
+          <span class="stat-val" id="stat-clears">0</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">YOUR STREAK</span>
+          <span class="stat-val" id="stat-streak">1d</span>
+        </div>
+      </section>
+
+      <div class="cta-wrap">
+        <button class="start-button" id="start-button" type="button">
+          ⚔️ ENTER TODAY'S DELVE
+        </button>
+        <div class="sub-status" id="sub-status">
+          10 Floors • 3-Buff Draft • Greed Gamble Legendary
+        </div>
+      </div>
+
+      <footer class="footer">
+        <button class="footer-link" id="how-to-btn" type="button">Rules &amp; Loops</button>
+        <span class="divider">•</span>
+        <button class="footer-link" id="reddit-link" type="button">r/Devvit</button>
+      </footer>
+    </main>
     <script type="module" src="splash.ts" defer></script>
   </body>
 </html>

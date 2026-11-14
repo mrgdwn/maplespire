@@ -16,6 +16,8 @@
     "types": [],
     "isolatedModules": true,
     "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "skipLibCheck": true,

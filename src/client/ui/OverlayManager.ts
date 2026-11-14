@@ -1,0 +1,1463 @@
+import { showToast } from '@devvit/web/client';
+import {
+  BOSS_MUTATIONS,
+  getBiomeById,
+  getMutationById,
+  rollBossMutations,
+} from '../../shared/catalogs/biomes.ts';
+import {
+  ALL_BUFFS,
+  CORE_BUFFS,
+  getBuffById,
+  refreshSingleDraftCard,
+  rollDraftCards,
+} from '../../shared/catalogs/buffs.ts';
+import type { BuffDefinition } from '../../shared/catalogs/buffs.ts';
+import {
+  CLASS_CATALOG,
+  GEAR_SLOTS,
+  computeHeroCombatStats,
+  computeLinkSkillBonuses,
+  getClassDefinition,
+  getJobAdvancementTitle,
+} from '../../shared/catalogs/classes.ts';
+import {
+  ELEMENT_CATALOG,
+  HYBRID_ELEMENTS,
+  LEGENDARY_CATALOG,
+  getHybridElement,
+  getLegendaryById,
+} from '../../shared/catalogs/legendaries.ts';
+import type {
+  CampActionRequest,
+  ClassId,
+  CompleteRunRequest,
+  GearItem,
+  LeaderboardEntry,
+  LegionStatKey,
+  MutationId,
+  RunMode,
+  RunRewardSummary,
+} from '../../shared/types.ts';
+import {
+  SANCTUM_PURIFY_COST,
+  createInitialProfile,
+  expForNextLevel,
+  getDailyChallengeConfig,
+  getDismantleShardValue,
+  getLegionUpgradeCost,
+  getNextBanishSlotCost,
+  getSlotUpgradeCost,
+  getUtcDateKey,
+  isBoolean,
+  isClassId,
+  isNumber,
+  isRecord,
+  isString,
+  mulberry32,
+  parseGearItem,
+  parseLeaderboardEntry,
+  parsePlayerProfile,
+} from '../../shared/utils.ts';
+import { soundFX } from '../fx/sound.ts';
+import type {
+  AppState,
+  DungeonBridge,
+  RunEndPayload,
+  RunHudSnapshot,
+} from './bridge.ts';
+
+type CampTab = 'roster' | 'buildings' | 'codex' | 'leaderboard';
+
+export class OverlayManager {
+  private root: HTMLElement;
+  private bridge: DungeonBridge | null = null;
+  private state: AppState;
+  private mode: 'camp' | 'dungeon' = 'camp';
+  private activeTab: CampTab = 'roster';
+  private codexFilter: ClassId | 'buffs' = 'warrior';
+  private draftRng: () => number = mulberry32(1);
+  private rouletteRng: () => number = mulberry32(2);
+  private lastHud: RunHudSnapshot | null = null;
+
+  private activeModal: HTMLElement | null = null;
+
+  constructor(root: HTMLElement) {
+    this.root = root;
+    const dateKey = getUtcDateKey();
+    const cfg = getDailyChallengeConfig(dateKey);
+    this.state = {
+      profile: createInitialProfile('Adventurer'),
+      daily: {
+        dateKey,
+        seed: cfg.seed,
+        biomeId: cfg.biomeId,
+        bountyClass: cfg.bountyClass,
+        totalRunsToday: 0,
+        floor10ClearsToday: 0,
+      },
+      leaderboard: [],
+    };
+  }
+
+  public setBridge(bridge: DungeonBridge): void {
+    this.bridge = bridge;
+  }
+
+  public async initialize(): Promise<void> {
+    this.renderCamp();
+    try {
+      const res = await fetch('/api/init');
+      if (!res.ok) return;
+      const raw: unknown = await res.json();
+      this.applyInitOrCompletePayload(raw);
+      if (this.mode === 'camp') this.renderCamp();
+    } catch {
+      // Keep local fallback state
+    }
+  }
+
+  private applyInitOrCompletePayload(raw: unknown): void {
+    if (!isRecord(raw)) return;
+    if (raw.profile) {
+      this.state.profile = parsePlayerProfile(raw.profile, this.state.profile.username);
+    }
+    if (isRecord(raw.daily)) {
+      const d = raw.daily;
+      const dateKey = isString(d.dateKey) ? d.dateKey : this.state.daily.dateKey;
+      const fallback = getDailyChallengeConfig(dateKey);
+      const biomeStr = d.biomeId;
+      const biomeId =
+        biomeStr === 'slime_bog' ||
+        biomeStr === 'glacial_spire' ||
+        biomeStr === 'volcanic_caldera' ||
+        biomeStr === 'shadow_alley' ||
+        biomeStr === 'temple_of_time'
+          ? biomeStr
+          : fallback.biomeId;
+      this.state.daily = {
+        dateKey,
+        seed: isNumber(d.seed) ? d.seed : fallback.seed,
+        biomeId,
+        bountyClass: isClassId(d.bountyClass) ? d.bountyClass : fallback.bountyClass,
+        totalRunsToday: isNumber(d.totalRunsToday) ? d.totalRunsToday : 0,
+        floor10ClearsToday: isNumber(d.floor10ClearsToday) ? d.floor10ClearsToday : 0,
+      };
+    }
+    if (Array.isArray(raw.leaderboard)) {
+      const entries: LeaderboardEntry[] = [];
+      for (const item of raw.leaderboard) {
+        const parsed = parseLeaderboardEntry(item);
+        if (parsed) entries.push(parsed);
+      }
+      this.state.leaderboard = entries;
+    }
+  }
+
+  private el<K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    className: string = '',
+    text: string = ''
+  ): HTMLElementTagNameMap[K] {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  private clearModal(): void {
+    if (this.activeModal) {
+      this.activeModal.remove();
+      this.activeModal = null;
+    }
+  }
+
+  private showToastSafe(msg: string): void {
+    try {
+      showToast(msg);
+    } catch {
+      // ignore if outside Devvit shell
+    }
+  }
+
+  private async sendCampAction(req: CampActionRequest): Promise<void> {
+    try {
+      const res = await fetch('/api/camp/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
+      const raw: unknown = await res.json();
+      if (!res.ok) {
+        if (isRecord(raw) && isString(raw.message)) {
+          this.showToastSafe(raw.message);
+        }
+        return;
+      }
+      if (isRecord(raw) && raw.profile) {
+        this.state.profile = parsePlayerProfile(raw.profile, this.state.profile.username);
+        if (isString(raw.message)) this.showToastSafe(raw.message);
+        this.renderCamp();
+      }
+    } catch {
+      this.showToastSafe('Action saved locally (offline preview)');
+    }
+  }
+
+  // ==================== CAMP HUB RENDERING ====================
+
+  public renderCamp(): void {
+    this.mode = 'camp';
+    this.clearModal();
+    this.root.innerHTML = '';
+
+    const p = this.state.profile;
+    const daily = this.state.daily;
+    const biome = getBiomeById(daily.biomeId);
+    const bountyCls = getClassDefinition(daily.bountyClass);
+    const dailyCompleted = p.dailyRankedCompletedDate === daily.dateKey;
+
+    const wrap = this.el('div', 'camp-backdrop');
+
+    // Header
+    const header = this.el('div', 'camp-header');
+    const leftGroup = this.el('div', 'camp-title-group');
+    leftGroup.appendChild(this.el('span', 'camp-logo', 'MAPLEDELVE'));
+    leftGroup.appendChild(this.el('span', 'pill', `u/${p.username}`));
+    leftGroup.appendChild(
+      this.el(
+        'span',
+        'pill',
+        `🔥 ${p.streakDays}d Streak${p.restedStacks > 0 ? ` • ${p.restedStacks}x Rested` : ''}`
+      )
+    );
+    header.appendChild(leftGroup);
+
+    const resRow = this.el('div', 'resource-row');
+    resRow.appendChild(this.el('span', 'pill pill-gold', `🪙 ${p.gold}g`));
+    resRow.appendChild(this.el('span', 'pill pill-shard', `💎 ${p.shards} Shards`));
+    resRow.appendChild(this.el('span', 'pill pill-core', `🔮 ${p.bossCores} Cores`));
+    resRow.appendChild(this.el('span', 'pill', `🎫 ${p.goldenTickets} Tickets`));
+    const muteBtn = this.el(
+      'button',
+      'btn btn-sm',
+      soundFX.isMuted() ? '🔇 Muted' : '🔊 SFX'
+    );
+    muteBtn.addEventListener('click', () => {
+      const m = soundFX.toggleMute();
+      muteBtn.textContent = m ? '🔇 Muted' : '🔊 SFX';
+    });
+    resRow.appendChild(muteBtn);
+    header.appendChild(resRow);
+    wrap.appendChild(header);
+
+    // Daily Banner
+    const strip = this.el('div', 'daily-strip');
+    strip.appendChild(
+      this.el(
+        'div',
+        '',
+        `🗺️ Today (${daily.dateKey}): ${biome.name} — F4: ${biome.miniBossName} -> F10: ${biome.endBossName} [${biome.mechanicName}]`
+      )
+    );
+    strip.appendChild(
+      this.el(
+        'span',
+        'pill pill-bounty',
+        `2x BOUNTY: ${bountyCls.name.toUpperCase()} (+2x EXP, +25% Gold)`
+      )
+    );
+    wrap.appendChild(strip);
+
+    // Tabs
+    const tabs = this.el('div', 'camp-tabs');
+    const tabDefs: readonly { id: CampTab; label: string }[] = [
+      { id: 'roster', label: '⚔️ Roster & Gear' },
+      { id: 'buildings', label: '🏰 Camp Buildings' },
+      { id: 'codex', label: '📖 Codex (48 Legendaries)' },
+      { id: 'leaderboard', label: '🏆 Daily Leaderboard' },
+    ];
+    for (const td of tabDefs) {
+      const btn = this.el(
+        'button',
+        `tab-btn ${this.activeTab === td.id ? 'active' : ''}`,
+        td.label
+      );
+      btn.addEventListener('click', () => {
+        this.activeTab = td.id;
+        this.renderCamp();
+      });
+      tabs.appendChild(btn);
+    }
+    wrap.appendChild(tabs);
+
+    // Body
+    const body = this.el('div', 'camp-body');
+    if (this.activeTab === 'roster') this.renderRosterTab(body);
+    else if (this.activeTab === 'buildings') this.renderBuildingsTab(body);
+    else if (this.activeTab === 'codex') this.renderCodexTab(body);
+    else this.renderLeaderboardTab(body);
+    wrap.appendChild(body);
+
+    // Footer Launch Buttons
+    const footer = this.el('div', 'camp-footer');
+    const selectedDef = getClassDefinition(p.selectedClass);
+
+    if (!dailyCompleted) {
+      const dailyBtn = this.el(
+        'button',
+        'btn btn-primary',
+        `⚔️ START DAILY RANKED DELVE (${selectedDef.name})`
+      );
+      dailyBtn.addEventListener('click', () => {
+        void this.launchRun('daily', false);
+      });
+      footer.appendChild(dailyBtn);
+    } else if (p.goldenTickets > 0) {
+      const ticketBtn = this.el(
+        'button',
+        'btn btn-primary',
+        `🎫 USE GOLDEN TICKET FOR RANKED DELVE (${p.goldenTickets} left)`
+      );
+      ticketBtn.addEventListener('click', () => {
+        void this.launchRun('daily', true);
+      });
+      footer.appendChild(ticketBtn);
+    }
+
+    const practiceBtn = this.el(
+      'button',
+      'btn btn-secondary',
+      dailyCompleted
+        ? `🏕️ PLAY PRACTICE / GRIND DELVE (${selectedDef.name})`
+        : `🏕️ PRACTICE RUN (No Daily Lockout)`
+    );
+    practiceBtn.addEventListener('click', () => {
+      void this.launchRun('practice', false);
+    });
+    footer.appendChild(practiceBtn);
+
+    wrap.appendChild(footer);
+    this.root.appendChild(wrap);
+  }
+
+  private renderRosterTab(container: HTMLElement): void {
+    const p = this.state.profile;
+    const links = computeLinkSkillBonuses(p.classes);
+
+    container.appendChild(
+      this.el(
+        'div',
+        'muted',
+        `Account Link Skills Active: +${links.maxHpPct}% Max HP • +${links.skillDmgPct}% Skill DMG • +${links.critRatePct}% Crit Rate • +${links.attackSpeedPct}% Attack Speed`
+      )
+    );
+
+    const grid = this.el('div', 'grid-4');
+    grid.style.marginTop = '8px';
+
+    for (const def of CLASS_CATALOG) {
+      const prog = p.classes[def.id];
+      const nextExp = expForNextLevel(prog.level);
+      const job = getJobAdvancementTitle(prog.level);
+      const isSelected = p.selectedClass === def.id;
+      const isBounty = this.state.daily.bountyClass === def.id;
+
+      const card = this.el('div', `card ${isSelected ? 'selected' : ''}`);
+      const top = this.el('div', 'row-between');
+      const title = this.el('span', 'class-name', `${def.name} (Lv.${prog.level})`);
+      title.style.color = def.colorHex;
+      top.appendChild(title);
+      if (isBounty) top.appendChild(this.el('span', 'pill pill-bounty', '2x'));
+      card.appendChild(top);
+
+      card.appendChild(this.el('div', 'muted', `${job.title} • ${def.weaponLabel}`));
+      const track = this.el('div', 'bar-track');
+      const fill = this.el('div', 'bar-fill');
+      fill.style.width = `${Math.min(100, Math.round((prog.exp / nextExp) * 100))}%`;
+      track.appendChild(fill);
+      card.appendChild(track);
+
+      card.appendChild(this.el('div', 'muted', `EXP ${prog.exp}/${nextExp} • Link: ${def.linkSkillDesc}`));
+
+      const selectBtn = this.el(
+        'button',
+        `btn btn-sm ${isSelected ? 'btn-gold' : ''}`,
+        isSelected ? '✓ Active Hero' : `Select ${def.name}`
+      );
+      selectBtn.disabled = isSelected;
+      selectBtn.addEventListener('click', () => {
+        void this.sendCampAction({ action: 'select_class', classId: def.id });
+      });
+      card.appendChild(selectBtn);
+      grid.appendChild(card);
+    }
+    container.appendChild(grid);
+
+    // Selected class stats + equipped gear + inventory
+    const selId = p.selectedClass;
+    const selProg = p.classes[selId];
+    const stats = computeHeroCombatStats(p, selId, [], 0, 0);
+
+    const split = this.el('div', 'grid-2');
+    split.style.marginTop = '12px';
+
+    // Equipped column
+    const eqBox = this.el('div', 'card');
+    eqBox.appendChild(
+      this.el(
+        'div',
+        'class-name',
+        `${getClassDefinition(selId).name} Gear & Combat Stats`
+      )
+    );
+    eqBox.appendChild(
+      this.el(
+        'div',
+        'muted',
+        `HP ${stats.maxHp} • ATK ${stats.atk} • SPD ${stats.attackSpeed}/s • ARM ${stats.armor} • CRIT ${Math.round(stats.critRate * 100)}% (${Math.round(stats.critDmg * 100)}%) • DODGE ${Math.round(stats.dodgeRate * 100)}%`
+      )
+    );
+
+    for (const slot of GEAR_SLOTS) {
+      const item = selProg.equipped[slot];
+      const slotLvl = selProg.slotLevels[slot];
+      const box = this.el(
+        'div',
+        `gear-item ${item ? `tier-${item.tier}` : ''} ${item?.isCursed ? 'cursed-tag' : ''}`
+      );
+      const row = this.el('div', 'row-between');
+      row.appendChild(
+        this.el(
+          'strong',
+          '',
+          `${slot.toUpperCase()} [+${slotLvl * 10}%]: ${item ? item.name : 'Empty'}`
+        )
+      );
+      if (item?.isCursed) {
+        row.appendChild(this.el('span', 'pill', 'CURSED'));
+      }
+      box.appendChild(row);
+      if (item) {
+        box.appendChild(this.el('div', 'muted', `+${item.baseStatBonus} Power • ${item.affixText}`));
+        if (item.legendaryId && item.isCursed) {
+          const leg = getLegendaryById(item.legendaryId);
+          if (leg) {
+            box.appendChild(
+              this.el('div', 'muted', `Penalty (${leg.cursedName}): ${leg.cursedText}`)
+            );
+          }
+        }
+        if (item.maxSockets > 0) {
+          const hybrid = getHybridElement(item.sockets);
+          const socketRow = this.el('div', 'row-wrap');
+          socketRow.appendChild(
+            this.el(
+              'span',
+              'muted',
+              `Sockets (${item.sockets.length}/${item.maxSockets}): ${item.sockets.length > 0 ? item.sockets.join(' + ').toUpperCase() : 'Empty'}${hybrid ? ` [${hybrid.name}!]` : ''}`
+            )
+          );
+          for (const elem of ELEMENT_CATALOG) {
+            const sockBtn = this.el('button', 'btn btn-sm', `${elem.id.slice(0, 3).toUpperCase()} (15💎)`);
+            sockBtn.disabled = p.shards < 15;
+            sockBtn.addEventListener('click', () => {
+              void this.sendCampAction({
+                action: 'socket_element',
+                itemId: item.id,
+                elementId: elem.id,
+              });
+            });
+            socketRow.appendChild(sockBtn);
+          }
+          box.appendChild(socketRow);
+        }
+      }
+      eqBox.appendChild(box);
+    }
+    split.appendChild(eqBox);
+
+    // Inventory bag column
+    const bagBox = this.el('div', 'card');
+    const bagHead = this.el('div', 'row-between');
+    bagHead.appendChild(this.el('div', 'class-name', `Bag (${p.inventory.length}/60)`));
+    const bulkBtn = this.el('button', 'btn btn-sm', '♻️ Dismantle All Normal/Rare');
+    bulkBtn.addEventListener('click', () => {
+      void this.sendCampAction({ action: 'dismantle_all_normal_rare' });
+    });
+    bagHead.appendChild(bulkBtn);
+    bagBox.appendChild(bagHead);
+
+    if (p.inventory.length === 0) {
+      bagBox.appendChild(
+        this.el('div', 'muted', 'No items in bag yet. Complete a delve to collect Normal, Rare, and Unique Legendary gear!')
+      );
+    } else {
+      for (const item of p.inventory) {
+        const card = this.el(
+          'div',
+          `gear-item tier-${item.tier} ${item.isCursed ? 'cursed-tag' : ''}`
+        );
+        const top = this.el('div', 'row-between');
+        top.appendChild(
+          this.el(
+            'strong',
+            '',
+            `${item.name} (${getClassDefinition(item.classId).name} ${item.slot})`
+          )
+        );
+        top.appendChild(
+          this.el('span', 'muted', `${item.tier.toUpperCase()}${item.isCursed ? ' • CURSED' : ''}`)
+        );
+        card.appendChild(top);
+        card.appendChild(this.el('div', 'muted', `+${item.baseStatBonus} Power • ${item.affixText}`));
+
+        const acts = this.el('div', 'row-wrap');
+        const eqBtn = this.el('button', 'btn btn-sm btn-green', 'Equip');
+        eqBtn.addEventListener('click', () => {
+          void this.sendCampAction({ action: 'equip_item', itemId: item.id });
+        });
+        const disBtn = this.el(
+          'button',
+          'btn btn-sm',
+          `Dismantle (+${getDismantleShardValue(item)}💎)`
+        );
+        disBtn.addEventListener('click', () => {
+          void this.sendCampAction({ action: 'dismantle_item', itemId: item.id });
+        });
+        acts.appendChild(eqBtn);
+        acts.appendChild(disBtn);
+        card.appendChild(acts);
+        bagBox.appendChild(card);
+      }
+    }
+    split.appendChild(bagBox);
+    container.appendChild(split);
+  }
+
+  private renderBuildingsTab(container: HTMLElement): void {
+    const p = this.state.profile;
+    const grid = this.el('div', 'grid-2');
+
+    // 1. Blacksmith
+    const smith = this.el('div', 'card');
+    smith.appendChild(
+      this.el(
+        'div',
+        'class-name',
+        `🔨 Blacksmith (${getClassDefinition(p.selectedClass).name} Slots)`
+      )
+    );
+    smith.appendChild(
+      this.el('div', 'muted', 'Spend Gold & Shards to permanently empower each gear slot (+10% stats/level).')
+    );
+
+    const autoRow = this.el('div', 'row-between');
+    autoRow.appendChild(
+      this.el('span', 'muted', `Auto-Dismantle Normal drops: ${p.autoDismantleNormal ? 'ON' : 'OFF'}`)
+    );
+    const autoBtn = this.el('button', 'btn btn-sm', p.autoDismantleNormal ? 'Disable' : 'Enable');
+    autoBtn.addEventListener('click', () => {
+      void this.sendCampAction({ action: 'toggle_auto_dismantle' });
+    });
+    autoRow.appendChild(autoBtn);
+    smith.appendChild(autoRow);
+
+    const clsProg = p.classes[p.selectedClass];
+    for (const slot of GEAR_SLOTS) {
+      const lvl = clsProg.slotLevels[slot];
+      const cost = getSlotUpgradeCost(lvl);
+      const row = this.el('div', 'row-between');
+      row.appendChild(this.el('span', '', `${slot.toUpperCase()} Lv.${lvl} (+${lvl * 10}%)`));
+      const upBtn = this.el(
+        'button',
+        'btn btn-sm btn-gold',
+        `Upgrade (${cost.gold}g, ${cost.shards}💎)`
+      );
+      upBtn.disabled = p.gold < cost.gold || p.shards < cost.shards;
+      upBtn.addEventListener('click', () => {
+        void this.sendCampAction({
+          action: 'upgrade_slot',
+          classId: p.selectedClass,
+          slot,
+        });
+      });
+      row.appendChild(upBtn);
+      smith.appendChild(row);
+    }
+    grid.appendChild(smith);
+
+    // 2. The Sanctum
+    const sanctum = this.el('div', 'card');
+    sanctum.appendChild(this.el('div', 'class-name', '✨ The Sanctum (Purify Cursed Legendaries)'));
+    sanctum.appendChild(
+      this.el(
+        'div',
+        'muted',
+        `Cleanse any Cursed Legendary into its Pristine form (${SANCTUM_PURIFY_COST.shards}💎 + ${SANCTUM_PURIFY_COST.bossCores}🔮).`
+      )
+    );
+
+    const cursedItems: GearItem[] = [];
+    for (const item of p.inventory) {
+      if (item.isCursed) cursedItems.push(item);
+    }
+    for (const clsDef of CLASS_CATALOG) {
+      const eq = p.classes[clsDef.id].equipped;
+      for (const slot of GEAR_SLOTS) {
+        const it = eq[slot];
+        if (it?.isCursed) cursedItems.push(it);
+      }
+    }
+
+    if (cursedItems.length === 0) {
+      sanctum.appendChild(
+        this.el('div', 'muted', 'No Cursed Legendaries owned yet. Clear Floor 10 in a Daily Run to earn Legendaries!')
+      );
+    } else {
+      for (const item of cursedItems) {
+        const leg = getLegendaryById(item.legendaryId);
+        const row = this.el('div', 'gear-item tier-legendary cursed-tag');
+        row.appendChild(this.el('strong', '', item.name));
+        if (leg) {
+          row.appendChild(this.el('div', 'muted', `Curse: ${leg.cursedName} — ${leg.cursedText}`));
+        }
+        const purBtn = this.el(
+          'button',
+          'btn btn-sm btn-purple',
+          `Purify (${SANCTUM_PURIFY_COST.shards}💎, ${SANCTUM_PURIFY_COST.bossCores}🔮)`
+        );
+        purBtn.disabled =
+          p.shards < SANCTUM_PURIFY_COST.shards || p.bossCores < SANCTUM_PURIFY_COST.bossCores;
+        purBtn.addEventListener('click', () => {
+          void this.sendCampAction({ action: 'purify_legendary', itemId: item.id });
+        });
+        row.appendChild(purBtn);
+        sanctum.appendChild(row);
+      }
+    }
+    grid.appendChild(sanctum);
+
+    // 3. Alchemy Altar
+    const alchemy = this.el('div', 'card');
+    alchemy.appendChild(
+      this.el(
+        'div',
+        'class-name',
+        `⚗️ Alchemy Altar (Banish ${p.banishedBuffIds.length}/${p.unlockedBanishSlots})`
+      )
+    );
+    alchemy.appendChild(
+      this.el('div', 'muted', 'Banish unwanted Bronze buffs so they never appear in your floor drafts.')
+    );
+
+    const nextSlotCost = getNextBanishSlotCost(p.unlockedBanishSlots);
+    if (nextSlotCost !== null) {
+      const unlockBtn = this.el(
+        'button',
+        'btn btn-sm btn-gold',
+        `Unlock Banish Slot #${p.unlockedBanishSlots + 1} (${nextSlotCost}g)`
+      );
+      unlockBtn.disabled = p.gold < nextSlotCost;
+      unlockBtn.addEventListener('click', () => {
+        void this.sendCampAction({ action: 'unlock_banish_slot' });
+      });
+      alchemy.appendChild(unlockBtn);
+    }
+
+    const bronzeBuffs = CORE_BUFFS.filter((b) => b.tier === 'bronze');
+    const banishWrap = this.el('div', 'row-wrap');
+    for (const b of bronzeBuffs) {
+      const isBanished = p.banishedBuffIds.includes(b.id);
+      const bBtn = this.el(
+        'button',
+        `btn btn-sm ${isBanished ? 'btn-purple' : ''}`,
+        `${b.icon} ${b.name}${isBanished ? ' [BANISHED]' : ''}`
+      );
+      bBtn.addEventListener('click', () => {
+        void this.sendCampAction({ action: 'toggle_banish_buff', buffId: b.id });
+      });
+      banishWrap.appendChild(bBtn);
+    }
+    alchemy.appendChild(banishWrap);
+    grid.appendChild(alchemy);
+
+    // 4. Legion Board
+    const legion = this.el('div', 'card');
+    legion.appendChild(this.el('div', 'class-name', '🛡️ Legion Board (Account-Wide Stats)'));
+    legion.appendChild(
+      this.el('div', 'muted', 'Infinite Gold sinks granting permanent power to all 4 classes.')
+    );
+
+    const nodes: readonly { key: LegionStatKey; label: string }[] = [
+      { key: 'atk', label: '+1% Base ATK' },
+      { key: 'hp', label: '+1% Max HP' },
+      { key: 'gold', label: '+1% Gold Gain' },
+      { key: 'critDmg', label: '+1% Crit DMG' },
+    ];
+    for (const n of nodes) {
+      const lvl = p.legion[n.key];
+      const cost = getLegionUpgradeCost(lvl);
+      const row = this.el('div', 'row-between');
+      row.appendChild(this.el('span', '', `${n.label} (Lv.${lvl} -> +${lvl}%)`));
+      const btn = this.el('button', 'btn btn-sm btn-gold', `Upgrade (${cost}g)`);
+      btn.disabled = p.gold < cost;
+      btn.addEventListener('click', () => {
+        void this.sendCampAction({ action: 'upgrade_legion', stat: n.key });
+      });
+      row.appendChild(btn);
+      legion.appendChild(row);
+    }
+    grid.appendChild(legion);
+
+    container.appendChild(grid);
+  }
+
+  private renderCodexTab(container: HTMLElement): void {
+    const filterRow = this.el('div', 'row-wrap');
+    filterRow.style.marginBottom = '10px';
+
+    for (const c of CLASS_CATALOG) {
+      const btn = this.el(
+        'button',
+        `tab-btn ${this.codexFilter === c.id ? 'active' : ''}`,
+        `${c.name} Legendaries (12)`
+      );
+      btn.addEventListener('click', () => {
+        this.codexFilter = c.id;
+        this.renderCamp();
+      });
+      filterRow.appendChild(btn);
+    }
+    const buffBtn = this.el(
+      'button',
+      `tab-btn ${this.codexFilter === 'buffs' ? 'active' : ''}`,
+      `Draft Buffs (${ALL_BUFFS.length})`
+    );
+    buffBtn.addEventListener('click', () => {
+      this.codexFilter = 'buffs';
+      this.renderCamp();
+    });
+    filterRow.appendChild(buffBtn);
+    container.appendChild(filterRow);
+
+    if (this.codexFilter === 'buffs') {
+      const grid = this.el('div', 'grid-4');
+      for (const b of ALL_BUFFS) {
+        const card = this.el('div', `draft-card tier-${b.tier}`);
+        card.appendChild(this.el('span', 'tier-badge', `${b.tier}${b.classId ? ` • ${b.classId}` : ''}`));
+        card.appendChild(this.el('strong', '', `${b.icon} ${b.name}`));
+        card.appendChild(this.el('div', 'muted', b.description));
+        if (b.downside) {
+          card.appendChild(this.el('div', 'muted', `Curse: ${b.downside}`));
+        }
+        grid.appendChild(card);
+      }
+      container.appendChild(grid);
+      return;
+    }
+
+    const items = LEGENDARY_CATALOG.filter((i) => i.classId === this.codexFilter);
+    const grid = this.el('div', 'grid-2');
+    for (const item of items) {
+      const card = this.el('div', 'gear-item tier-legendary');
+      const row = this.el('div', 'row-between');
+      row.appendChild(this.el('strong', '', item.name));
+      row.appendChild(this.el('span', 'pill', item.slot.toUpperCase()));
+      card.appendChild(row);
+      card.appendChild(this.el('div', 'muted', `Pristine: ${item.signatureText}`));
+      card.appendChild(this.el('div', 'muted', `Cursed (${item.cursedName}): ${item.cursedText}`));
+      grid.appendChild(card);
+    }
+
+    // Hybrid elements footer in codex
+    const hybCard = this.el('div', 'card');
+    hybCard.style.marginTop = '10px';
+    hybCard.appendChild(this.el('strong', '', 'Weapon Dual-Socket Hybrid Synergies (Legendary Weapons)'));
+    for (const h of HYBRID_ELEMENTS) {
+      hybCard.appendChild(
+        this.el('div', 'muted', `${h.name} (${h.elements[0]} + ${h.elements[1]}): ${h.effectText}`)
+      );
+    }
+    container.appendChild(grid);
+    container.appendChild(hybCard);
+  }
+
+  private renderLeaderboardTab(container: HTMLElement): void {
+    const daily = this.state.daily;
+    container.appendChild(
+      this.el(
+        'div',
+        'muted',
+        `Today (${daily.dateKey}): ${daily.totalRunsToday} Total Delves • ${daily.floor10ClearsToday} Floor 10 Clears`
+      )
+    );
+
+    if (this.state.leaderboard.length === 0) {
+      container.appendChild(
+        this.el('div', 'card', 'No ranked delves recorded today yet. Be the first on the Daily Leaderboard!')
+      );
+      return;
+    }
+
+    const table = this.el('table', 'table');
+    const thead = this.el('thead');
+    const hr = this.el('tr');
+    for (const col of ['#', 'Redditor', 'Class', 'Result', 'Time', 'Gold', 'Legendary']) {
+      hr.appendChild(this.el('th', '', col));
+    }
+    thead.appendChild(hr);
+    table.appendChild(thead);
+
+    const tbody = this.el('tbody');
+    for (const entry of this.state.leaderboard) {
+      const tr = this.el('tr');
+      tr.appendChild(this.el('td', '', String(entry.rank)));
+      tr.appendChild(this.el('td', '', `u/${entry.username}`));
+      tr.appendChild(this.el('td', '', getClassDefinition(entry.classId).name));
+      tr.appendChild(
+        this.el(
+          'td',
+          '',
+          entry.outcome === 'cleared'
+            ? 'Cleared F10'
+            : entry.outcome === 'extracted'
+              ? `Extracted F${entry.floorReached}`
+              : `Fell F${entry.floorReached}`
+        )
+      );
+      tr.appendChild(this.el('td', '', `${(entry.durationMs / 1000).toFixed(1)}s`));
+      tr.appendChild(this.el('td', '', `${entry.goldEarned}g`));
+      tr.appendChild(this.el('td', '', entry.legendaryName ?? '—'));
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    container.appendChild(table);
+  }
+
+  // ==================== START RUN & DUNGEON HUD ====================
+
+  private async launchRun(requestedMode: RunMode, useGoldenTicket: boolean): Promise<void> {
+    if (!this.bridge) return;
+
+    let runId = `local_${Date.now()}`;
+    let actualMode: RunMode = requestedMode;
+    let seed =
+      requestedMode === 'daily'
+        ? this.state.daily.seed
+        : Math.floor(Math.random() * 1_000_000_000);
+
+    try {
+      const res = await fetch('/api/run/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: requestedMode,
+          classId: this.state.profile.selectedClass,
+          useGoldenTicket,
+        }),
+      });
+      if (res.ok) {
+        const raw: unknown = await res.json();
+        if (isRecord(raw)) {
+          if (isString(raw.runId)) runId = raw.runId;
+          if (raw.mode === 'daily' || raw.mode === 'practice') actualMode = raw.mode;
+          if (isNumber(raw.seed)) seed = raw.seed;
+          if (raw.profile) {
+            this.state.profile = parsePlayerProfile(raw.profile, this.state.profile.username);
+          }
+        }
+      }
+    } catch {
+      // Offline fallback
+    }
+
+    this.draftRng = mulberry32(seed ^ 0x9e3779b9);
+    this.rouletteRng = mulberry32(seed ^ 0x85ebca6b);
+
+    this.mode = 'dungeon';
+    this.renderDungeonHudShell();
+
+    this.bridge.startRun({
+      runId,
+      mode: actualMode,
+      seed,
+      biomeId: this.state.daily.biomeId,
+      classId: this.state.profile.selectedClass,
+      profile: this.state.profile,
+      daily: this.state.daily,
+    });
+  }
+
+  private renderDungeonHudShell(): void {
+    this.root.innerHTML = '';
+
+    const top = this.el('div', 'hud-top');
+    top.id = 'hud-top';
+
+    const left = this.el('div', 'hud-hp-box');
+    const floorLbl = this.el('strong', '', 'Floor 1/10 • Wave 1/2');
+    floorLbl.id = 'hud-floor';
+    const hpTrack = this.el('div', 'bar-track');
+    const hpFill = this.el('div', 'bar-fill');
+    hpFill.id = 'hud-hp-fill';
+    hpTrack.appendChild(hpFill);
+    const hpText = this.el('div', 'muted', 'HP 200 / 200');
+    hpText.id = 'hud-hp-text';
+    left.appendChild(floorLbl);
+    left.appendChild(hpTrack);
+    left.appendChild(hpText);
+    top.appendChild(left);
+
+    const bossBox = this.el('div', 'hud-boss-box');
+    bossBox.id = 'hud-boss-box';
+    bossBox.style.display = 'none';
+    const bossName = this.el('strong', '', 'BOSS');
+    bossName.id = 'hud-boss-name';
+    const bossTrack = this.el('div', 'bar-track');
+    const bossFill = this.el('div', 'bar-fill');
+    bossFill.id = 'hud-boss-fill';
+    bossFill.style.background = '#f97316';
+    bossTrack.appendChild(bossFill);
+    const bossSub = this.el('div', 'muted', '');
+    bossSub.id = 'hud-boss-sub';
+    bossBox.appendChild(bossName);
+    bossBox.appendChild(bossTrack);
+    bossBox.appendChild(bossSub);
+    top.appendChild(bossBox);
+
+    const right = this.el('div', 'row-wrap');
+    const lootTxt = this.el('span', 'pill pill-gold', '🪙 0g • 💎 0 • 🔮 0');
+    lootTxt.id = 'hud-loot';
+    right.appendChild(lootTxt);
+
+    const muteBtn = this.el('button', 'btn btn-sm', soundFX.isMuted() ? '🔇' : '🔊');
+    muteBtn.addEventListener('click', () => {
+      muteBtn.textContent = soundFX.toggleMute() ? '🔇' : '🔊';
+    });
+    right.appendChild(muteBtn);
+
+    const retreatBtn = this.el('button', 'btn btn-sm', 'Camp');
+    retreatBtn.addEventListener('click', () => {
+      this.bridge?.stopToIdle();
+      this.renderCamp();
+    });
+    right.appendChild(retreatBtn);
+    top.appendChild(right);
+
+    const bottom = this.el('div', 'hud-bottom');
+    const controls = this.el('div', 'row-wrap');
+
+    const skillBtn = this.el('button', 'btn btn-sm btn-primary', '⚡ Skill');
+    skillBtn.id = 'hud-skill-btn';
+    skillBtn.style.minWidth = '140px';
+    skillBtn.addEventListener('click', () => {
+      this.bridge?.triggerActiveSkill();
+    });
+
+    const autoBtn = this.el('button', 'btn btn-sm btn-green', 'Auto: ON');
+    autoBtn.id = 'hud-auto-btn';
+    autoBtn.addEventListener('click', () => {
+      const next = this.bridge?.toggleAutoSkill() ?? true;
+      autoBtn.textContent = `Auto: ${next ? 'ON' : 'OFF'}`;
+    });
+
+    const potBtn = this.el('button', 'btn btn-sm btn-purple', '🧪 Potion (1)');
+    potBtn.id = 'hud-pot-btn';
+    potBtn.addEventListener('click', () => {
+      this.bridge?.triggerPotion();
+    });
+
+    const spdBtn = this.el('button', 'btn btn-sm', '1x Speed');
+    spdBtn.id = 'hud-spd-btn';
+    spdBtn.addEventListener('click', () => {
+      const next = this.bridge?.toggleSpeed() ?? 1;
+      spdBtn.textContent = `${next}x Speed`;
+    });
+
+    controls.appendChild(skillBtn);
+    controls.appendChild(autoBtn);
+    controls.appendChild(potBtn);
+    controls.appendChild(spdBtn);
+
+    const buffStrip = this.el('div', 'buff-strip');
+    buffStrip.id = 'hud-buffs';
+
+    bottom.appendChild(controls);
+    bottom.appendChild(buffStrip);
+
+    this.root.appendChild(top);
+    this.root.appendChild(bottom);
+  }
+
+  public updateRunHud(hud: RunHudSnapshot): void {
+    if (this.mode !== 'dungeon') return;
+    this.lastHud = hud;
+
+    const floorEl = document.getElementById('hud-floor');
+    if (floorEl) floorEl.textContent = `Floor ${hud.floor}/${hud.maxFloors} • ${hud.waveLabel}`;
+
+    const hpFill = document.getElementById('hud-hp-fill');
+    if (hpFill) {
+      hpFill.style.width = `${Math.min(100, Math.round((hud.hp / Math.max(1, hud.maxHp)) * 100))}%`;
+    }
+
+    const hpText = document.getElementById('hud-hp-text');
+    if (hpText) {
+      hpText.textContent = `HP ${hud.hp}/${hud.maxHp}${hud.shield > 0 ? ` (+${hud.shield} Shield)` : ''}`;
+    }
+
+    const bossBox = document.getElementById('hud-boss-box');
+    if (bossBox) {
+      if (hud.activeBossName) {
+        bossBox.style.display = 'flex';
+        const bName = document.getElementById('hud-boss-name');
+        if (bName) bName.textContent = hud.activeBossName;
+        const bFill = document.getElementById('hud-boss-fill');
+        if (bFill) {
+          bFill.style.width = `${Math.min(100, Math.round((hud.activeBossHp / Math.max(1, hud.activeBossMaxHp)) * 100))}%`;
+        }
+        const bSub = document.getElementById('hud-boss-sub');
+        if (bSub) {
+          const muts = hud.activeMutations.map((m) => getMutationById(m).name).join(' + ');
+          bSub.textContent = `${hud.activeBossHp}/${hud.activeBossMaxHp}${hud.activeBossShield > 0 ? ` • Ice Shield ${hud.activeBossShield}` : ''}${muts ? ` • ${muts}` : ''}`;
+        }
+      } else {
+        bossBox.style.display = 'none';
+      }
+    }
+
+    const lootEl = document.getElementById('hud-loot');
+    if (lootEl) lootEl.textContent = `🪙 ${hud.gold}g • 💎 ${hud.shards} • 🔮 ${hud.cores}`;
+
+    const skillBtn = document.getElementById('hud-skill-btn');
+    if (skillBtn instanceof HTMLButtonElement) {
+      skillBtn.disabled = !hud.skillReady;
+      skillBtn.textContent = hud.skillReady
+        ? `⚡ ${hud.skillName}`
+        : `⏳ ${Math.ceil(hud.skillCooldownPct * 10)}s`;
+    }
+
+    const potBtn = document.getElementById('hud-pot-btn');
+    if (potBtn instanceof HTMLButtonElement) {
+      potBtn.disabled = hud.potionCharges <= 0 || hud.potionDisabledReason !== null;
+      potBtn.textContent = hud.potionDisabledReason
+        ? `🚫 ${hud.potionDisabledReason}`
+        : `🧪 Potion (${hud.potionCharges})`;
+    }
+
+    const buffStrip = document.getElementById('hud-buffs');
+    if (buffStrip) {
+      buffStrip.innerHTML = '';
+      for (const id of hud.draftedBuffIds.slice(-8)) {
+        const b = getBuffById(id);
+        if (!b) continue;
+        buffStrip.appendChild(this.el('span', 'buff-chip', `${b.icon} ${b.name}`));
+      }
+    }
+    void this.lastHud;
+  }
+
+  // ==================== IN-RUN MODALS ====================
+
+  public openDraftModal(floor: number, equippedBuffIds: string[], silverMult: number): void {
+    this.clearModal();
+    const clsId = this.state.profile.selectedClass;
+    const clsLevel = this.state.profile.classes[clsId].level;
+
+    const draftInput = {
+      floor,
+      rng: this.draftRng,
+      classId: clsId,
+      classLevel: clsLevel,
+      banishedIds: this.state.profile.banishedBuffIds,
+      equippedBuffIds,
+      silverWeightMult: silverMult,
+    };
+
+    let cards: BuffDefinition[] = rollDraftCards(draftInput);
+    let refreshesLeft = 2;
+
+    const backdrop = this.el('div', 'modal-backdrop');
+    const box = this.el('div', 'modal-box');
+    const title = this.el('div', 'modal-title', `Floor ${floor} Cleared — Draft 1 of 3 Buffs`);
+    const subtitle = this.el(
+      'div',
+      'muted',
+      `Targeted Card Refreshes Remaining: ${refreshesLeft} (Click Refresh on any individual card to keep the other 2 locked!)`
+    );
+    subtitle.style.textAlign = 'center';
+
+    const grid = this.el('div', 'draft-grid');
+
+    const renderCards = (): void => {
+      subtitle.textContent = `Targeted Card Refreshes Remaining: ${refreshesLeft} (Click Refresh on any individual card to keep the other 2 locked!)`;
+      grid.innerHTML = '';
+
+      cards.forEach((cardDef, idx) => {
+        const card = this.el('div', `draft-card tier-${cardDef.tier}`);
+        const top = this.el('div', 'row-between');
+        top.appendChild(this.el('span', 'tier-badge', cardDef.tier));
+        const refreshBtn = this.el(
+          'button',
+          'btn btn-sm',
+          `🔄 Refresh (${refreshesLeft})`
+        );
+        refreshBtn.disabled = refreshesLeft <= 0;
+        refreshBtn.addEventListener('click', () => {
+          if (refreshesLeft <= 0) return;
+          refreshesLeft -= 1;
+          soundFX.playRouletteTick();
+          cards = refreshSingleDraftCard(draftInput, cards, idx);
+          renderCards();
+        });
+        top.appendChild(refreshBtn);
+        card.appendChild(top);
+
+        card.appendChild(this.el('strong', '', `${cardDef.icon} ${cardDef.name}`));
+        card.appendChild(this.el('div', 'muted', cardDef.description));
+        if (cardDef.downside) {
+          card.appendChild(this.el('div', 'muted', `⚠️ Downside: ${cardDef.downside}`));
+        }
+
+        const pickBtn = this.el('button', 'btn btn-gold', 'Choose Buff');
+        pickBtn.addEventListener('click', () => {
+          soundFX.playDraft();
+          this.clearModal();
+          this.bridge?.resumeAfterDraft(cardDef.id);
+        });
+        card.appendChild(pickBtn);
+        grid.appendChild(card);
+      });
+    };
+
+    renderCards();
+    box.appendChild(title);
+    box.appendChild(subtitle);
+    box.appendChild(grid);
+    backdrop.appendChild(box);
+    this.root.appendChild(backdrop);
+    this.activeModal = backdrop;
+  }
+
+  public openRouletteModal(floor: number, count: number, exclude: MutationId[]): void {
+    this.clearModal();
+    const rolled = rollBossMutations(this.rouletteRng, count, exclude);
+    const biome = getBiomeById(this.state.daily.biomeId);
+
+    const backdrop = this.el('div', 'modal-backdrop');
+    const box = this.el('div', 'modal-box');
+    box.appendChild(
+      this.el(
+        'div',
+        'modal-title',
+        floor === 4
+          ? `🎰 Floor 4 Mini-Boss Roulette: ${biome.miniBossName}`
+          : `🎰 Floor 10 End Boss Roulette: ${biome.endBossName}`
+      )
+    );
+    const windowEl = this.el('div', 'roulette-window', 'Spinning Boss Mutation...');
+    const descEl = this.el('div', 'muted', `${biome.mechanicName}: ${biome.mechanicDescription}`);
+    descEl.style.textAlign = 'center';
+
+    const goBtn = this.el('button', 'btn btn-primary', '⚔️ FIGHT BOSS!');
+    goBtn.disabled = true;
+    goBtn.addEventListener('click', () => {
+      this.clearModal();
+      this.bridge?.resumeAfterRoulette(rolled);
+    });
+
+    box.appendChild(windowEl);
+    box.appendChild(descEl);
+    box.appendChild(goBtn);
+    backdrop.appendChild(box);
+    this.root.appendChild(backdrop);
+    this.activeModal = backdrop;
+
+    let ticks = 0;
+    const timer = window.setInterval(() => {
+      ticks += 1;
+      soundFX.playRouletteTick();
+      const sample = BOSS_MUTATIONS[ticks % BOSS_MUTATIONS.length];
+      if (sample && ticks < 11) {
+        windowEl.textContent = `${sample.icon} ${sample.name}`;
+      } else {
+        window.clearInterval(timer);
+        const defs = rolled.map((id) => getMutationById(id));
+        windowEl.textContent = defs.map((d) => `${d.icon} ${d.name}`).join(' + ');
+        descEl.textContent = defs.map((d) => `${d.name}: ${d.effectText}`).join(' | ');
+        goBtn.disabled = false;
+      }
+    }, 105);
+  }
+
+  public openExtractionModal(floor: number, gold: number, shards: number, cores: number): void {
+    this.clearModal();
+    const backdrop = this.el('div', 'modal-backdrop');
+    const box = this.el('div', 'modal-box');
+    box.appendChild(
+      this.el('div', 'modal-title', `🚁 Floor ${floor} Extraction Checkpoint`)
+    );
+    box.appendChild(
+      this.el(
+        'div',
+        'muted',
+        `Current Unbanked Loot: 🪙 ${gold} Gold • 💎 ${shards} Shards • 🔮 ${cores} Boss Cores`
+      )
+    );
+    box.appendChild(
+      this.el(
+        'div',
+        'muted',
+        'Extract safely now to bank 100% of your loot, or push deeper toward Floor 10 (dying forfeits 50% of unbanked loot!).'
+      )
+    );
+
+    const row = this.el('div', 'camp-footer');
+    const extractBtn = this.el('button', 'btn btn-secondary', '🚁 EXTRACT SAFELY (100% Loot)');
+    extractBtn.addEventListener('click', () => {
+      this.clearModal();
+      this.bridge?.resumeAfterExtraction(true);
+    });
+
+    const pushBtn = this.el(
+      'button',
+      'btn btn-primary',
+      floor === 4 ? '🔥 PUSH TO FLOOR 5 -> 7' : '🔥 PUSH TO FLOOR 10 END BOSS!'
+    );
+    pushBtn.addEventListener('click', () => {
+      this.clearModal();
+      this.bridge?.resumeAfterExtraction(false);
+    });
+
+    row.appendChild(extractBtn);
+    row.appendChild(pushBtn);
+    box.appendChild(row);
+    backdrop.appendChild(box);
+    this.root.appendChild(backdrop);
+    this.activeModal = backdrop;
+  }
+
+  public handleRunEnded(payload: RunEndPayload): void {
+    if (payload.outcome === 'cleared' && payload.mode === 'daily') {
+      this.openGreedGambleModal(payload);
+      return;
+    }
+    void this.submitAndShowSummary(payload);
+  }
+
+  private openGreedGambleModal(payload: RunEndPayload): void {
+    this.clearModal();
+    const backdrop = this.el('div', 'modal-backdrop');
+    const box = this.el('div', 'modal-box');
+    box.appendChild(this.el('div', 'modal-title', '🏛️ Altar of Fate — Floor 10 Greed Gamble'));
+    box.appendChild(
+      this.el(
+        'div',
+        'muted',
+        `You conquered Floor 10! You are guaranteed a Unique Named Legendary for your ${getClassDefinition(payload.classId).name}. Use your 1 Free Purification Roll: Success grants a Pristine Legendary; Failure still keeps the Legendary with a Tuned Cursed Penalty (cleansable later at The Sanctum)!`
+      )
+    );
+
+    const statusEl = this.el('div', 'roulette-window', '✨ Ready to Roll Purification ✨');
+    const rollBtn = this.el('button', 'btn btn-primary', '🎲 ROLL FREE PURIFICATION (50/50)');
+    rollBtn.addEventListener('click', () => {
+      rollBtn.disabled = true;
+      const purified = this.rouletteRng() < 0.5;
+      if (purified) {
+        soundFX.playVictory();
+        statusEl.textContent = '✨ PURIFIED! PRISTINE LEGENDARY ✨';
+      } else {
+        soundFX.playBossRoar();
+        statusEl.textContent = '😈 CURSED! (Retains full Signature Power + Tuned Penalty)';
+      }
+      window.setTimeout(() => {
+        void this.submitAndShowSummary({
+          ...payload,
+          greedGamblePurified: purified,
+        });
+      }, 950);
+    });
+
+    box.appendChild(statusEl);
+    box.appendChild(rollBtn);
+    backdrop.appendChild(box);
+    this.root.appendChild(backdrop);
+    this.activeModal = backdrop;
+  }
+
+  private async submitAndShowSummary(payload: RunEndPayload): Promise<void> {
+    let summary: RunRewardSummary = {
+      goldBanked: payload.outcome === 'died' ? Math.floor(payload.goldCollected * 0.5) : payload.goldCollected,
+      shardsBanked: payload.outcome === 'died' ? Math.floor(payload.shardsCollected * 0.5) : payload.shardsCollected,
+      coresBanked: payload.outcome === 'cleared' ? payload.coresCollected + 1 : payload.coresCollected,
+      expGained: payload.floorReached * 42,
+      bountyApplied: payload.classId === this.state.daily.bountyClass,
+      restedApplied: false,
+      lootForfeited: payload.outcome === 'died',
+      newLevel: this.state.profile.classes[payload.classId].level,
+      leveledUp: false,
+      drops: [],
+      autoDismantledCount: 0,
+      autoDismantledShards: 0,
+      legendaryDrop: null,
+      playerRank: null,
+    };
+
+    const reqBody: CompleteRunRequest = payload;
+    try {
+      const res = await fetch('/api/run/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody),
+      });
+      if (res.ok) {
+        const raw: unknown = await res.json();
+        this.applyInitOrCompletePayload(raw);
+        if (isRecord(raw) && isRecord(raw.summary)) {
+          const s = raw.summary;
+          const drops: GearItem[] = [];
+          if (Array.isArray(s.drops)) {
+            for (const d of s.drops) {
+              const parsed = parseGearItem(d);
+              if (parsed) drops.push(parsed);
+            }
+          }
+          summary = {
+            goldBanked: isNumber(s.goldBanked) ? s.goldBanked : summary.goldBanked,
+            shardsBanked: isNumber(s.shardsBanked) ? s.shardsBanked : summary.shardsBanked,
+            coresBanked: isNumber(s.coresBanked) ? s.coresBanked : summary.coresBanked,
+            expGained: isNumber(s.expGained) ? s.expGained : summary.expGained,
+            bountyApplied: isBoolean(s.bountyApplied) ? s.bountyApplied : summary.bountyApplied,
+            restedApplied: isBoolean(s.restedApplied) ? s.restedApplied : false,
+            lootForfeited: isBoolean(s.lootForfeited) ? s.lootForfeited : summary.lootForfeited,
+            newLevel: isNumber(s.newLevel) ? s.newLevel : summary.newLevel,
+            leveledUp: isBoolean(s.leveledUp) ? s.leveledUp : false,
+            drops,
+            autoDismantledCount: isNumber(s.autoDismantledCount) ? s.autoDismantledCount : 0,
+            autoDismantledShards: isNumber(s.autoDismantledShards) ? s.autoDismantledShards : 0,
+            legendaryDrop: parseGearItem(s.legendaryDrop),
+            playerRank: isNumber(s.playerRank) ? s.playerRank : null,
+          };
+        }
+      }
+    } catch {
+      // Keep fallback summary
+    }
+
+    this.clearModal();
+    const backdrop = this.el('div', 'modal-backdrop');
+    const box = this.el('div', 'modal-box');
+    const titleStr =
+      payload.outcome === 'cleared'
+        ? '🏆 FLOOR 10 VICTORY!'
+        : payload.outcome === 'extracted'
+          ? `🚁 EXTRACTED AT FLOOR ${payload.floorReached}!`
+          : `💀 DEFEATED ON FLOOR ${payload.floorReached}`;
+    box.appendChild(this.el('div', 'modal-title', titleStr));
+
+    if (summary.lootForfeited) {
+      box.appendChild(
+        this.el('div', 'muted', '⚠️ Defeat Penalty: 50% of unbanked loot was lost.')
+      );
+    }
+
+    box.appendChild(
+      this.el(
+        'div',
+        'card',
+        `Banked: 🪙 ${summary.goldBanked}g • 💎 ${summary.shardsBanked} Shards • 🔮 ${summary.coresBanked} Cores • ⭐ +${summary.expGained} EXP (Lv.${summary.newLevel}${summary.leveledUp ? ' LEVEL UP!' : ''})${summary.bountyApplied ? ' [2x Bounty]' : ''}${summary.restedApplied ? ' [2x Rested]' : ''}${summary.playerRank ? ` • Daily Rank #${summary.playerRank}` : ''}`
+      )
+    );
+
+    if (summary.legendaryDrop) {
+      const leg = getLegendaryById(summary.legendaryDrop.legendaryId);
+      const lBox = this.el(
+        'div',
+        `gear-item tier-legendary ${summary.legendaryDrop.isCursed ? 'cursed-tag' : ''}`
+      );
+      lBox.appendChild(
+        this.el(
+          'strong',
+          '',
+          `Altar of Fate Legendary: ${summary.legendaryDrop.name} (${summary.legendaryDrop.isCursed ? 'CURSED' : 'PRISTINE ✨'})`
+        )
+      );
+      lBox.appendChild(this.el('div', 'muted', summary.legendaryDrop.affixText));
+      if (summary.legendaryDrop.isCursed && leg) {
+        lBox.appendChild(
+          this.el('div', 'muted', `Penalty (${leg.cursedName}): ${leg.cursedText} — Cleanse at The Sanctum!`)
+        );
+      }
+      box.appendChild(lBox);
+    }
+
+    if (summary.drops.length > 0) {
+      box.appendChild(
+        this.el(
+          'div',
+          'muted',
+          `Gear Drops Added to Bag: ${summary.drops.map((d) => `${d.name} (${d.tier})`).join(', ')}`
+        )
+      );
+    }
+
+    const actions = this.el('div', 'camp-footer');
+    const shareBtn = this.el('button', 'btn btn-secondary', '💬 Share Build to Reddit Comments');
+    shareBtn.addEventListener('click', () => {
+      void this.shareRunToComments(payload, summary, shareBtn);
+    });
+
+    const campBtn = this.el('button', 'btn btn-primary', '🏕️ Return to Camp');
+    campBtn.addEventListener('click', () => {
+      this.clearModal();
+      this.renderCamp();
+    });
+
+    actions.appendChild(shareBtn);
+    actions.appendChild(campBtn);
+    box.appendChild(actions);
+
+    backdrop.appendChild(box);
+    this.root.appendChild(backdrop);
+    this.activeModal = backdrop;
+  }
+
+  private async shareRunToComments(
+    payload: RunEndPayload,
+    summary: RunRewardSummary,
+    button: HTMLButtonElement
+  ): Promise<void> {
+    button.disabled = true;
+    try {
+      const res = await fetch('/api/share-comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          classId: payload.classId,
+          floorReached: payload.floorReached,
+          outcome: payload.outcome,
+          durationMs: payload.durationMs,
+          goldBanked: summary.goldBanked,
+          topBuffIds: payload.draftedBuffIds.slice(0, 5),
+          bossMutations: payload.bossMutations,
+          legendaryName: summary.legendaryDrop ? summary.legendaryDrop.name : null,
+          legendaryCursed: summary.legendaryDrop ? summary.legendaryDrop.isCursed : false,
+        }),
+      });
+      const raw: unknown = await res.json();
+      if (isRecord(raw)) {
+        const msg = isString(raw.message) ? raw.message : 'Shared!';
+        if (isString(raw.commentText) && raw.posted !== true && navigator.clipboard) {
+          await navigator.clipboard.writeText(raw.commentText);
+        }
+        this.showToastSafe(msg);
+        button.textContent = raw.posted === true ? '✓ Posted to Comments!' : '📋 Copied Summary!';
+        return;
+      }
+    } catch {
+      this.showToastSafe('Unable to share comment right now.');
+    }
+    button.disabled = false;
+  }
+}

@@ -1,32 +1,45 @@
-import { Boot } from './scenes/Boot';
-import { GameOver } from './scenes/GameOver';
-import { Game as MainGame } from './scenes/Game';
-import { MainMenu } from './scenes/MainMenu';
 import * as Phaser from 'phaser';
 import { AUTO, Game } from 'phaser';
-import { Preloader } from './scenes/Preloader';
+import { DungeonScene } from './scenes/DungeonScene.ts';
+import { OverlayManager } from './ui/OverlayManager.ts';
 
-//  Find out more information about the Game Config at:
-//  https://docs.phaser.io/api-documentation/typedef/types-core#gameconfig
-const config: Phaser.Types.Core.GameConfig = {
-  type: AUTO,
-  parent: 'game-container',
-  backgroundColor: '#028af8',
-  scale: {
-    // Keep a fixed game resolution but automatically scale it to fit within the available
-    // web-view / device while maintaining aspect ratio.
-    mode: Phaser.Scale.RESIZE,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: 1024,
-    height: 768,
-  },
-  scene: [Boot, Preloader, MainMenu, MainGame, GameOver],
-};
+export const startMapleDelve = (): void => {
+  const uiRoot = document.getElementById('ui-layer');
+  if (!uiRoot) return;
 
-const StartGame = (parent: string) => {
-  return new Game({ ...config, parent });
+  const overlay = new OverlayManager(uiRoot);
+  const dungeonScene = new DungeonScene();
+
+  dungeonScene.setCallbacks({
+    onHudUpdate: (hud) => overlay.updateRunHud(hud),
+    onRequestDraft: (floor, equippedBuffIds, silverMult) =>
+      overlay.openDraftModal(floor, equippedBuffIds, silverMult),
+    onRequestRoulette: (floor, count, exclude) =>
+      overlay.openRouletteModal(floor, count, exclude),
+    onRequestExtraction: (floor, gold, shards, cores) =>
+      overlay.openExtractionModal(floor, gold, shards, cores),
+    onRunEnded: (payload) => overlay.handleRunEnded(payload),
+    onRegisterBridge: (bridge) => overlay.setBridge(bridge),
+  });
+
+  const config: Phaser.Types.Core.GameConfig = {
+    type: AUTO,
+    parent: 'game-container',
+    backgroundColor: '#0b101b',
+    pixelArt: true,
+    scale: {
+      mode: Phaser.Scale.RESIZE,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: 1024,
+      height: 768,
+    },
+    scene: [dungeonScene],
+  };
+
+  new Game(config);
+  void overlay.initialize();
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  StartGame('game-container');
+  startMapleDelve();
 });
