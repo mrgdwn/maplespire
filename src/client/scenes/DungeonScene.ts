@@ -347,6 +347,11 @@ export class DungeonScene extends Scene {
     if (this.heroSprite) {
       this.heroSprite.setPosition(this.heroX, this.groundY - 28);
     }
+    for (const e of this.enemies) {
+      const ey = this.groundY - (e.isBoss && !e.isMiniBoss ? 44 : e.isBoss ? 34 : 24);
+      e.sprite.y = ey;
+      e.sprite.x = Math.max(this.heroX + 74, Math.min(width - 55, e.sprite.x));
+    }
   }
 
   private applyBiomeVisuals(biome: BiomeDefinition): void {
@@ -579,6 +584,10 @@ export class DungeonScene extends Scene {
 
     const mobCount =
       this.floor === 1 ? 2 : this.floor === 7 ? 5 : 3 + Math.min(2, Math.floor(this.floor / 4));
+    const spacing = Math.min(
+      95,
+      Math.max(38, Math.floor((w - this.heroX - 180) / Math.max(1, mobCount - 1)))
+    );
     for (let i = 0; i < mobCount; i++) {
       const kindIdx = Math.floor(this.rng() * 3);
       const textureKey = `mob_${kindIdx}`;
@@ -589,7 +598,7 @@ export class DungeonScene extends Scene {
         (42 + this.floor * 26 + this.waveIndex * 10) * (isElite ? 2.1 : 1) * hpMult
       );
       const atk = Math.round((6 + this.floor * 2.0) * (isElite ? 1.35 : 1));
-      const x = w - 75 - i * 95;
+      const x = Math.max(this.heroX + 130, w - 75 - i * spacing);
       const y = this.groundY - 24;
 
       const sprite = this.add.image(x, y, textureKey).setTint(tint).setDepth(6);
@@ -941,6 +950,7 @@ export class DungeonScene extends Scene {
     let best: EnemyEntity | null = null;
     let bestDist = Number.POSITIVE_INFINITY;
     for (const e of this.enemies) {
+      if (e.hp <= 0) continue;
       const d = e.sprite.x - this.heroX;
       if (d < bestDist) {
         bestDist = d;
@@ -1016,13 +1026,14 @@ export class DungeonScene extends Scene {
           ? 2
           : 1;
       for (let i = 0; i < boltCount; i++) {
+        const offset = i - (boltCount - 1) / 2;
         const { dmg, isCrit } = rollHit(i === 0 ? 1 : 0.65);
         this.spawnProjectile(
           'proj_bolt',
           this.heroX + 24,
-          this.groundY - 34 + (i - 1) * 14,
+          this.groundY - 28 + offset * 12,
           440,
-          (i - 1) * 28,
+          offset * 24,
           dmg,
           isCrit,
           1,
@@ -1146,9 +1157,10 @@ export class DungeonScene extends Scene {
       let destroyed = p.life <= 0 || p.sprite.x > (this.scale.width || 1024) + 60;
       if (!destroyed) {
         for (const e of [...this.enemies]) {
-          if (p.hitIds.has(e.id)) continue;
-          const dist = Phaser.Math.Distance.Between(p.sprite.x, p.sprite.y, e.sprite.x, e.sprite.y);
-          if (dist <= (p.isWave ? 54 : 36)) {
+          if (e.hp <= 0 || p.hitIds.has(e.id)) continue;
+          const dx = Math.abs(p.sprite.x - e.sprite.x);
+          const dy = Math.abs(p.sprite.y - e.sprite.y);
+          if (dx <= (p.isWave ? 56 : 42) && dy <= 76) {
             p.hitIds.add(e.id);
             this.damageEnemy(e, p.damage, p.isCrit);
             if (!e.mutations.includes('juggernaut') && e.hp > 0) {
@@ -1179,7 +1191,11 @@ export class DungeonScene extends Scene {
     isCrit: boolean,
     labelTag: string | null = null
   ): void {
-    if (enemy.hp <= 0 || !this.stats || !this.runConfig) return;
+    if (!this.stats || !this.runConfig) return;
+    if (enemy.hp <= 0) {
+      this.killEnemy(enemy);
+      return;
+    }
 
     // Smoke Bomb dodge check
     if (enemy.smokeActiveTimer > 0 && this.rng() < 0.5) {
@@ -1239,10 +1255,14 @@ export class DungeonScene extends Scene {
         this.healHero(this.stats.maxHp * 0.02, true);
       }
       if (this.draftedBuffIds.includes('gold_stormcaller_conduit')) {
-        const skyDmg = Math.round(this.stats.atk * 1.2);
-        for (const other of this.enemies) {
-          if (other.id !== enemy.id && Math.abs(other.sprite.x - enemy.sprite.x) <= 95) {
+        const skyDmg = Math.max(1, Math.round(this.stats.atk * 1.2));
+        for (const other of [...this.enemies]) {
+          if (other.id !== enemy.id && other.hp > 0 && Math.abs(other.sprite.x - enemy.sprite.x) <= 95) {
             other.hp = Math.max(0, other.hp - skyDmg);
+            this.spawnFloatingText(other.sprite.x, other.sprite.y - 26, `ZAP! ${skyDmg}`, '#38bdf8', 13);
+            if (other.hp <= 0) {
+              this.killEnemy(other);
+            }
           }
         }
       }
@@ -1287,8 +1307,15 @@ export class DungeonScene extends Scene {
         enemy.burnStacks = Math.min(5, enemy.burnStacks + 1);
         enemy.burnTimer = 3;
       } else if (elem === 'lightning' && this.rng() < 0.35) {
-        const other = this.enemies.find((o) => o.id !== enemy.id);
-        if (other) other.hp = Math.max(0, other.hp - Math.round(finalDmg * 0.4));
+        const other = this.enemies.find((o) => o.id !== enemy.id && o.hp > 0);
+        if (other) {
+          const arcDmg = Math.max(1, Math.round(finalDmg * 0.4));
+          other.hp = Math.max(0, other.hp - arcDmg);
+          this.spawnFloatingText(other.sprite.x, other.sprite.y - 26, `ARC ${arcDmg}`, '#60a5fa', 12);
+          if (other.hp <= 0) {
+            this.killEnemy(other);
+          }
+        }
       }
     }
     if (hybrid?.name === 'Plasma' && enemy.burnStacks > 0 && this.rng() < 0.25) {
@@ -1381,6 +1408,11 @@ export class DungeonScene extends Scene {
   }
 
   private updateEnemy(e: EnemyEntity, dt: number, heroInRange: boolean): void {
+    if (e.hp <= 0) {
+      this.killEnemy(e);
+      return;
+    }
+
     const isElementOverload = this.draftedBuffIds.includes('gold_elemental_overload');
     const dotMult = isElementOverload ? 2 : 1;
 
@@ -1468,6 +1500,10 @@ export class DungeonScene extends Scene {
     }
 
     // Sync HP bar positions
+    if (e.hp <= 0) {
+      this.killEnemy(e);
+      return;
+    }
     const barY = e.sprite.y - (e.isBoss ? 62 : 42);
     e.hpBg.setPosition(e.sprite.x, barY);
     e.hpFill.setPosition(e.sprite.x, barY);
