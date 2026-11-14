@@ -33,15 +33,20 @@ import type {
   ClassId,
   CompleteRunRequest,
   GearItem,
+  GearSlot,
   LeaderboardEntry,
   LegionStatKey,
   MutationId,
+  PlayerProfile,
   RunMode,
   RunRewardSummary,
 } from '../../shared/types.ts';
 import {
   SANCTUM_PURIFY_COST,
+  awardClassExp,
+  createGearItem,
   createInitialProfile,
+  createLegendaryGearItem,
   expForNextLevel,
   getDailyChallengeConfig,
   getDismantleShardValue,
@@ -49,6 +54,7 @@ import {
   getNextBanishSlotCost,
   getSlotUpgradeCost,
   getUtcDateKey,
+  hashString,
   isBoolean,
   isClassId,
   isNumber,
@@ -68,6 +74,8 @@ import type {
 } from './bridge.ts';
 
 type CampTab = 'roster' | 'buildings' | 'codex' | 'leaderboard';
+
+const LOCAL_PROFILE_KEY = 'mapledelve_local_profile';
 
 export class OverlayManager {
   private root: HTMLElement;
@@ -104,7 +112,30 @@ export class OverlayManager {
     this.bridge = bridge;
   }
 
+  private loadLocalProfile(): PlayerProfile | null {
+    try {
+      const saved = window.localStorage.getItem(LOCAL_PROFILE_KEY);
+      if (!saved) return null;
+      const parsed: unknown = JSON.parse(saved);
+      return parsePlayerProfile(parsed, this.state.profile.username);
+    } catch {
+      return null;
+    }
+  }
+
+  private saveLocalProfile(profile: PlayerProfile): void {
+    try {
+      window.localStorage.setItem(LOCAL_PROFILE_KEY, JSON.stringify(profile));
+    } catch {
+      // Ignore storage quota errors
+    }
+  }
+
   public async initialize(): Promise<void> {
+    const cached = this.loadLocalProfile();
+    if (cached) {
+      this.state.profile = cached;
+    }
     this.renderCamp();
     try {
       const res = await fetch('/api/init');
@@ -180,6 +211,208 @@ export class OverlayManager {
     }
   }
 
+  private applyCampActionLocally(req: CampActionRequest): string | null {
+    let p = this.state.profile;
+    let message = 'Updated';
+
+    switch (req.action) {
+      case 'select_class': {
+        p = { ...p, selectedClass: req.classId };
+        message = `Selected ${getClassDefinition(req.classId).name}`;
+        break;
+      }
+      case 'equip_item': {
+        const item = p.inventory.find((i) => i.id === req.itemId);
+        if (!item) return null;
+        const cls = p.classes[item.classId];
+        const prev = cls.equipped[item.slot];
+        const nextInv = p.inventory.filter((i) => i.id !== item.id);
+        if (prev) nextInv.unshift(prev);
+        p = {
+          ...p,
+          inventory: nextInv,
+          classes: {
+            ...p.classes,
+            [item.classId]: {
+              ...cls,
+              equipped: { ...cls.equipped, [item.slot]: item },
+            },
+          },
+        };
+        message = `Equipped ${item.name}`;
+        break;
+      }
+      case 'dismantle_item': {
+        const item = p.inventory.find((i) => i.id === req.itemId);
+        if (!item) return null;
+        const gained = getDismantleShardValue(item);
+        p = {
+          ...p,
+          shards: p.shards + gained,
+          inventory: p.inventory.filter((i) => i.id !== item.id),
+        };
+        message = `Dismantled ${item.name} (+${gained} Shards)`;
+        break;
+      }
+      case 'dismantle_all_normal_rare': {
+        let gained = 0;
+        let count = 0;
+        const kept: GearItem[] = [];
+        for (const item of p.inventory) {
+          if (item.tier === 'normal' || item.tier === 'rare') {
+            gained += getDismantleShardValue(item);
+            count += 1;
+          } else {
+            kept.push(item);
+          }
+        }
+        p = { ...p, shards: p.shards + gained, inventory: kept };
+        message = count > 0 ? `Dismantled ${count} items (+${gained} Shards)` : 'No Normal/Rare items';
+        break;
+      }
+      case 'socket_element': {
+        const cost = 15;
+        if (p.shards < cost) {
+          this.showToastSafe('Need 15 Shards to fuse Gem');
+          return null;
+        }
+        let updated = false;
+        const patch = (item: GearItem): GearItem => {
+          if (item.id !== req.itemId || item.maxSockets === 0) return item;
+          updated = true;
+          const nextSockets =
+            item.sockets.length < item.maxSockets
+              ? [...item.sockets, req.elementId]
+              : [...item.sockets.slice(1), req.elementId];
+          return { ...item, sockets: nextSockets };
+        };
+        const nextInv = p.inventory.map(patch);
+        const cls = p.classes[p.selectedClass];
+        const nextWep = cls.equipped.weapon ? patch(cls.equipped.weapon) : null;
+        if (!updated) return null;
+        p = {
+          ...p,
+          shards: p.shards - cost,
+          inventory: nextInv,
+          classes: {
+            ...p.classes,
+            [p.selectedClass]: { ...cls, equipped: { ...cls.equipped, weapon: nextWep } },
+          },
+        };
+        message = `Socketed ${req.elementId.toUpperCase()} gem!`;
+        break;
+      }
+      case 'upgrade_slot': {
+        const cls = p.classes[req.classId];
+        const lvl = cls.slotLevels[req.slot];
+        const cost = getSlotUpgradeCost(lvl);
+        if (p.shards < cost.shards || p.gold < cost.gold) {
+          this.showToastSafe(`Need ${cost.gold}g and ${cost.shards} Shards`);
+          return null;
+        }
+        p = {
+          ...p,
+          gold: p.gold - cost.gold,
+          shards: p.shards - cost.shards,
+          classes: {
+            ...p.classes,
+            [req.classId]: {
+              ...cls,
+              slotLevels: { ...cls.slotLevels, [req.slot]: lvl + 1 },
+            },
+          },
+        };
+        message = `Upgraded ${req.slot} slot to Lv.${lvl + 1}`;
+        break;
+      }
+      case 'purify_legendary': {
+        if (p.shards < SANCTUM_PURIFY_COST.shards || p.bossCores < SANCTUM_PURIFY_COST.bossCores) {
+          this.showToastSafe('Need 25 Shards & 2 Boss Cores');
+          return null;
+        }
+        let purifiedName = '';
+        const purify = (item: GearItem): GearItem => {
+          if (item.id === req.itemId && item.isCursed) {
+            purifiedName = item.name;
+            return { ...item, isCursed: false };
+          }
+          return item;
+        };
+        const nextInv = p.inventory.map(purify);
+        const nextClasses = { ...p.classes };
+        const classIds: readonly ClassId[] = ['warrior', 'mage', 'thief', 'bowman'];
+        for (const cId of classIds) {
+          const cls = nextClasses[cId];
+          const eq = { ...cls.equipped };
+          for (const slot of GEAR_SLOTS) {
+            const it = eq[slot];
+            if (it) eq[slot] = purify(it);
+          }
+          nextClasses[cId] = { ...cls, equipped: eq };
+        }
+        if (!purifiedName) return null;
+        p = {
+          ...p,
+          shards: p.shards - SANCTUM_PURIFY_COST.shards,
+          bossCores: p.bossCores - SANCTUM_PURIFY_COST.bossCores,
+          inventory: nextInv,
+          classes: nextClasses,
+        };
+        message = `Purified ${purifiedName}!`;
+        break;
+      }
+      case 'unlock_banish_slot': {
+        const nextCost = getNextBanishSlotCost(p.unlockedBanishSlots);
+        if (nextCost === null || p.gold < nextCost) return null;
+        p = {
+          ...p,
+          gold: p.gold - nextCost,
+          unlockedBanishSlots: p.unlockedBanishSlots + 1,
+        };
+        message = `Unlocked Banish Slot #${p.unlockedBanishSlots}`;
+        break;
+      }
+      case 'toggle_banish_buff': {
+        const buff = getBuffById(req.buffId);
+        if (!buff || buff.tier !== 'bronze') return null;
+        const exists = p.banishedBuffIds.includes(buff.id);
+        if (exists) {
+          p = { ...p, banishedBuffIds: p.banishedBuffIds.filter((id) => id !== buff.id) };
+          message = `Unbanished ${buff.name}`;
+        } else {
+          if (p.banishedBuffIds.length >= p.unlockedBanishSlots) {
+            this.showToastSafe(`All ${p.unlockedBanishSlots} Banish slots are full`);
+            return null;
+          }
+          p = { ...p, banishedBuffIds: [...p.banishedBuffIds, buff.id] };
+          message = `Banished ${buff.name}`;
+        }
+        break;
+      }
+      case 'upgrade_legion': {
+        const lvl = p.legion[req.stat];
+        const cost = getLegionUpgradeCost(lvl);
+        if (p.gold < cost) return null;
+        p = {
+          ...p,
+          gold: p.gold - cost,
+          legion: { ...p.legion, [req.stat]: lvl + 1 },
+        };
+        message = `Legion ${req.stat.toUpperCase()} upgraded to Lv.${lvl + 1}`;
+        break;
+      }
+      case 'toggle_auto_dismantle': {
+        p = { ...p, autoDismantleNormal: !p.autoDismantleNormal };
+        message = p.autoDismantleNormal ? 'Auto-dismantle ON' : 'Auto-dismantle OFF';
+        break;
+      }
+    }
+
+    this.state.profile = p;
+    this.saveLocalProfile(p);
+    return message;
+  }
+
   private async sendCampAction(req: CampActionRequest): Promise<void> {
     try {
       const res = await fetch('/api/camp/action', {
@@ -187,20 +420,33 @@ export class OverlayManager {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(req),
       });
-      const raw: unknown = await res.json();
-      if (!res.ok) {
-        if (isRecord(raw) && isString(raw.message)) {
-          this.showToastSafe(raw.message);
+      if (res.ok) {
+        const raw: unknown = await res.json();
+        if (isRecord(raw) && raw.profile) {
+          this.state.profile = parsePlayerProfile(raw.profile, this.state.profile.username);
+          this.saveLocalProfile(this.state.profile);
+          if (isString(raw.message)) this.showToastSafe(raw.message);
+          this.renderCamp();
+          return;
         }
-        return;
-      }
-      if (isRecord(raw) && raw.profile) {
-        this.state.profile = parsePlayerProfile(raw.profile, this.state.profile.username);
-        if (isString(raw.message)) this.showToastSafe(raw.message);
-        this.renderCamp();
+      } else {
+        const contentType = res.headers.get('content-type') ?? '';
+        if (contentType.includes('application/json')) {
+          const raw: unknown = await res.json();
+          if (isRecord(raw) && isString(raw.message)) {
+            this.showToastSafe(raw.message);
+            return;
+          }
+        }
       }
     } catch {
-      this.showToastSafe('Action saved locally (offline preview)');
+      // Fallback to local profile storage below
+    }
+
+    const localMsg = this.applyCampActionLocally(req);
+    if (localMsg) {
+      this.showToastSafe(localMsg);
+      this.renderCamp();
     }
   }
 
@@ -1286,23 +1532,105 @@ export class OverlayManager {
     this.activeModal = backdrop;
   }
 
-  private async submitAndShowSummary(payload: RunEndPayload): Promise<void> {
-    let summary: RunRewardSummary = {
-      goldBanked: payload.outcome === 'died' ? Math.floor(payload.goldCollected * 0.5) : payload.goldCollected,
-      shardsBanked: payload.outcome === 'died' ? Math.floor(payload.shardsCollected * 0.5) : payload.shardsCollected,
-      coresBanked: payload.outcome === 'cleared' ? payload.coresCollected + 1 : payload.coresCollected,
-      expGained: payload.floorReached * 42,
-      bountyApplied: payload.classId === this.state.daily.bountyClass,
-      restedApplied: false,
-      lootForfeited: payload.outcome === 'died',
-      newLevel: this.state.profile.classes[payload.classId].level,
-      leveledUp: false,
-      drops: [],
-      autoDismantledCount: 0,
-      autoDismantledShards: 0,
-      legendaryDrop: null,
+  private applyRunCompleteLocally(payload: RunEndPayload): RunRewardSummary {
+    const p = this.state.profile;
+    const lootForfeited = payload.outcome === 'died';
+    const penalty = lootForfeited ? 0.5 : 1;
+    const bountyApplied = payload.classId === this.state.daily.bountyClass;
+    const restedApplied = p.restedStacks > 0;
+
+    const goldBanked = Math.round(
+      payload.goldCollected * penalty * (bountyApplied ? 1.25 : 1) * (restedApplied ? 2 : 1)
+    );
+    const shardsBase = Math.round(payload.shardsCollected * penalty * (restedApplied ? 2 : 1));
+    const coresBanked =
+      Math.round(payload.coresCollected * penalty) + (payload.outcome === 'cleared' ? 1 : 0);
+    const expBase =
+      payload.floorReached * 42 +
+      (payload.outcome === 'cleared' ? 120 : payload.outcome === 'extracted' ? 50 : 15);
+    const expGained = expBase * (bountyApplied ? 2 : 1);
+
+    const rng = mulberry32(hashString(`${payload.runId}:${p.username}:${payload.floorReached}`));
+    const slots: readonly GearSlot[] = ['weapon', 'headgear', 'top', 'cape'];
+    const rawDrops: GearItem[] = [];
+    const clearedFloors =
+      payload.outcome === 'died' ? Math.max(0, payload.floorReached - 1) : payload.floorReached;
+
+    for (let f = 2; f <= clearedFloors; f++) {
+      if (f === 4 || f === 7) {
+        const slot = slots[Math.floor(rng() * slots.length)] ?? 'weapon';
+        rawDrops.push(createGearItem(rng, payload.classId, slot, 'rare', f, `f${f}`));
+      } else if (rng() < 0.45) {
+        const slot = slots[Math.floor(rng() * slots.length)] ?? 'weapon';
+        rawDrops.push(createGearItem(rng, payload.classId, slot, 'normal', f, `f${f}`));
+      }
+    }
+
+    const keptDrops: GearItem[] = [];
+    let autoDismantledCount = 0;
+    let autoDismantledShards = 0;
+    const keepCount = lootForfeited ? Math.ceil(rawDrops.length * 0.5) : rawDrops.length;
+    for (let i = 0; i < keepCount; i++) {
+      const item = rawDrops[i];
+      if (!item) continue;
+      if (p.autoDismantleNormal && item.tier === 'normal') {
+        autoDismantledCount += 1;
+        autoDismantledShards += getDismantleShardValue(item);
+      } else {
+        keptDrops.push(item);
+      }
+    }
+
+    let legendaryDrop: GearItem | null = null;
+    if (payload.outcome === 'cleared' && payload.mode === 'daily') {
+      legendaryDrop = createLegendaryGearItem(
+        rng,
+        payload.classId,
+        !payload.greedGamblePurified,
+        'f10'
+      );
+      keptDrops.push(legendaryDrop);
+    }
+
+    const expResult = awardClassExp(p.classes[payload.classId], expGained);
+    const shardsBanked = shardsBase + autoDismantledShards;
+    const nextProfile: PlayerProfile = {
+      ...p,
+      gold: p.gold + goldBanked,
+      shards: p.shards + shardsBanked,
+      bossCores: p.bossCores + coresBanked,
+      restedStacks: restedApplied ? Math.max(0, p.restedStacks - 1) : p.restedStacks,
+      dailyRankedCompletedDate:
+        payload.mode === 'daily' ? this.state.daily.dateKey : p.dailyRankedCompletedDate,
+      classes: {
+        ...p.classes,
+        [payload.classId]: expResult.updated,
+      },
+      inventory: [...keptDrops, ...p.inventory].slice(0, 60),
+    };
+    this.state.profile = nextProfile;
+    this.saveLocalProfile(nextProfile);
+
+    return {
+      goldBanked,
+      shardsBanked,
+      coresBanked,
+      expGained,
+      bountyApplied,
+      restedApplied,
+      lootForfeited,
+      newLevel: expResult.updated.level,
+      leveledUp: expResult.leveledUp,
+      drops: keptDrops,
+      autoDismantledCount,
+      autoDismantledShards,
+      legendaryDrop,
       playerRank: null,
     };
+  }
+
+  private async submitAndShowSummary(payload: RunEndPayload): Promise<void> {
+    let summary: RunRewardSummary | null = null;
 
     const reqBody: CompleteRunRequest = payload;
     try {
@@ -1314,6 +1642,7 @@ export class OverlayManager {
       if (res.ok) {
         const raw: unknown = await res.json();
         this.applyInitOrCompletePayload(raw);
+        this.saveLocalProfile(this.state.profile);
         if (isRecord(raw) && isRecord(raw.summary)) {
           const s = raw.summary;
           const drops: GearItem[] = [];
@@ -1324,14 +1653,16 @@ export class OverlayManager {
             }
           }
           summary = {
-            goldBanked: isNumber(s.goldBanked) ? s.goldBanked : summary.goldBanked,
-            shardsBanked: isNumber(s.shardsBanked) ? s.shardsBanked : summary.shardsBanked,
-            coresBanked: isNumber(s.coresBanked) ? s.coresBanked : summary.coresBanked,
-            expGained: isNumber(s.expGained) ? s.expGained : summary.expGained,
-            bountyApplied: isBoolean(s.bountyApplied) ? s.bountyApplied : summary.bountyApplied,
+            goldBanked: isNumber(s.goldBanked) ? s.goldBanked : 0,
+            shardsBanked: isNumber(s.shardsBanked) ? s.shardsBanked : 0,
+            coresBanked: isNumber(s.coresBanked) ? s.coresBanked : 0,
+            expGained: isNumber(s.expGained) ? s.expGained : 0,
+            bountyApplied: isBoolean(s.bountyApplied) ? s.bountyApplied : false,
             restedApplied: isBoolean(s.restedApplied) ? s.restedApplied : false,
-            lootForfeited: isBoolean(s.lootForfeited) ? s.lootForfeited : summary.lootForfeited,
-            newLevel: isNumber(s.newLevel) ? s.newLevel : summary.newLevel,
+            lootForfeited: isBoolean(s.lootForfeited) ? s.lootForfeited : false,
+            newLevel: isNumber(s.newLevel)
+              ? s.newLevel
+              : this.state.profile.classes[payload.classId].level,
             leveledUp: isBoolean(s.leveledUp) ? s.leveledUp : false,
             drops,
             autoDismantledCount: isNumber(s.autoDismantledCount) ? s.autoDismantledCount : 0,
@@ -1342,7 +1673,11 @@ export class OverlayManager {
         }
       }
     } catch {
-      // Keep fallback summary
+      // Fallback to local summary calculation below
+    }
+
+    if (!summary) {
+      summary = this.applyRunCompleteLocally(payload);
     }
 
     this.clearModal();
