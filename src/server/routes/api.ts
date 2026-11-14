@@ -500,25 +500,45 @@ api.post('/camp/action', async (c) => {
         if (!item) {
           return c.json<ErrorResponse>({ status: 'error', message: 'Item not found' }, 404);
         }
-        const cls = profile.classes[item.classId];
-        const prevEquipped = cls.equipped[item.slot];
+        const selectedClsId = profile.selectedClass;
+        const selectedCls = profile.classes[selectedClsId];
+        const prevEquipped = selectedCls.equipped[item.slot];
         const nextInventory = profile.inventory.filter((i) => i.id !== item.id);
-        if (prevEquipped) {
+        if (prevEquipped && !prevEquipped.id.startsWith('starter_wep_')) {
           nextInventory.unshift(prevEquipped);
+        }
+        const nextClasses = {
+          ...profile.classes,
+          [selectedClsId]: {
+            ...selectedCls,
+            equipped: {
+              ...selectedCls.equipped,
+              [item.slot]: item,
+            },
+          },
+        };
+        if (item.classId !== selectedClsId) {
+          const itemCls = nextClasses[item.classId];
+          const prevItemClsEquipped = itemCls.equipped[item.slot];
+          if (
+            prevItemClsEquipped &&
+            prevItemClsEquipped.id !== prevEquipped?.id &&
+            !prevItemClsEquipped.id.startsWith('starter_wep_')
+          ) {
+            nextInventory.unshift(prevItemClsEquipped);
+          }
+          nextClasses[item.classId] = {
+            ...itemCls,
+            equipped: {
+              ...itemCls.equipped,
+              [item.slot]: item,
+            },
+          };
         }
         profile = {
           ...profile,
           inventory: nextInventory,
-          classes: {
-            ...profile.classes,
-            [item.classId]: {
-              ...cls,
-              equipped: {
-                ...cls.equipped,
-                [item.slot]: item,
-              },
-            },
-          },
+          classes: nextClasses,
         };
         message = `Equipped ${item.name}`;
         break;
@@ -850,7 +870,7 @@ api.post('/share-comment', async (c) => {
 
   const lines = [
     `**Wuxia Spire Daily Report (${dateKey}) — u/${username}**`,
-    `- **Path:** Jianghu Wanderer | **Result:** ${outcomeText} in ${timeSec}s`,
+    `- **Path:** Wuxia Wanderer | **Result:** ${outcomeText} in ${timeSec}s`,
     `- **Cult Sect:** ${biome.name}${mutNames ? ` (${mutNames})` : ''}`,
     `- **Silver Taels Banked:** ${goldBanked}`,
   ];
@@ -890,7 +910,7 @@ api.post('/share-comment', async (c) => {
       type: 'share_comment',
       posted: true,
       commentText,
-      message: 'Posted your MapleSpire build to Reddit comments!',
+      message: 'Posted your Wuxia Spire build to Reddit comments!',
     });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : 'Unable to post comment';

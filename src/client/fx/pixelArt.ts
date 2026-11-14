@@ -77,7 +77,7 @@ export const getGearVisualStyle = (
     hasCape: equipped.cape !== null,
     hasTop: equipped.top !== null,
     hasHead: equipped.headgear !== null,
-    hasWeapon: equipped.weapon !== null,
+    hasWeapon: equipped.weapon !== null && !equipped.weapon.id.startsWith('starter_wep_'),
     capeTint: capeCol.hex,
     topTint: topCol.hex,
     headTint: headCol.hex,
@@ -149,95 +149,72 @@ const drawPixelGrid = (
   tex.refresh();
 };
 
-const drawCircleTexture = (
-  scene: Phaser.Scene,
-  key: string,
-  size: number,
-  outerColor: string,
-  innerColor: string
-): void => {
-  if (scene.textures.exists(key)) return;
-  const tex = scene.textures.createCanvas(key, size, size);
-  if (!tex) return;
-  const ctx = tex.getContext();
-  const half = size / 2;
-  ctx.fillStyle = outerColor;
-  ctx.beginPath();
-  ctx.arc(half, half, half - 1, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = innerColor;
-  ctx.beginPath();
-  ctx.arc(half, half, Math.max(2, half - 4), 0, Math.PI * 2);
-  ctx.fill();
-  tex.refresh();
-};
-
-// Chibi 14x14 sprites (MapleStory-inspired big head, expressive eyes, compact body)
+// Chibi 14x14 Wuxia martial artist sprites (topknot, crossed hanfu robe, sash, martial boots)
 const WARRIOR_GRID: PixelGrid = [
+  '.....PPPP.....',
   '....HHHHHH....',
   '...HHHHHHHH...',
   '..HHSSSSSSHH..',
   '..HSSESSSESH..',
-  '..HSSSSSSSSSH.',
   '...SSSSSSSS...',
-  '..AAAAAAAAAA..',
-  '.AAAWAAAAAWAA.',
-  '.AAAWAAAAAWAA.',
+  '..AAAWAWAAAA..',
+  '.AAAAWAAWAAAA.',
   '..AAWWWWWWAA..',
-  '...BBBBBBBB...',
-  '...BB....BB...',
+  '..AAAAAAAAAA..',
+  '...BBB..BBB...',
+  '...KK....KK...',
   '..KKK....KKK..',
   '..............',
 ];
 
 const MAGE_GRID: PixelGrid = [
-  '.....HHHH.....',
+  '....PPPPPP....',
   '....HHHHHH....',
-  '..HHHHHHHHHH..',
+  '...HHHHHHHH...',
   '..HHSSSSSSHH..',
   '..HSSESSSESH..',
   '...SSSSSSSS...',
-  '..RRRRRRRRRR..',
-  '.RRRRWRRWRRRR.',
-  '.RRRRWWWWWRRR.',
+  '..RRRRWRWRRR..',
+  '.RRRRRWRWRRRR.',
+  '..RRWWWWWWWR..',
   '..RRRRRRRRRR..',
   '...RRRRRRRR...',
-  '...RR....RR...',
+  '...KK....KK...',
   '..KKK....KKK..',
   '..............',
 ];
 
 const THIEF_GRID: PixelGrid = [
+  '.....PPPP.....',
   '....HHHHHH....',
   '...HHHHHHHH...',
-  '..HHHHHHHHHH..',
   '..HHSSSSSSHH..',
   '..HSSESSSESH..',
   '..HHMMMMMMHH..',
+  '..DDDAWADDDD..',
+  '.DDDDWAAWDDDD.',
+  '..DDWWWWWWDD..',
   '..DDDDDDDDDD..',
-  '.DDDADDDDADDD.',
-  '..DDDDDDDDDD..',
-  '..SSDDDDDDSS..',
   '...DD....DD...',
-  '...DD....DD...',
+  '...KK....KK...',
   '..KKK....KKK..',
   '..............',
 ];
 
 const BOWMAN_GRID: PixelGrid = [
+  '.....PPPP.....',
   '....GGGGGG....',
   '...GGGGGGGG...',
   '..GGSSSSSSGG..',
   '..GSSESSSESG..',
   '...SSSSSSSS...',
-  '..GGGGGGGGGG..',
-  '.GGGWGGGGWGGG.',
+  '..GGGWGWGGGG..',
+  '.GGGGWGWGGGGG.',
   '..GGWWWWWWGG..',
-  '...GGGGGGGG...',
+  '..GGGGGGGGGG..',
   '...BB....BB...',
-  '...BB....BB...',
+  '...KK....KK...',
   '..KKK....KKK..',
-  '..............',
   '..............',
 ];
 
@@ -245,47 +222,52 @@ const HERO_GRIDS: Record<ClassId, { grid: PixelGrid; palette: Palette }> = {
   warrior: {
     grid: WARRIOR_GRID,
     palette: {
-      H: '#b91c1c',
+      P: '#fbbf24',
+      H: '#1e293b',
       S: '#fed7aa',
       E: '#111827',
-      A: '#94a3b8',
-      W: '#facc15',
+      A: '#991b1b',
+      W: '#fde047',
       B: '#475569',
-      K: '#1e293b',
+      K: '#0f172a',
     },
   },
   mage: {
     grid: MAGE_GRID,
     palette: {
-      H: '#1e3a8a',
+      P: '#38bdf8',
+      H: '#0f172a',
       S: '#fed7aa',
       E: '#111827',
-      R: '#2563eb',
-      W: '#fbbf24',
-      K: '#312e81',
+      R: '#1d4ed8',
+      W: '#fef08a',
+      K: '#1e1b4b',
     },
   },
   thief: {
     grid: THIEF_GRID,
     palette: {
-      H: '#4c1d95',
+      P: '#c084fc',
+      H: '#09090b',
       S: '#fed7aa',
       E: '#f43f5e',
       M: '#1e1b4b',
       D: '#312e81',
-      A: '#c084fc',
+      A: '#6366f1',
+      W: '#e9d5ff',
       K: '#09090b',
     },
   },
   bowman: {
     grid: BOWMAN_GRID,
     palette: {
-      G: '#15803d',
+      P: '#6ee7b7',
+      G: '#111827',
       S: '#fed7aa',
       E: '#111827',
       W: '#fde047',
-      B: '#78350f',
-      K: '#451a03',
+      B: '#065f46',
+      K: '#1e293b',
     },
   },
 };
@@ -442,62 +424,87 @@ const GEAR_TOP_GRIDS: Record<ClassId, PixelGrid> = {
   ],
 };
 
-// Held Weapon Grids (rendered as standalone textures for swinging / recoil animations)
+// Held Wuxia Weapon Grids (12x12 white/silver shaded so tinting works in Phaser & <canvas>)
+const WEP_WUXIA_SWORD_GRID: PixelGrid = [
+  '..........TT',
+  '.........TTM',
+  '........TTMM',
+  '.......TTMM.',
+  '......TTMM..',
+  '.....TTMM...',
+  '....TTMM....',
+  '..SWTTM.....',
+  '...WWKS.....',
+  '..KKW.......',
+  '.WK.........',
+  '.W..........',
+];
+
+const WEP_WUXIA_STAFF_GRID: PixelGrid = [
+  '..........TT',
+  '.........TMT',
+  '........TMW.',
+  '.......TMT..',
+  '......TMW...',
+  '.....TMT....',
+  '....TMW.....',
+  '...TMT......',
+  '..TMW.......',
+  '.TMT........',
+  'TMT.........',
+  'TT..........',
+];
+
+const WEP_WUXIA_HEAVY_SWORD_GRID: PixelGrid = [
+  '.........TTT',
+  '........TTMM',
+  '.......TTTMM',
+  '......TTTMM.',
+  '.....TTTMM..',
+  '....TTTMM...',
+  '...TTTMM....',
+  '..SWWTM.....',
+  '...WWKS.....',
+  '..KKW.......',
+  '.KK.........',
+  '............',
+];
+
+const WEP_WUXIA_FLUTE_GRID: PixelGrid = [
+  '............',
+  '............',
+  '........TTTT',
+  '......TTTMMT',
+  '....TTTMMW..',
+  '..TTTMMW....',
+  '.TTMMW......',
+  '..KWW.......',
+  '...W........',
+  '...W........',
+  '............',
+  '............',
+];
+
+const WEP_WUXIA_NEEDLES_GRID: PixelGrid = [
+  '........TTT.',
+  '.......TM...',
+  '......TM..TT',
+  '.....KS..TM.',
+  '......K.TM..',
+  '.....K.KS..T',
+  '......KK.TM.',
+  '........TM..',
+  '.......KS...',
+  '............',
+  '............',
+  '............',
+];
+
 const GEAR_WEAPON_GRIDS: Record<ClassId, PixelGrid> = {
-  warrior: [
-    '..........TT',
-    '.........TTM',
-    '........TTMM',
-    '.......TTMM.',
-    '......TTMM..',
-    '.....TTMM...',
-    '....TTMM....',
-    '..SSTTM.....',
-    '...KKSS.....',
-    '..KKK.......',
-    '.KK.........',
-    '............',
-  ],
-  mage: [
-    '......TTTT',
-    '.....TTWWT',
-    '......TTTT',
-    '.......MM.',
-    '......MM..',
-    '.....KK...',
-    '....KK....',
-    '...KK.....',
-    '..KK......',
-    '.KK.......',
-    '.K........',
-    '..........',
-  ],
-  thief: [
-    '........TT',
-    '.......TTM',
-    '......TTMM',
-    '.....SSKM.',
-    '....KK....',
-    '........TT',
-    '.......TTM',
-    '......SSMM',
-    '.....KK...',
-    '..........',
-  ],
-  bowman: [
-    '..TT....',
-    '...MMW..',
-    '....MMW.',
-    '....MMW.',
-    '...KKMW.',
-    '...KKMW.',
-    '...KKMW.',
-    '....MMW.',
-    '....MMW.',
-    '...MMW..',
-    '..TT....',
-    '........',
-  ],
+  warrior: WEP_WUXIA_HEAVY_SWORD_GRID,
+  mage: WEP_WUXIA_FLUTE_GRID,
+  thief: WEP_WUXIA_NEEDLES_GRID,
+  bowman: WEP_WUXIA_SWORD_GRID,
 };
 
 const GEAR_SHADE_PALETTE: Palette = {
@@ -557,60 +564,87 @@ const RUNE_BOOK_GRID: PixelGrid = [
   '.BBBBBB.',
 ];
 
-// Slime/Mushroom style normal mobs
+// Wuxia Cultist Mobs & Sect Bosses (humanoid, facing left toward hero)
 const MOB_SLIME_GRID: PixelGrid = [
-  '....MMMM....',
+  'W...MMMM....',
+  'W..MMMMMM...',
+  'W.MMKKKKMM..',
+  'W.MKEKKEKM..',
+  'W..MMMMMM...',
+  'WWMMMMMMMM..',
+  '.MMDDDDDDMM.',
+  '.MMMWWWWMMM.',
   '..MMMMMMMM..',
-  '.MMMMMMMMMM.',
-  'MMMEEMMMMEEM',
-  'MMMMMMMMMMMM',
-  'MMDDDDDDDDMM',
-  '.MMMMMMMMMM.',
+  '..MMDDDDMM..',
+  '..KK....KK..',
+  '.KKK....KKK.',
 ];
 
 const MOB_MUSH_GRID: PixelGrid = [
+  '....CCCC....',
   '..CCCCCCCC..',
   '.CCWCCCCWCC.',
   'CCCCCCCCCCCC',
-  '..SSSSSSSS..',
-  '..SSEESSEE..',
-  '..SSSSSSSS..',
-  '...SS..SS...',
+  '..KKKKKKKK..',
+  '..KEKKEKK...',
+  '.WMMMMMMMM..',
+  'W.MDDDDDDMM.',
+  '..MMMMMMMMW.',
+  '..MMDDDDMM..',
+  '..KK....KK..',
+  '.KKK....KKK.',
 ];
 
 const MOB_HORNED_GRID: PixelGrid = [
-  '.K........K.',
-  '..MM....MM..',
-  '.MMMMMMMMMM.',
-  'MMMEEMMMMEEM',
-  'MMDDDDDDDDMM',
-  '.MMMMMMMMMM.',
-  '..MM....MM..',
+  'W...KKKKK...',
+  'WW.KWWWWWK..',
+  'WW.KKEKKEK..',
+  'W.MMMMMMMMM.',
+  'K.MMDDDDDMM.',
+  'KMDDDDDDDDMM',
+  'K..MMWWWMM..',
+  'K..MMMMMMM..',
+  'K..MMDDDMM..',
+  'K...KK.KK...',
+  'K...KK.KK...',
+  '...KKK.KKK..',
 ];
 
-// Large Boss sprites
+// Cult Hall Master Mini-Boss & Supreme Cult Leader Boss (humanoid, facing left)
 const MINIBOSS_GRID: PixelGrid = [
-  '...YYYYYY...',
-  '..MMMMMMMM..',
-  '.MMMMMMMMMM.',
-  'MMMEEMMMMEEM',
-  'MMMMMMMMMMMM',
-  'MMWWWWWWWWMM',
-  'MMDDDDDDDDMM',
-  '.MMMMMMMMMM.',
-  '..MM....MM..',
+  '..Y........Y..',
+  '..YY.YYYY.YY..',
+  '.W..KKKKKK....',
+  '.W..KEKKEK....',
+  '.W.MMMMMMMM...',
+  '.WWMMDDDDMMM..',
+  'WW.MWWWWWWM.MM',
+  '.K.MMMMMMMMMMM',
+  '....MMDDDDMMMM',
+  '....MMMMMMM.MM',
+  '....MMWWWM..MM',
+  '....KK..KK...M',
+  '...KKK..KKK...',
+  '...KKK..KKK...',
 ];
 
 const ENDBOSS_GRID: PixelGrid = [
-  '.Y..YYYY..Y.',
-  '.YYYYYYYYYY.',
-  'MMMMMMMMMMMM',
-  'MMEEEMMEEEMM',
-  'MMRRRRRRRRMM',
-  'MMWWWWWWWWMM',
-  'MMDDDDDDDDMM',
-  'MMMMMMMMMMMM',
-  '.MMM....MMM.',
+  '....Y..YY..Y....',
+  '....YYYYYYYY....',
+  '...YMMMMMMMMY...',
+  '.Y..KKKKKKKK....',
+  '.Y..KKEKKKEK....',
+  'WY.MMMMMMMMMM...',
+  'WY.MMRRRRRRMM.M.',
+  'WWMMMWWWWWWWMMMM',
+  '.KMMDDDDDDDDMMMM',
+  '..MMMMMMMMMM.MMM',
+  '..MMRRRRRRMM.MMM',
+  '..MMMWWWWMMM..MM',
+  '...MMMMMMMM...MM',
+  '...KKK..KKK....M',
+  '..KKKK..KKKK....',
+  '..KKKK..KKKK....',
 ];
 
 const COIN_GRID: PixelGrid = [
@@ -763,281 +797,339 @@ export const registerPixelTextures = (scene: Phaser.Scene): void => {
     3
   );
 
-  // Biome mobs (white-tinted base so tinting per biome looks vivid!)
+  // Sect Cultist mobs (white-tinted base so per-sect tint colors robes vividly)
   drawPixelGrid(
     scene,
     'mob_0',
     MOB_SLIME_GRID,
-    { M: '#ffffff', D: '#cbd5e1', E: '#0f172a' },
+    { K: '#0f172a', M: '#ffffff', D: '#cbd5e1', W: '#f8fafc', E: '#fef08a' },
     4
   );
   drawPixelGrid(
     scene,
     'mob_1',
     MOB_MUSH_GRID,
-    { C: '#ffffff', W: '#fef9c3', S: '#fde68a', E: '#111827' },
+    { K: '#0f172a', C: '#fef3c7', W: '#fde68a', M: '#ffffff', D: '#cbd5e1', E: '#fef08a' },
     4
   );
   drawPixelGrid(
     scene,
     'mob_2',
     MOB_HORNED_GRID,
-    { K: '#1e293b', M: '#ffffff', D: '#cbd5e1', E: '#ef4444' },
+    { K: '#0f172a', M: '#ffffff', D: '#cbd5e1', W: '#f8fafc', E: '#ef4444' },
     4
   );
 
-  // Bosses
+  // Sect Hall Master Mini-Boss & Supreme Cult Leader
   drawPixelGrid(
     scene,
     'miniboss',
     MINIBOSS_GRID,
-    { Y: '#facc15', M: '#ffffff', W: '#f1f5f9', D: '#94a3b8', E: '#ef4444' },
-    7
+    { K: '#0f172a', Y: '#facc15', M: '#ffffff', W: '#f1f5f9', D: '#94a3b8', E: '#ef4444' },
+    6
   );
   drawPixelGrid(
     scene,
     'endboss',
     ENDBOSS_GRID,
-    { Y: '#fde047', M: '#ffffff', R: '#ef4444', W: '#f8fafc', D: '#64748b', E: '#111827' },
-    9
+    { K: '#0f172a', Y: '#fde047', M: '#ffffff', R: '#ef4444', W: '#f8fafc', D: '#64748b', E: '#fef08a' },
+    7
   );
 
-  // Projectiles & FX
-  drawCircleTexture(scene, 'proj_bolt', 16, '#38bdf8', '#e0f2fe');
-  drawCircleTexture(scene, 'proj_star', 14, '#c084fc', '#fae8ff');
-  drawCircleTexture(scene, 'proj_orb_hp', 14, '#22c55e', '#bbf7d0');
-  drawCircleTexture(scene, 'proj_lightning', 18, '#eab308', '#fef9c3');
+  // Wuxia held weapons (pixelSize 3 -> 36x36, aligned with gear_wep_*)
+  drawPixelGrid(scene, 'wep_wuxia_sword', WEP_WUXIA_SWORD_GRID, GEAR_SHADE_PALETTE, 3);
+  drawPixelGrid(scene, 'wep_wuxia_staff', WEP_WUXIA_STAFF_GRID, GEAR_SHADE_PALETTE, 3);
+  drawPixelGrid(scene, 'wep_wuxia_heavy_sword', WEP_WUXIA_HEAVY_SWORD_GRID, GEAR_SHADE_PALETTE, 3);
+  drawPixelGrid(scene, 'wep_wuxia_flute', WEP_WUXIA_FLUTE_GRID, GEAR_SHADE_PALETTE, 3);
+  drawPixelGrid(scene, 'wep_wuxia_needles', WEP_WUXIA_NEEDLES_GRID, GEAR_SHADE_PALETTE, 3);
 
-  // Arrow, Feather, Fang & Wave canvases
-  if (!scene.textures.exists('proj_arrow')) {
-    const tex = scene.textures.createCanvas('proj_arrow', 22, 6);
-    if (tex) {
-      const ctx = tex.getContext();
-      ctx.fillStyle = '#fde047';
-      ctx.fillRect(0, 2, 16, 2);
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(15, 0, 7, 6);
-      tex.refresh();
-    }
-  }
-
-  if (!scene.textures.exists('proj_hawk_feather')) {
-    const tex = scene.textures.createCanvas('proj_hawk_feather', 18, 6);
-    if (tex) {
-      const ctx = tex.getContext();
-      ctx.fillStyle = '#d97706';
-      ctx.fillRect(0, 2, 12, 2);
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(10, 0, 8, 6);
-      tex.refresh();
-    }
-  }
-
-  if (!scene.textures.exists('proj_wolf_fang')) {
-    const tex = scene.textures.createCanvas('proj_wolf_fang', 20, 18);
-    if (tex) {
-      const ctx = tex.getContext();
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.arc(8, 9, 8, -Math.PI * 0.45, Math.PI * 0.45);
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#e0f2fe';
-      ctx.stroke();
-      tex.refresh();
-    }
-  }
-
-  if (!scene.textures.exists('proj_wave')) {
-    const tex = scene.textures.createCanvas('proj_wave', 40, 76);
-    if (tex) {
-      const ctx = tex.getContext();
-      ctx.strokeStyle = '#f97316';
-      ctx.lineWidth = 10;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.arc(8, 38, 30, -Math.PI * 0.42, Math.PI * 0.42);
-      ctx.stroke();
-      ctx.strokeStyle = '#fef08a';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(11, 38, 29, -Math.PI * 0.38, Math.PI * 0.38);
-      ctx.stroke();
-      tex.refresh();
-    }
-  }
+  // Projectiles & Wuxia Martial Arts (crisp drawPixelGrid sprites oriented facing RIGHT +X)
+  drawPixelGrid(
+    scene,
+    'proj_palm_qi',
+    [
+      '.....GGGGW..',
+      '...GGGYYWWW.',
+      '.GG...YYYWW.',
+      'G...YYYYWWWT',
+      'GG.YYYYWWWWT',
+      'GG.YYYYWWWWT',
+      'G...YYYYWWWT',
+      '.GG...YYYWW.',
+      '...GGGYYWWW.',
+      '.....GGGGW..',
+    ],
+    { G: '#f59e0b', Y: '#fde047', W: '#fef9c3', T: '#ffffff' },
+    3
+  );
+  drawPixelGrid(
+    scene,
+    'proj_bolt',
+    [
+      '....CCCC..',
+      '..CCWWWWC.',
+      '.CCWWTTTTT',
+      'CCWWTTTTTT',
+      'CCWWTTTTTT',
+      '.CCWWTTTTT',
+      '..CCWWWWC.',
+      '....CCCC..',
+    ],
+    { C: '#38bdf8', W: '#bae6fd', T: '#ffffff' },
+    3
+  );
+  drawPixelGrid(
+    scene,
+    'proj_star',
+    [
+      '....P....',
+      '...PWP...',
+      '..PPWPP..',
+      '.PPWTWPP.',
+      'PWWTTTWWP',
+      '.PPWTWPP.',
+      '..PPWPP..',
+      '...PWP...',
+      '....P....',
+    ],
+    { P: '#c084fc', W: '#e9d5ff', T: '#ffffff' },
+    3
+  );
+  drawPixelGrid(
+    scene,
+    'proj_orb_hp',
+    [
+      '..GGGG..',
+      '.GWWWWG.',
+      'GWWTTWWG',
+      'GWTTTTWG',
+      'GWTTTTWG',
+      'GWWTTWWG',
+      '.GWWWWG.',
+      '..GGGG..',
+    ],
+    { G: '#22c55e', W: '#bbf7d0', T: '#ffffff' },
+    3
+  );
+  drawPixelGrid(
+    scene,
+    'proj_lightning',
+    [
+      '....YYYY....',
+      '..YYYYTT....',
+      'YYYYTTWW....',
+      '..TTWWWWYYYY',
+      '....WWTTTTTT',
+      '......YYYY..',
+      '........YY..',
+    ],
+    { Y: '#eab308', W: '#fef08a', T: '#ffffff' },
+    3
+  );
+  drawPixelGrid(
+    scene,
+    'proj_arrow',
+    [
+      '......WW..',
+      '..YYYYWWT.',
+      'YYYYYYWWTT',
+      '..YYYYWWT.',
+      '......WW..',
+    ],
+    { Y: '#fde047', W: '#e2e8f0', T: '#ffffff' },
+    3
+  );
+  drawPixelGrid(
+    scene,
+    'proj_hawk_feather',
+    [
+      '.....YY..',
+      '..AAAYYWT',
+      'AAAAAYYWW',
+      '..AAAYYWT',
+      '.....YY..',
+    ],
+    { A: '#d97706', Y: '#fef08a', W: '#fef9c3', T: '#ffffff' },
+    3
+  );
+  drawPixelGrid(
+    scene,
+    'proj_wolf_fang',
+    [
+      '..CC....',
+      '...CCW..',
+      '....CWWT',
+      '.....WWT',
+      '.....WWT',
+      '....CWWT',
+      '...CCW..',
+      '..CC....',
+    ],
+    { C: '#38bdf8', W: '#e0f2fe', T: '#ffffff' },
+    3
+  );
+  drawPixelGrid(
+    scene,
+    'proj_wave',
+    [
+      '.OO.......',
+      '..OOY.....',
+      '...OOYW...',
+      '....OYWT..',
+      '....OOYWT.',
+      '.....OYWT.',
+      '.....OYWTT',
+      '.....OYWTT',
+      '.....OYWTT',
+      '.....OYWTT',
+      '.....OYWT.',
+      '....OOYWT.',
+      '....OYWT..',
+      '...OOYW...',
+      '..OOY.....',
+      '.OO.......',
+    ],
+    { O: '#f97316', Y: '#fde047', W: '#fef9c3', T: '#ffffff' },
+    3
+  );
 
   // Taiji / Dantian Bagua Seal
-  if (!scene.textures.exists('fx_taiji_seal')) {
-    const tex = scene.textures.createCanvas('fx_taiji_seal', 52, 52);
-    if (tex) {
-      const ctx = tex.getContext();
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(26, 26, 22, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(26, 26, 15, Math.PI * 0.5, Math.PI * 1.5);
-      ctx.fill();
-      ctx.fillStyle = '#fef9c3';
-      ctx.beginPath();
-      ctx.arc(26, 26, 15, -Math.PI * 0.5, Math.PI * 0.5);
-      ctx.fill();
-      ctx.fillStyle = '#fef9c3';
-      ctx.beginPath();
-      ctx.arc(26, 18.5, 7.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(26, 33.5, 7.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.arc(26, 18.5, 2.5, 0, Math.PI * 2);
-      ctx.arc(26, 33.5, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      tex.refresh();
-    }
-  }
+  drawPixelGrid(
+    scene,
+    'fx_taiji_seal',
+    [
+      '...YYYYYY...',
+      '..YKKKKWWY..',
+      '.YKKKKWWWWY.',
+      'YKKKKWWCWWWY',
+      'YKKKKKWWWWWY',
+      'YKKKKKWWWWWY',
+      'YKKKKKKWWWWY',
+      'YKKDKKKWWWWY',
+      'YKKKKWWWWWWY',
+      '.YKKKWWWWWY.',
+      '..YYKKWWYY..',
+      '...YYYYYY...',
+    ],
+    { Y: '#fde047', K: '#0f172a', W: '#fef9c3', C: '#38bdf8', D: '#1e293b' },
+    3
+  );
 
-  // 18 Dragon-Subduing Palms Qi Wave
-  if (!scene.textures.exists('fx_dragon_palm')) {
-    const tex = scene.textures.createCanvas('fx_dragon_palm', 56, 42);
-    if (tex) {
-      const ctx = tex.getContext();
-      ctx.fillStyle = 'rgba(245, 158, 11, 0.38)';
-      ctx.beginPath();
-      ctx.arc(24, 21, 20, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(6, 11, 22, 20);
-      for (let i = 0; i < 4; i++) {
-        const cy = 6 + i * 9;
-        ctx.fillStyle = '#fde047';
-        ctx.fillRect(24, cy, 22 + (i === 1 || i === 2 ? 8 : 0), 5);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(40, cy + 1, 10, 3);
-      }
-      ctx.fillStyle = '#fef9c3';
-      ctx.beginPath();
-      ctx.arc(22, 21, 8, 0, Math.PI * 2);
-      ctx.fill();
-      tex.refresh();
-    }
-  }
+  // 18 Dragon-Subduing Palms Pixel Qi Wave (facing RIGHT +X)
+  drawPixelGrid(
+    scene,
+    'fx_dragon_palm',
+    [
+      '.....OOOO.......',
+      '...OOYYYYYYO....',
+      '..OYYYYYWWYYYO..',
+      'OOYYYYWWRRWWYYTT',
+      'GYYYYWWWWWWWT...',
+      'GGYYWWWWWWW.....',
+      'GYYYYWWWWWWWT...',
+      'OOYYYYWWWWWWWWTT',
+      '..OYYYYYYYYYOO..',
+      '....OOYYYYOO....',
+      '......OOOO......',
+    ],
+    { O: '#ea580c', G: '#f59e0b', Y: '#fde047', W: '#fef9c3', R: '#ef4444', T: '#ffffff' },
+    3
+  );
 
-  // Jade Maiden Flying Sword
-  if (!scene.textures.exists('fx_jade_sword')) {
-    const tex = scene.textures.createCanvas('fx_jade_sword', 44, 16);
-    if (tex) {
-      const ctx = tex.getContext();
-      ctx.fillStyle = '#f43f5e';
-      ctx.fillRect(0, 6, 7, 4);
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillRect(10, 3, 4, 10);
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(14, 5, 22, 6);
-      ctx.fillStyle = '#e0f2fe';
-      ctx.fillRect(15, 7, 26, 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.moveTo(36, 4);
-      ctx.lineTo(44, 8);
-      ctx.lineTo(36, 12);
-      ctx.closePath();
-      ctx.fill();
-      tex.refresh();
-    }
-  }
+  // Jade Maiden Flying Sword (tassel left, sharp blade tip RIGHT +X)
+  drawPixelGrid(
+    scene,
+    'fx_jade_sword',
+    [
+      '.....G..........',
+      '....GGG.........',
+      'RR..GGBBBBBBBBT.',
+      'RKKGGWWWWWWWWWTT',
+      'RR..GGBBBBBBBBT.',
+      '....GGG.........',
+      '.....G..........',
+    ],
+    { R: '#f43f5e', K: '#334155', G: '#fbbf24', B: '#38bdf8', W: '#e0f2fe', T: '#ffffff' },
+    3
+  );
 
   // Beggar Sect Whirling Emerald Staff Wheel
-  if (!scene.textures.exists('fx_staff_wheel')) {
-    const tex = scene.textures.createCanvas('fx_staff_wheel', 68, 68);
-    if (tex) {
-      const ctx = tex.getContext();
-      ctx.strokeStyle = 'rgba(16, 185, 129, 0.55)';
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.arc(34, 34, 28, 0.2, Math.PI * 0.9);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(34, 34, 28, Math.PI + 0.2, Math.PI * 1.9);
-      ctx.stroke();
-      ctx.strokeStyle = '#a7f3d0';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(34, 34, 22, -0.5, 0.9);
-      ctx.stroke();
-      ctx.fillStyle = '#10b981';
-      ctx.fillRect(6, 31, 56, 6);
-      ctx.fillStyle = '#fef08a';
-      ctx.fillRect(16, 32, 36, 2);
-      tex.refresh();
-    }
-  }
+  drawPixelGrid(
+    scene,
+    'fx_staff_wheel',
+    [
+      '...CCCCCCCC...',
+      '..CC......CC..',
+      '.CC...WW....C.',
+      'CC..........WC',
+      '.C..........W.',
+      'GGGGGGGGGGGGGG',
+      'EWWEGGGGGGWWWE',
+      'GGGGGGGGGGGGGG',
+      '.W..........C.',
+      'CW..........CC',
+      '.C....WW...CC.',
+      '..CC......CC..',
+      '...CCCCCCCC...',
+      '..............',
+    ],
+    { G: '#10b981', C: '#6ee7b7', E: '#047857', W: '#fef08a' },
+    3
+  );
 
-  // Xuantie Heavy Iron Greatsword
-  if (!scene.textures.exists('fx_iron_cleave')) {
-    const tex = scene.textures.createCanvas('fx_iron_cleave', 36, 76);
-    if (tex) {
-      const ctx = tex.getContext();
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillRect(15, 2, 6, 14);
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(6, 14, 24, 6);
-      ctx.fillStyle = '#3b0764';
-      ctx.fillRect(9, 20, 18, 48);
-      ctx.fillStyle = '#a855f7';
-      ctx.fillRect(13, 22, 10, 44);
-      ctx.fillStyle = '#f5d0fe';
-      ctx.fillRect(16, 24, 4, 48);
-      tex.refresh();
-    }
-  }
+  // Xuantie Heavy Iron Greatsword (pommel left, broad obsidian blade RIGHT +X)
+  drawPixelGrid(
+    scene,
+    'fx_iron_cleave',
+    [
+      '...SS...........',
+      '...SS...........',
+      '...SSBBBBBBBBBB.',
+      'GKKSSPPPPPPPPBBT',
+      'GKKSSWWWWWWWWTTT',
+      'GKKSSPPPPPPPPBBT',
+      '...SSBBBBBBBBBB.',
+      '...SS...........',
+      '...SS...........',
+    ],
+    { G: '#fbbf24', K: '#334155', S: '#94a3b8', B: '#3b0764', P: '#a855f7', W: '#f5d0fe', T: '#ffffff' },
+    3
+  );
 
-  // Peach Blossom Jade Flute Sonic Wave
-  if (!scene.textures.exists('fx_flute_wave')) {
-    const tex = scene.textures.createCanvas('fx_flute_wave', 40, 40);
-    if (tex) {
-      const ctx = tex.getContext();
-      ctx.strokeStyle = '#2dd4bf';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(20, 20, 16, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = '#99f6e4';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(20, 20, 10, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(20, 20, 4, 0, Math.PI * 2);
-      ctx.fill();
-      tex.refresh();
-    }
-  }
+  // Peach Blossom Jade Flute Sonic Crescent Wave (facing RIGHT +X)
+  drawPixelGrid(
+    scene,
+    'fx_flute_wave',
+    [
+      '......CCCC..',
+      '........CCW.',
+      '..NNN....WCT',
+      '..N.N....WCT',
+      'NNN......WWT',
+      'NNN......WWT',
+      '..N......WCT',
+      '........CCW.',
+      '......CCCC..',
+      '............',
+    ],
+    { C: '#2dd4bf', W: '#99f6e4', T: '#ffffff', N: '#f472b6' },
+    3
+  );
 
-  // Soul-Chilling Ice Needle
-  if (!scene.textures.exists('fx_ice_needle')) {
-    const tex = scene.textures.createCanvas('fx_ice_needle', 36, 12);
-    if (tex) {
-      const ctx = tex.getContext();
-      ctx.fillStyle = '#818cf8';
-      ctx.fillRect(2, 4, 24, 4);
-      ctx.fillStyle = '#e0e7ff';
-      ctx.fillRect(8, 5, 22, 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.moveTo(24, 2);
-      ctx.lineTo(36, 6);
-      ctx.lineTo(24, 10);
-      ctx.closePath();
-      ctx.fill();
-      tex.refresh();
-    }
-  }
+  // Soul-Chilling Ice Needle (facing RIGHT +X)
+  drawPixelGrid(
+    scene,
+    'fx_ice_needle',
+    [
+      '.........CC...',
+      '..CCCCCCWWWT..',
+      'CCWWWWWWWWWWTT',
+      '..CCCCCCWWWT..',
+      '.........CC...',
+    ],
+    { C: '#818cf8', W: '#e0e7ff', T: '#ffffff' },
+    3
+  );
 
   // Loot & hazards
   drawPixelGrid(scene, 'loot_coin', COIN_GRID, { Y: '#facc15', W: '#fef9c3' }, 3);

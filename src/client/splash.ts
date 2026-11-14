@@ -43,7 +43,7 @@ const renderDailyInfo = (
 
 const initSplash = async (): Promise<void> => {
   const username = context.username ?? 'Wanderer';
-  setText('greeting', `Welcome to the Jianghu, u/${username}`);
+  setText('greeting', `Welcome to Wuxia Spire, u/${username}`);
 
   const dateKey = getUtcDateKey();
   const fallback = getDailyChallengeConfig(dateKey);

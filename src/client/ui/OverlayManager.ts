@@ -8,6 +8,8 @@ import {
 import { CORE_BUFFS, getBuffById } from '../../shared/catalogs/buffs.ts';
 import {
   WUXIA_ACTIVE_ARTS,
+  WUXIA_HIGH_REALM_ACTIVE_SLOTS,
+  WUXIA_HIGH_REALM_INNER_QI_SLOTS,
   WUXIA_INNER_QI,
   WUXIA_MAX_ACTIVE_SLOTS,
   WUXIA_MAX_INNER_QI_SLOTS,
@@ -97,7 +99,7 @@ import type {
 
 type CampTab = 'roster' | 'buildings' | 'codex' | 'leaderboard';
 
-const LOCAL_PROFILE_KEY = 'maplespire_local_profile';
+const LOCAL_PROFILE_KEY = 'wuxiaspire_local_profile_v2';
 const DISCOVERED_SYNERGIES_KEY = 'wuxiaspire_discovered_synergies_v1';
 
 const loadDiscoveredSynergies = (): Set<string> => {
@@ -130,6 +132,15 @@ const recordDiscoveredSynergy = (synergyId: string): boolean => {
   }
   return true;
 };
+
+const RELIC_LINEAGE_LABELS: Record<ClassId, string> = {
+  warrior: 'External Relic',
+  mage: 'Internal Relic',
+  thief: 'Shadow Relic',
+  bowman: 'Condor Relic',
+};
+
+const getRelicLineageLabel = (classId: ClassId): string => RELIC_LINEAGE_LABELS[classId];
 
 export class OverlayManager {
   private root: HTMLElement;
@@ -649,7 +660,7 @@ export class OverlayManager {
     const rulesCard = this.el('div', 'card');
     const rulesRow = this.el('div', 'row-between');
     rulesRow.appendChild(
-      this.el('strong', '', '☯️ Classless Jianghu Wanderer — Empty-Handed Ascent')
+      this.el('strong', '', '☯️ Classless Wuxia Wanderer — Empty-Handed Ascent')
     );
     const badgeWrap = this.el('span', 'astryx-inline-slot');
     mountAstryxStatusBadge(badgeWrap, {
@@ -662,7 +673,7 @@ export class OverlayManager {
       this.el(
         'div',
         'muted',
-        `Start every run unarmed with Taiji Fist & Qinggong Dash. Draft up to ${WUXIA_MAX_ACTIVE_SLOTS} Active Martial Arts (Lv.1→Lv.3 Ultimate) & ${WUXIA_MAX_INNER_QI_SLOTS} Inner Qi Manuals, then pair matching manuals to awaken hidden Peerless Synergies!`
+        `Start every run unarmed with Taiji Fist & Qinggong Dash. Draft up to ${WUXIA_MAX_ACTIVE_SLOTS}–${WUXIA_HIGH_REALM_ACTIVE_SLOTS} Active Martial Arts (Lv.1→Lv.5 Transcendent, 4th slot unlocks at F15) & ${WUXIA_MAX_INNER_QI_SLOTS}–${WUXIA_HIGH_REALM_INNER_QI_SLOTS} Inner Qi Manuals, then pair matching manuals to awaken hidden Peerless Synergies!`
       )
     );
     container.appendChild(rulesCard);
@@ -691,7 +702,7 @@ export class OverlayManager {
     const heroTitle = this.el(
       'div',
       'class-name',
-      `Jianghu Wanderer Lv.${selProg.level} • ${selJob.title} (${selProg.exp}/${nextExp})`
+      `Wuxia Wanderer Lv.${selProg.level} • ${selJob.title} (${selProg.exp}/${nextExp})`
     );
     heroTitle.style.color = '#fbbf24';
     metaCol.appendChild(heroTitle);
@@ -731,7 +742,13 @@ export class OverlayManager {
         this.el(
           'strong',
           '',
-          `${slotIcons[slot]} ${item ? item.name : `Empty ${slot}`}`
+          `${slotIcons[slot]} ${
+            slot === 'weapon' && (!item || item.id.startsWith('starter_wep_'))
+              ? 'Unarmed (Taiji Fist)'
+              : item
+                ? item.name
+                : `Empty ${slot}`
+          }`
         )
       );
       const rightTags = this.el('div', 'row-wrap');
@@ -811,7 +828,7 @@ export class OverlayManager {
           this.el(
             'strong',
             '',
-            `${item.name} (${getClassDefinition(item.classId).name} ${item.slot})`
+            `${item.name} (${getRelicLineageLabel(item.classId)} ${item.slot})`
           )
         );
         const itemBadgeHost = this.el('span', 'astryx-inline-slot');
@@ -860,7 +877,7 @@ export class OverlayManager {
       this.el(
         'div',
         'class-name',
-        `🔨 Blacksmith (${getClassDefinition(p.selectedClass).name} Slots)`
+        '🔨 Sect Forge (Relic Slot Tempering)'
       )
     );
     smith.appendChild(
@@ -999,9 +1016,9 @@ export class OverlayManager {
 
     // 4. Legion Board
     const legion = this.el('div', 'card');
-    legion.appendChild(this.el('div', 'class-name', '🛡️ Legion Board (Account-Wide Stats)'));
+    legion.appendChild(this.el('div', 'class-name', '☯️ Meridian Cultivation (Account-Wide Stats)'));
     legion.appendChild(
-      this.el('div', 'muted', 'Infinite Gold sinks granting permanent power to all 4 classes.')
+      this.el('div', 'muted', 'Permanent Silver Tael cultivation empowering all ascents.')
     );
 
     const nodes: readonly { key: LegionStatKey; label: string }[] = [
@@ -1059,7 +1076,7 @@ export class OverlayManager {
       const btn = this.el(
         'button',
         `tab-btn ${this.codexFilter === c.id ? 'active' : ''}`,
-        `🏺 Relics (${c.name})`
+        `🏺 ${getRelicLineageLabel(c.id)}s`
       );
       btn.addEventListener('click', () => {
         this.codexFilter = c.id;
@@ -1098,7 +1115,7 @@ export class OverlayManager {
         } else {
           card.appendChild(this.el('span', 'tier-badge', '??? UNDISCOVERED'));
           card.appendChild(this.el('strong', '', '❓ Hidden Peerless Technique'));
-          card.appendChild(this.el('div', 'muted', `Jianghu Clue: "${syn.riddleHint}"`));
+          card.appendChild(this.el('div', 'muted', `Wuxia Clue: "${syn.riddleHint}"`));
         }
         grid.appendChild(card);
       }
@@ -1107,7 +1124,13 @@ export class OverlayManager {
     }
 
     if (this.codexFilter === 'manuals') {
-      container.appendChild(this.el('strong', '', '🥋 Active Martial Arts (Max 3 Slots • Lv.1 → Lv.2 → Lv.3 Ultimate)'));
+      container.appendChild(
+        this.el(
+          'strong',
+          '',
+          '🥋 Active Martial Arts (3 Slots F1–14, 4th Slot at F15+ • Lv.1→Lv.3 Ultimate → Lv.5 Transcendent at F21+)'
+        )
+      );
       const activeGrid = this.el('div', 'grid-3');
       activeGrid.style.marginTop = '6px';
       for (const art of WUXIA_ACTIVE_ARTS) {
@@ -1115,13 +1138,17 @@ export class OverlayManager {
         card.appendChild(this.el('span', 'tier-badge', `ACTIVE • ${art.sectOrigin}`));
         card.appendChild(this.el('strong', '', `${art.icon} ${art.name}`));
         card.appendChild(this.el('div', 'muted', `Lv.1: ${art.levelDescriptions[0]}`));
-        card.appendChild(this.el('div', 'muted', `Lv.2: ${art.levelDescriptions[1]}`));
         card.appendChild(this.el('div', 'muted', `Lv.3: ${art.levelDescriptions[2]}`));
+        card.appendChild(this.el('div', 'muted', `Lv.5: ${art.levelDescriptions[4]}`));
         activeGrid.appendChild(card);
       }
       container.appendChild(activeGrid);
 
-      const qiHeading = this.el('strong', '', '☯️ Inner Qi / Neigong Manuals (Max 3 Slots • Lv.1 → Lv.3)');
+      const qiHeading = this.el(
+        'strong',
+        '',
+        '☯️ Inner Qi / Neigong Manuals (3 Slots F1–14, 4th Slot at F15+ • Lv.1→Lv.5 Transcendent)'
+      );
       qiHeading.style.display = 'block';
       qiHeading.style.marginTop = '12px';
       container.appendChild(qiHeading);
@@ -1133,6 +1160,7 @@ export class OverlayManager {
         card.appendChild(this.el('strong', '', `${qi.icon} ${qi.name}`));
         card.appendChild(this.el('div', 'muted', `Lv.1: ${qi.levelDescriptions[0]}`));
         card.appendChild(this.el('div', 'muted', `Lv.3: ${qi.levelDescriptions[2]}`));
+        card.appendChild(this.el('div', 'muted', `Lv.5: ${qi.levelDescriptions[4]}`));
         qiGrid.appendChild(card);
       }
       container.appendChild(qiGrid);
@@ -1185,7 +1213,7 @@ export class OverlayManager {
     const table = this.el('table', 'table');
     const thead = this.el('thead');
     const hr = this.el('tr');
-    for (const col of ['#', 'Redditor', 'Class', 'Result', 'Time', 'Gold', 'Legendary']) {
+    for (const col of ['#', 'Redditor', 'Path', 'Result', 'Time', 'Gold', 'Legendary']) {
       hr.appendChild(this.el('th', '', col));
     }
     thead.appendChild(hr);
@@ -1196,7 +1224,7 @@ export class OverlayManager {
       const tr = this.el('tr');
       tr.appendChild(this.el('td', '', String(entry.rank)));
       tr.appendChild(this.el('td', '', `u/${entry.username}`));
-      tr.appendChild(this.el('td', '', getClassDefinition(entry.classId).name));
+      tr.appendChild(this.el('td', '', 'Wuxia Wanderer'));
       tr.appendChild(
         this.el(
           'td',
@@ -1475,13 +1503,13 @@ export class OverlayManager {
     const buffStrip = document.getElementById('hud-buffs');
     if (buffStrip) {
       buffStrip.innerHTML = '';
-      const loadout = computeWuxiaLoadout(hud.draftedBuffIds);
+      const loadout = computeWuxiaLoadout(hud.draftedBuffIds, hud.floor);
 
-      for (let i = 0; i < WUXIA_MAX_ACTIVE_SLOTS; i++) {
+      for (let i = 0; i < loadout.maxActiveSlots; i++) {
         const slot = loadout.actives[i];
         if (!slot) {
           const empty = this.el('span', 'buff-chip', `[Art ${i + 1}: Empty]`);
-          empty.title = 'Empty Active Martial Art Slot (Max 3)';
+          empty.title = `Empty Active Martial Art Slot (Max ${loadout.maxActiveSlots})`;
           buffStrip.appendChild(empty);
           continue;
         }
@@ -1490,22 +1518,26 @@ export class OverlayManager {
         const syn = loadout.awakenedSynergies.includes(art.synergyId)
           ? getWuxiaSynergyById(art.synergyId)
           : null;
-        const tierClass = syn ? 'tier-prismatic' : slot.level >= 3 ? 'tier-gold' : 'tier-silver';
+        const tierClass = syn
+          ? 'tier-prismatic'
+          : slot.level >= 3
+            ? 'tier-gold'
+            : 'tier-silver';
         const label = syn
-          ? `${syn.icon} ${syn.shortName} ★`
+          ? `${syn.icon} ${syn.shortName}${slot.level >= 4 ? ` Lv.${slot.level}` : ''} ★`
           : `${art.icon} ${art.shortName} Lv.${slot.level}${slot.level >= 3 ? '★' : ''}`;
         const chip = this.el('span', `buff-chip ${tierClass}`, label);
         chip.title = syn
           ? `${syn.name}: ${syn.description}`
-          : `${art.name} (Lv.${slot.level}/3): ${art.levelDescriptions[slot.level - 1] ?? ''}`;
+          : `${art.name} (Lv.${slot.level}/${loadout.maxManualLevel}): ${art.levelDescriptions[slot.level - 1] ?? ''}`;
         buffStrip.appendChild(chip);
       }
 
-      for (let i = 0; i < WUXIA_MAX_INNER_QI_SLOTS; i++) {
+      for (let i = 0; i < loadout.maxInnerQiSlots; i++) {
         const slot = loadout.innerQis[i];
         if (!slot) {
           const empty = this.el('span', 'buff-chip', `[Qi ${i + 1}: Empty]`);
-          empty.title = 'Empty Inner Qi Slot (Max 3)';
+          empty.title = `Empty Inner Qi Slot (Max ${loadout.maxInnerQiSlots})`;
           buffStrip.appendChild(empty);
           continue;
         }
@@ -1513,10 +1545,10 @@ export class OverlayManager {
         if (!qi) continue;
         const chip = this.el(
           'span',
-          'buff-chip tier-silver',
+          `buff-chip ${slot.level >= 4 ? 'tier-gold' : 'tier-silver'}`,
           `${qi.icon} ${qi.shortName} Lv.${slot.level}`
         );
-        chip.title = `${qi.name} (Lv.${slot.level}/3): ${qi.levelDescriptions[slot.level - 1] ?? ''}`;
+        chip.title = `${qi.name} (Lv.${slot.level}/${loadout.maxManualLevel}): ${qi.levelDescriptions[slot.level - 1] ?? ''}`;
         buffStrip.appendChild(chip);
       }
 
@@ -1536,7 +1568,7 @@ export class OverlayManager {
   public openDraftModal(floor: number, equippedBuffIds: string[], silverMult: number): void {
     this.clearModal();
     void silverMult;
-    const loadout = computeWuxiaLoadout(equippedBuffIds);
+    const loadout = computeWuxiaLoadout(equippedBuffIds, floor);
     let cards: readonly WuxiaDraftOption[] = rollWuxiaDraftCards(
       this.draftRng,
       equippedBuffIds,
@@ -1552,7 +1584,7 @@ export class OverlayManager {
       mountAstryxModalBanner(bannerHost, {
         status: loadout.availableSynergies.length > 0 ? 'success' : 'info',
         title: `Floor ${floor} Cleared — Comprehend 1 Martial Manual`,
-        description: `Active Arts ${loadout.actives.length}/${WUXIA_MAX_ACTIVE_SLOTS} • Inner Qi ${loadout.innerQis.length}/${WUXIA_MAX_INNER_QI_SLOTS} • Refreshes Remaining: ${refreshesLeft}`,
+        description: `Active Arts ${loadout.actives.length}/${loadout.maxActiveSlots} • Inner Qi ${loadout.innerQis.length}/${loadout.maxInnerQiSlots} • Max Lv.${loadout.maxManualLevel} • Refreshes: ${refreshesLeft}`,
         badgeText: `${refreshesLeft} Roll${refreshesLeft === 1 ? '' : 's'} Left`,
         badgeTier: loadout.availableSynergies.length > 0 ? 'prismatic' : 'silver',
       });
@@ -1789,7 +1821,7 @@ export class OverlayManager {
     mountAstryxModalBanner(bannerHost, {
       status: 'warning',
       title: '🏛️ Altar of Fate — Floor 10 Greed Gamble',
-      description: `You conquered Floor 10! Guaranteed Unique Legendary for ${getClassDefinition(payload.classId).name}. Roll Free Purification (50/50) for Pristine, or gain a Tuned Cursed Legendary.`,
+      description: `You conquered Floor 10! Guaranteed Unique Sect Relic (${getRelicLineageLabel(payload.classId)}). Roll Free Purification (50/50) for Pristine, or gain a Tuned Cursed Relic.`,
       badgeText: '50 / 50',
       badgeTier: 'gold',
     });
@@ -2013,7 +2045,10 @@ export class OverlayManager {
     });
     box.appendChild(bannerHost);
 
-    const awakenedSyns = computeWuxiaLoadout(payload.draftedBuffIds).awakenedSynergies;
+    const awakenedSyns = computeWuxiaLoadout(
+      payload.draftedBuffIds,
+      payload.floorReached
+    ).awakenedSynergies;
     if (awakenedSyns.length > 0) {
       const synNames = awakenedSyns
         .map((id) => getWuxiaSynergyById(id))

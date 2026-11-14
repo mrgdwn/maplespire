@@ -5,10 +5,15 @@ import {
   ALL_WUXIA_MANUALS,
   WUXIA_ACTIVE_ARTS,
   WUXIA_ENLIGHTENMENT_SCROLLS,
+  WUXIA_GRANDMASTER_LEVEL,
+  WUXIA_HIGH_REALM_ACTIVE_SLOTS,
+  WUXIA_HIGH_REALM_INNER_QI_SLOTS,
   WUXIA_INNER_QI,
   WUXIA_MAX_ACTIVE_SLOTS,
   WUXIA_MAX_INNER_QI_SLOTS,
+  WUXIA_MAX_MANUAL_LEVEL,
   WUXIA_SECRET_SYNERGIES,
+  WUXIA_TRANSCENDENT_LEVEL,
   buildWuxiaDraftCandidates,
   computeWuxiaLoadout,
   getMiniBossFloorsForBracket,
@@ -23,10 +28,10 @@ import { calculateLeaderboardScore, createInitialProfile, mulberry32 } from '../
 
 void describe('Wuxia Spire Martial Arts, Inner Qi & Secret Synergies', () => {
   void it('maintains expected catalog sizes, unique IDs, and valid secret pairs', () => {
-    assert.equal(WUXIA_ACTIVE_ARTS.length, 6);
-    assert.equal(WUXIA_INNER_QI.length, 8);
-    assert.equal(WUXIA_SECRET_SYNERGIES.length, 6);
-    assert.equal(WUXIA_ENLIGHTENMENT_SCROLLS.length, 3);
+    assert.equal(WUXIA_ACTIVE_ARTS.length, 8);
+    assert.equal(WUXIA_INNER_QI.length, 10);
+    assert.equal(WUXIA_SECRET_SYNERGIES.length, 8);
+    assert.equal(WUXIA_ENLIGHTENMENT_SCROLLS.length, 10);
 
     const uniqueIds = new Set(ALL_WUXIA_MANUALS.map((m) => m.id));
     assert.equal(uniqueIds.size, ALL_WUXIA_MANUALS.length);
@@ -38,42 +43,58 @@ void describe('Wuxia Spire Martial Arts, Inner Qi & Secret Synergies', () => {
     }
   });
 
-  void it('enforces 3 Active Martial Art slots, 3 Inner Qi slots, and Lv.1 -> Lv.3 progression', () => {
+  void it('enforces 3 slots / Lv.3 on F1-10 and unlocks 4th slot + Lv.4/Lv.5 breakthroughs at higher floors', () => {
     const drafted = [
       'art_dragon_palm',
       'art_dragon_palm',
       'art_jade_sword',
       'art_dog_staff',
-      'art_heavy_iron', // 4th distinct active should be ignored by slot cap
+      'art_heavy_iron', // 4th distinct active blocked on F1-14, unlocked at F15+
       'art_dragon_palm',
-      'art_dragon_palm', // 4th copy caps at Lv.3
+      'art_dragon_palm', // 4th copy capped at Lv.3 on F1-10, unlocked at F11+
+      'art_dragon_palm', // 5th copy unlocked at F21+
       'qi_nine_yang',
       'qi_nine_yin',
       'qi_heaven_earth',
-      'qi_iron_cloth', // 4th distinct qi should be ignored by slot cap
+      'qi_iron_cloth', // 4th distinct qi blocked on F1-14, unlocked at F15+
     ];
 
-    const loadout = computeWuxiaLoadout(drafted);
-    assert.equal(loadout.actives.length, WUXIA_MAX_ACTIVE_SLOTS);
-    assert.equal(loadout.innerQis.length, WUXIA_MAX_INNER_QI_SLOTS);
-    assert.equal(loadout.activeLevels.art_dragon_palm, 3);
-    assert.equal(loadout.activeLevels.art_heavy_iron, undefined);
-    assert.equal(loadout.innerQiLevels.qi_iron_cloth, undefined);
+    const earlyLoadout = computeWuxiaLoadout(drafted, 5);
+    assert.equal(earlyLoadout.maxActiveSlots, WUXIA_MAX_ACTIVE_SLOTS);
+    assert.equal(earlyLoadout.maxInnerQiSlots, WUXIA_MAX_INNER_QI_SLOTS);
+    assert.equal(earlyLoadout.maxManualLevel, WUXIA_MAX_MANUAL_LEVEL);
+    assert.equal(earlyLoadout.actives.length, WUXIA_MAX_ACTIVE_SLOTS);
+    assert.equal(earlyLoadout.innerQis.length, WUXIA_MAX_INNER_QI_SLOTS);
+    assert.equal(earlyLoadout.activeLevels.art_dragon_palm, 3);
+    assert.equal(earlyLoadout.activeLevels.art_heavy_iron, undefined);
+    assert.equal(earlyLoadout.innerQiLevels.qi_iron_cloth, undefined);
 
-    const candidates = buildWuxiaDraftCandidates(drafted, 5);
+    const earlyCandidates = buildWuxiaDraftCandidates(drafted, 5);
     assert.equal(
-      candidates.some((c) => c.option.id === 'art_heavy_iron'),
+      earlyCandidates.some((c) => c.option.id === 'art_heavy_iron'),
       false,
-      'Unowned 4th active art must not be offered when 3 Active slots are full'
+      'Unowned 4th active art must not be offered when 3 Active slots are full before Floor 15'
     );
     assert.equal(
-      candidates.some((c) => c.option.id === 'qi_iron_cloth'),
+      earlyCandidates.some((c) => c.option.id === 'qi_iron_cloth'),
       false,
-      'Unowned 4th inner qi must not be offered when 3 Qi slots are full'
+      'Unowned 4th inner qi must not be offered when 3 Qi slots are full before Floor 15'
     );
+
+    const midLoadout = computeWuxiaLoadout(drafted, 16);
+    assert.equal(midLoadout.maxActiveSlots, WUXIA_HIGH_REALM_ACTIVE_SLOTS);
+    assert.equal(midLoadout.maxInnerQiSlots, WUXIA_HIGH_REALM_INNER_QI_SLOTS);
+    assert.equal(midLoadout.maxManualLevel, WUXIA_GRANDMASTER_LEVEL);
+    assert.equal(midLoadout.actives.length, 4);
+    assert.equal(midLoadout.innerQis.length, 4);
+    assert.equal(midLoadout.activeLevels.art_dragon_palm, 4);
+
+    const highLoadout = computeWuxiaLoadout(drafted, 25);
+    assert.equal(highLoadout.maxManualLevel, WUXIA_TRANSCENDENT_LEVEL);
+    assert.equal(highLoadout.activeLevels.art_dragon_palm, 5);
   });
 
-  void it('guarantees at least one Active Martial Art on empty Floor 1 start and backfills endless Enlightenment', () => {
+  void it('guarantees at least one Active Martial Art on Floor 1, continues Lv.4-5 upgrades on F25, and varies High-Realm Scrolls once maxed', () => {
     const rng = mulberry32(4242);
     const firstCards = rollWuxiaDraftCards(rng, [], 1, 3);
     assert.equal(firstCards.length, 3);
@@ -83,8 +104,8 @@ void describe('Wuxia Spire Martial Arts, Inner Qi & Secret Synergies', () => {
       'Classless wanderer draft #1 must include at least one Active Martial Art'
     );
 
-    // Fully max 3 actives + 3 non-synergizing inner Qis to verify Enlightenment endless backfill
-    const maxedNonMatching = [
+    // At Floor 25, a 3-slot Lv.3 build still receives Lv.4/5 breakthroughs & 4th-slot unlocks
+    const midBuild = [
       'art_dragon_palm',
       'art_dragon_palm',
       'art_dragon_palm',
@@ -104,12 +125,31 @@ void describe('Wuxia Spire Martial Arts, Inner Qi & Secret Synergies', () => {
       'qi_solitary_sword',
       'qi_solitary_sword',
     ];
-    const endlessCards = rollWuxiaDraftCards(rng, maxedNonMatching, 25, 3);
+    const midF25Candidates = buildWuxiaDraftCandidates(midBuild, 25);
+    assert.equal(
+      midF25Candidates.some((c) => c.option.kind === 'active' || c.option.kind === 'inner_qi'),
+      true,
+      'Floor 25 should still offer Lv.4-5 breakthroughs and 4th slot manuals before falling back'
+    );
+
+    // Once all 4 Active + 4 Inner Qi slots hit Lv.5 (no paired synergies), offer 3 distinct High-Realm Scrolls
+    const maxed4x4NonMatching = [
+      ...Array.from({ length: 5 }, () => 'art_dragon_palm'),
+      ...Array.from({ length: 5 }, () => 'art_jade_sword'),
+      ...Array.from({ length: 5 }, () => 'art_dog_staff'),
+      ...Array.from({ length: 5 }, () => 'art_six_pulse'),
+      ...Array.from({ length: 5 }, () => 'qi_iron_cloth'),
+      ...Array.from({ length: 5 }, () => 'qi_star_absorb'),
+      ...Array.from({ length: 5 }, () => 'qi_solitary_sword'),
+      ...Array.from({ length: 5 }, () => 'qi_dragon_elephant'),
+    ];
+    const endlessCards = rollWuxiaDraftCards(rng, maxed4x4NonMatching, 32, 3);
     assert.equal(endlessCards.length, 3);
     assert.equal(
       endlessCards.every((c) => c.kind === 'enlightenment'),
       true
     );
+    assert.equal(new Set(endlessCards.map((c) => c.id)).size, 3);
 
     const swapped = refreshWuxiaDraftCard(
       rng,

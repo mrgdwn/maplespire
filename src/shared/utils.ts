@@ -54,7 +54,7 @@ export const daysBetweenUtc = (earlierDateKey: string, laterDateKey: string): nu
 export const getDailyChallengeConfig = (
   dateKey: string
 ): { seed: number; biomeId: BiomeId; bountyClass: ClassId } => {
-  const seed = hashString(`maplespire:${dateKey}`);
+  const seed = hashString(`wuxiaspire:${dateKey}`);
   const rng = mulberry32(seed);
   const biomeIndex = Math.floor(rng() * BIOME_CATALOG.length);
   const classIndex = Math.floor(rng() * CLASS_IDS.length);
@@ -126,18 +126,18 @@ export const getDismantleShardValue = (item: GearItem): number => {
 };
 
 const NORMAL_NAMES: Record<GearSlot, string> = {
-  weapon: 'Adventurer',
-  headgear: 'Leather Cap',
-  top: 'Cotton Tunic',
-  cape: 'Traveler Cloak',
+  weapon: 'Wuxia Blade',
+  headgear: 'Silk Headband',
+  top: 'Wuxia Robe',
+  cape: 'Cloud Mantle',
 };
 
 const RARE_PREFIXES: readonly string[] = [
-  'Reinforced',
-  'Tempest',
-  'Runic',
-  'Mithril',
-  'Dragonbone',
+  'Jade-Forged',
+  'Celestial',
+  'Nine-Yang',
+  'Xuantie',
+  'Dragon-Scale',
 ];
 
 const RARE_AFFIXES: readonly string[] = [
@@ -162,7 +162,7 @@ export const createGearItem = (
   const maxSockets: 0 | 1 = tier === 'rare' && slot === 'weapon' ? 1 : 0;
 
   let name = slot === 'weapon' ? `Basic ${def.weaponLabel}` : NORMAL_NAMES[slot];
-  let affixText = 'Standard adventurer gear.';
+  let affixText = 'Standard sect disciple attire.';
 
   if (tier === 'rare') {
     const prefix = RARE_PREFIXES[Math.floor(rng() * RARE_PREFIXES.length)] ?? 'Mithril';
@@ -219,17 +219,16 @@ export const createLegendaryGearItem = (
 };
 
 const createEmptyEquipped = (classId: ClassId): EquippedGearMap => {
-  const def = getClassDefinition(classId);
   return {
     weapon: {
       id: `starter_wep_${classId}`,
-      name: `Novice ${def.weaponLabel}`,
+      name: 'Unarmed Taiji Fist',
       slot: 'weapon',
       classId,
       tier: 'normal',
       level: 1,
       baseStatBonus: 6,
-      affixText: 'Reliable starter weapon.',
+      affixText: 'Empty-handed Wuxia martial stance.',
       sockets: [],
       maxSockets: 0,
       legendaryId: null,

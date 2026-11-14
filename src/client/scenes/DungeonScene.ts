@@ -9,6 +9,7 @@ import {
   getWuxiaSynergyById,
   isCultLeaderFloor,
   isRandomMiniBossFloor,
+  type WuxiaArtStyle,
 } from '../../shared/catalogs/wuxia.ts';
 import {
   computeBossChestCount,
@@ -389,7 +390,7 @@ export class DungeonScene extends Scene {
       .setVisible(gearStyle.hasWeapon)
       .setDepth(6.6);
 
-    if (classId === 'bowman') {
+    if (this.hasEquippedLegendary('bow_cape_goldenfalcon')) {
       this.hawkSprite = this.add
         .image(this.heroX - 38, this.groundY - 92, 'pet_hawk')
         .setDepth(6);
@@ -397,6 +398,38 @@ export class DungeonScene extends Scene {
       this.hawkSprite = null;
     }
     this.wolfSprite = null;
+    this.syncHeroWuxiaWeapon();
+  }
+
+  private syncHeroWuxiaWeapon(activeStyle?: WuxiaArtStyle | null): void {
+    if (!this.heroWeaponSprite || !this.runConfig) return;
+    const equipped = this.runConfig.profile.classes[this.runConfig.classId].equipped;
+    const gearStyle = getGearVisualStyle(this.runConfig.classId, equipped);
+    const loadout = computeWuxiaLoadout(this.draftedBuffIds, this.floor);
+    const firstArt = loadout.actives[0] ? getWuxiaActiveArtById(loadout.actives[0].id) : null;
+    const style = activeStyle !== undefined ? activeStyle : (firstArt?.style ?? null);
+
+    if (style === 'jade_swords' || style === 'six_pulse') {
+      this.heroWeaponSprite
+        .setTexture('wep_wuxia_sword')
+        .setTint(style === 'six_pulse' ? 0x0ea5e9 : 0x38bdf8)
+        .setVisible(true);
+    } else if (style === 'staff_spin') {
+      this.heroWeaponSprite.setTexture('wep_wuxia_staff').setTint(0x10b981).setVisible(true);
+    } else if (style === 'iron_cleave') {
+      this.heroWeaponSprite.setTexture('wep_wuxia_heavy_sword').setTint(0xa855f7).setVisible(true);
+    } else if (style === 'flute_sonic') {
+      this.heroWeaponSprite.setTexture('wep_wuxia_flute').setTint(0x2dd4bf).setVisible(true);
+    } else if (style === 'venom_needles') {
+      this.heroWeaponSprite.setTexture('wep_wuxia_needles').setTint(0x818cf8).setVisible(true);
+    } else if (style === 'palm_wave' || style === 'flicking_finger' || !gearStyle.hasWeapon) {
+      this.heroWeaponSprite.setVisible(false);
+    } else {
+      this.heroWeaponSprite
+        .setTexture(`gear_wep_${this.runConfig.classId}`)
+        .setTint(gearStyle.weaponTint)
+        .setVisible(true);
+    }
   }
 
   private refreshLayout(width: number, height: number): void {
@@ -543,13 +576,18 @@ export class DungeonScene extends Scene {
   private spawnCompanionVisuals(): void {
     if (!this.runConfig) return;
     if (
-      this.runConfig.classId === 'bowman' &&
       (this.hasEquippedLegendary('bow_head_beastmaster') ||
         this.draftedBuffIds.includes('prism_bow_spectral_pack')) &&
       !this.wolfSprite
     ) {
       this.wolfSprite = this.add
         .image(this.heroX + 36, this.groundY - 18, 'pet_wolf')
+        .setDepth(6);
+    }
+
+    if (this.hasEquippedLegendary('bow_cape_goldenfalcon') && !this.hawkSprite) {
+      this.hawkSprite = this.add
+        .image(this.heroX - 38, this.groundY - 92, 'pet_hawk')
         .setDepth(6);
     }
 
@@ -574,7 +612,7 @@ export class DungeonScene extends Scene {
 
   private applyFloorStartShieldsAndPassives(): void {
     if (!this.stats) return;
-    const wuxia = computeWuxiaLoadout(this.draftedBuffIds);
+    const wuxia = computeWuxiaLoadout(this.draftedBuffIds, this.floor);
     this.heroShield =
       computeFloorStartShield(
         this.stats.maxHp,
@@ -638,16 +676,47 @@ export class DungeonScene extends Scene {
     const runSeed = this.runConfig?.seed ?? 1;
     const isCultLeader = isCultLeaderFloor(this.floor);
     const isMiniBoss = isRandomMiniBossFloor(this.floor, runSeed);
+    const bracket = Math.floor((this.floor - 1) / 10);
+    const realmHpMult =
+      this.floor <= 10
+        ? 1 + (this.floor - 1) * 0.08
+        : this.floor <= 20
+          ? 1.72 * Math.pow(1.12, this.floor - 10)
+          : this.floor <= 30
+            ? 5.3 * Math.pow(1.14, this.floor - 20)
+            : 19.7 * Math.pow(1.15, this.floor - 30);
+    const realmAtkMult =
+      this.floor <= 10
+        ? 1
+        : this.floor <= 20
+          ? 1 + (this.floor - 10) * 0.14
+          : 2.4 * Math.pow(1.09, this.floor - 20);
 
     if (isCultLeader || isMiniBoss) {
       const isEndBoss = isCultLeader;
-      const leaderTier = Math.max(0, Math.floor(this.floor / 10) - 1);
+      const bossTier = Math.max(1, Math.floor(this.floor / 10));
+      const cultLeaderHp =
+        bossTier === 1
+          ? 4800
+          : bossTier === 2
+            ? 28000
+            : bossTier === 3
+              ? 115000
+              : Math.round(115000 * Math.pow(3.4, bossTier - 3));
+      const cultLeaderAtk =
+        bossTier === 1
+          ? 68
+          : bossTier === 2
+            ? 240
+            : bossTier === 3
+              ? 620
+              : Math.round(620 * Math.pow(2.2, bossTier - 3));
       const baseHp = isEndBoss
-        ? Math.round(2250 * Math.pow(1.75, leaderTier))
-        : Math.round(560 * (1 + (this.floor - 1) * 0.16));
+        ? cultLeaderHp
+        : Math.round((360 + this.floor * 85) * realmHpMult * (this.floor >= 11 ? 2.6 : 1.65));
       const baseAtk = isEndBoss
-        ? Math.round(34 + leaderTier * 14)
-        : Math.round(18 + this.floor * 1.4);
+        ? cultLeaderAtk
+        : Math.round((14 + this.floor * 3.2) * realmAtkMult * 1.65);
       const name = isEndBoss ? `${this.activeBiome.endBossName} (F${this.floor})` : this.activeBiome.miniBossName;
 
       if (this.currentBossMutations.includes('twin_soul')) {
@@ -666,10 +735,14 @@ export class DungeonScene extends Scene {
       return;
     }
 
-    const bracketScale = 1 + Math.max(0, Math.floor((this.floor - 1) / 10)) * 0.45;
-    const isEliteWave = this.floor > 1 && (this.floor % 10 === 7 || this.floor % 10 === 9);
+    const isFinalWave = this.waveIndex === this.totalWavesOnFloor;
+    const isEliteFloor = this.floor > 1 && (this.floor % 10 === 7 || this.floor % 10 === 9);
     const mobCount =
-      this.floor === 1 ? 3 : isEliteWave ? 5 : 3 + Math.min(3, Math.floor(this.floor / 5));
+      this.floor === 1
+        ? 3
+        : 3 + Math.min(5, Math.floor(this.floor / 4)) + (isFinalWave ? 1 : 0);
+    const eliteChance =
+      this.floor < 3 ? 0 : Math.min(0.65, 0.18 + bracket * 0.14 + (this.floor % 10) * 0.015);
     const spacing = Math.min(
       95,
       Math.max(38, Math.floor((w - this.heroX - 180) / Math.max(1, mobCount - 1)))
@@ -679,16 +752,21 @@ export class DungeonScene extends Scene {
       const textureKey = `mob_${kindIdx}`;
       const tint = this.activeBiome.mobColors[kindIdx] ?? 0x6ede8a;
       const mobName = this.activeBiome.mobNames[kindIdx] ?? 'Cultist';
-      const isElite = isEliteWave && i === mobCount - 1;
+      const isElite =
+        (isEliteFloor && i === mobCount - 1) ||
+        (this.floor >= 3 && (this.rng() < eliteChance || (isFinalWave && i === 0 && this.floor >= 5)));
       const maxHp = Math.round(
-        (42 + this.floor * 24 + this.waveIndex * 10) * bracketScale * (isElite ? 2.0 : 1) * hpMult
+        (46 + this.floor * 28 + this.waveIndex * 14) *
+          realmHpMult *
+          (isElite ? 2.15 : 1) *
+          hpMult
       );
-      const atk = Math.round((6 + this.floor * 1.8) * (isElite ? 1.3 : 1));
+      const atk = Math.round((7 + this.floor * 2.2) * realmAtkMult * (isElite ? 1.45 : 1));
       const x = Math.max(this.heroX + 130, w - 75 - i * spacing);
       const y = this.groundY - 24;
 
       const sprite = this.add.image(x, y, textureKey).setTint(tint).setDepth(6);
-      if (isElite) sprite.setScale(1.35);
+      if (isElite) sprite.setScale(1.3);
 
       const hpBg = this.add.rectangle(x, y - 42, 46, 6, 0x0f172a).setDepth(8);
       const hpFill = this.add.rectangle(x, y - 42, 46, 6, isElite ? 0xa855f7 : 0xef4444).setDepth(9);
@@ -715,11 +793,11 @@ export class DungeonScene extends Scene {
         isSplitClone: false,
         hp: maxHp,
         maxHp,
-        hitShield: 0,
+        hitShield: isElite && this.floor >= 11 ? Math.min(6, 1 + bracket) : 0,
         atk,
-        atkIntervalSec: 1.5,
+        atkIntervalSec: Math.max(0.78, (isElite ? 1.28 : 1.52) - this.floor * 0.018),
         atkTimer: 0.5 + this.rng() * 0.6,
-        speed: 44 + this.floor * 2,
+        speed: (36 + Math.min(48, this.floor * 1.5)) * (isElite ? 1.18 : 1),
         armorShred: 0,
         burnStacks: 0,
         burnTimer: 0,
@@ -753,20 +831,21 @@ export class DungeonScene extends Scene {
   ): void {
     const mutations = this.currentBossMutations;
     let maxHp = baseHp;
-    let atkIntervalSec = isEndBoss ? 1.35 : 1.55;
+    let atkIntervalSec = Math.max(0.68, (isEndBoss ? 1.15 : 1.32) - this.floor * 0.012);
     let scale = isSplitClone ? 0.78 : 1;
 
     if (mutations.includes('juggernaut')) {
       maxHp = Math.round(maxHp * 1.3);
       atkIntervalSec *= 1.2;
-      scale *= 1.25;
+      scale *= 1.2;
     }
     if (mutations.includes('hasted')) {
       maxHp = Math.round(maxHp * 0.8);
-      atkIntervalSec *= 0.7;
+      atkIntervalSec = Math.max(0.55, atkIntervalSec * 0.72);
     }
 
-    const y = this.groundY - (isEndBoss ? 44 : 34);
+    const y = this.groundY - (isEndBoss ? 52 : 40);
+    const barOffset = isEndBoss ? 68 : 56;
     const key = isEndBoss ? 'endboss' : 'miniboss';
     const baseColor = this.activeBiome.mobColors[0] ?? 0xef4444;
     const tint = mutations.includes('golden_gilded')
@@ -776,10 +855,10 @@ export class DungeonScene extends Scene {
         : baseColor;
 
     const sprite = this.add.image(x, y, key).setTint(tint).setScale(scale).setDepth(6);
-    const hpBg = this.add.rectangle(x, y - 62, 92, 8, 0x0f172a).setDepth(8);
-    const hpFill = this.add.rectangle(x, y - 62, 92, 8, 0xf97316).setDepth(9);
+    const hpBg = this.add.rectangle(x, y - barOffset, 96, 8, 0x0f172a).setDepth(8);
+    const hpFill = this.add.rectangle(x, y - barOffset, 96, 8, 0xf97316).setDepth(9);
     const nameText = this.add
-      .text(x, y - 76, name, {
+      .text(x, y - barOffset - 14, name, {
         fontSize: '12px',
         fontStyle: 'bold',
         color: '#fde047',
@@ -804,8 +883,8 @@ export class DungeonScene extends Scene {
       hitShield: 0,
       atk: baseAtk,
       atkIntervalSec,
-      atkTimer: 1.0,
-      speed: 26,
+      atkTimer: 0.9,
+      speed: 28 + Math.min(28, this.floor * 0.8),
       armorShred: 0,
       burnStacks: 0,
       burnTimer: 0,
@@ -946,7 +1025,7 @@ export class DungeonScene extends Scene {
 
     // Vampire-Survivors-style passive auto-cycle for drafted Wuxia Martial Arts
     if (this.enemies.length > 0) {
-      const loadout = computeWuxiaLoadout(this.draftedBuffIds);
+      const loadout = computeWuxiaLoadout(this.draftedBuffIds, this.floor);
       const cdMult = 1 - this.stats.cooldownReductionPct / 100;
       for (const slot of loadout.actives) {
         const art = getWuxiaActiveArtById(slot.id);
@@ -1025,101 +1104,99 @@ export class DungeonScene extends Scene {
       }
     }
 
-    // Bowman Hawk + Wolf companions
-    if (this.runConfig.classId === 'bowman') {
-      const clsLvl = this.runConfig.profile.classes.bowman.level;
-      if (clsLvl >= 15 || this.hasEquippedLegendary('bow_cape_goldenfalcon')) {
-        this.hawkTimer += dt;
-        if (this.hawkTimer >= 1.5 && this.enemies.length > 0) {
-          this.hawkTimer = 0;
-          const target = this.getClosestEnemy();
-          if (target) {
-            const inherit = this.hasEquippedLegendary('bow_top_apexpredator')
-              ? this.isEquippedLegendaryCursed('bow_top_apexpredator')
-                ? 0.75
-                : 1
-              : 0;
-            const isCrit = inherit > 0 && this.rng() < this.stats.critRate;
-            const dmg =
-              this.stats.atk *
-              0.65 *
-              (isCrit ? 1 + (this.stats.critDmg - 1) * inherit : 1);
-            const hx = this.hawkSprite ? this.hawkSprite.x : this.heroX - 24;
-            const hy = this.hawkSprite ? this.hawkSprite.y : this.groundY - 92;
-            const vx = 680;
-            const travelSec = Math.max(0.08, (target.sprite.x - hx) / vx);
-            const vy = (target.sprite.y - hy) / travelSec;
-            const dropFalconLoot =
-              this.hasEquippedLegendary('bow_cape_goldenfalcon') &&
-              this.rng() < (this.isEquippedLegendaryCursed('bow_cape_goldenfalcon') ? 0.25 : 0.45);
-            if (this.hawkSprite) {
-              this.tweens.add({
-                targets: this.hawkSprite,
-                scale: 1.28,
-                duration: 85,
-                yoyo: true,
-              });
-            }
-            this.spawnProjectile(
-              'proj_hawk_feather',
-              hx + 10,
-              hy,
-              vx,
-              vy,
-              dmg,
-              isCrit,
-              1,
-              false,
-              false,
-              false,
-              target.id,
-              false,
-              dropFalconLoot,
-              'HAWK'
-            );
-          }
-        }
-      }
-
-      if (this.wolfSprite) {
-        this.wolfTimer += dt;
-        const interval = this.isEquippedLegendaryCursed('bow_head_beastmaster') ? 1.5 : 1.3;
-        if (this.wolfTimer >= interval && this.enemies.length > 0) {
-          this.wolfTimer = 0;
-          const target = this.getClosestEnemy();
-          if (target) {
+    // Relic Companions (Golden Falcon & Spectral Wolf)
+    if (this.hawkSprite || this.hasEquippedLegendary('bow_cape_goldenfalcon')) {
+      this.hawkTimer += dt;
+      if (this.hawkTimer >= 1.5 && this.enemies.length > 0) {
+        this.hawkTimer = 0;
+        const target = this.getClosestEnemy();
+        if (target) {
+          const inherit = this.hasEquippedLegendary('bow_top_apexpredator')
+            ? this.isEquippedLegendaryCursed('bow_top_apexpredator')
+              ? 0.75
+              : 1
+            : 0;
+          const isCrit = inherit > 0 && this.rng() < this.stats.critRate;
+          const dmg =
+            this.stats.atk *
+            0.65 *
+            (isCrit ? 1 + (this.stats.critDmg - 1) * inherit : 1);
+          const hx = this.hawkSprite ? this.hawkSprite.x : this.heroX - 24;
+          const hy = this.hawkSprite ? this.hawkSprite.y : this.groundY - 92;
+          const vx = 680;
+          const travelSec = Math.max(0.08, (target.sprite.x - hx) / vx);
+          const vy = (target.sprite.y - hy) / travelSec;
+          const dropFalconLoot =
+            this.hasEquippedLegendary('bow_cape_goldenfalcon') &&
+            this.rng() < (this.isEquippedLegendaryCursed('bow_cape_goldenfalcon') ? 0.25 : 0.45);
+          if (this.hawkSprite) {
             this.tweens.add({
-              targets: this.wolfSprite,
-              scaleX: 1.3,
-              scaleY: 0.85,
-              duration: 90,
+              targets: this.hawkSprite,
+              scale: 1.28,
+              duration: 85,
               yoyo: true,
             });
-            this.spawnProjectile(
-              'proj_wolf_fang',
-              this.wolfSprite.x + 16,
-              this.groundY - 22,
-              640,
-              0,
-              this.stats.atk * 0.85,
-              false,
-              1,
-              false,
-              false,
-              false,
-              target.id,
-              false,
-              false,
-              'WOLF'
-            );
           }
+          this.spawnProjectile(
+            'proj_hawk_feather',
+            hx + 10,
+            hy,
+            vx,
+            vy,
+            dmg,
+            isCrit,
+            1,
+            false,
+            false,
+            false,
+            target.id,
+            false,
+            dropFalconLoot,
+            'HAWK'
+          );
+        }
+      }
+    }
+
+    if (this.wolfSprite) {
+      this.wolfTimer += dt;
+      const interval = this.isEquippedLegendaryCursed('bow_head_beastmaster') ? 1.5 : 1.3;
+      if (this.wolfTimer >= interval && this.enemies.length > 0) {
+        this.wolfTimer = 0;
+        const target = this.getClosestEnemy();
+        if (target) {
+          this.tweens.add({
+            targets: this.wolfSprite,
+            scaleX: 1.3,
+            scaleY: 0.85,
+            duration: 90,
+            yoyo: true,
+          });
+          this.spawnProjectile(
+            'proj_wolf_fang',
+            this.wolfSprite.x + 16,
+            this.groundY - 22,
+            640,
+            0,
+            this.stats.atk * 0.85,
+            false,
+            1,
+            false,
+            false,
+            false,
+            target.id,
+            false,
+            false,
+            'WOLF'
+          );
         }
       }
     }
 
     // Move enemies & tick enemy status effects / boss mechanics
     const frontEnemy = this.getClosestEnemy();
-    const inRange = frontEnemy ? frontEnemy.sprite.x - this.heroX <= this.stats.range : false;
+    const attackRange = Math.max(240, this.stats.range);
+    const inRange = frontEnemy ? frontEnemy.sprite.x - this.heroX <= attackRange : false;
 
     if (!inRange && this.enemies.length > 0) {
       if (this.floorTile) this.floorTile.tilePositionX += 70 * dt;
@@ -1239,6 +1316,7 @@ export class DungeonScene extends Scene {
   ): void {
     const sword = this.add
       .image(targetX, targetY - 175, 'fx_iron_cleave')
+      .setRotation(Math.PI / 2)
       .setTint(tintHex)
       .setScale(isSynergy ? 1.55 : 1.2)
       .setDepth(12);
@@ -1492,8 +1570,24 @@ export class DungeonScene extends Scene {
   private performHeroAttack(target: EnemyEntity): void {
     if (!this.stats || !this.runConfig) return;
     this.attackCount += 1;
-    const classId = this.runConfig.classId;
-    this.playHeroAttackAnimation(classId, 1);
+
+    const loadout = computeWuxiaLoadout(this.draftedBuffIds, this.floor);
+    const primarySlot = loadout.actives[0];
+    const primaryArt = primarySlot ? getWuxiaActiveArtById(primarySlot.id) : null;
+    const stanceStyle = primaryArt?.style ?? null;
+    this.syncHeroWuxiaWeapon(stanceStyle);
+
+    const equippedWep = this.runConfig.profile.classes[this.runConfig.classId].equipped.weapon;
+    const hasRelicWep = equippedWep !== null && !equippedWep.id.startsWith('starter_wep_');
+    const animStyleClass: ClassId =
+      stanceStyle === 'jade_swords' || stanceStyle === 'venom_needles'
+        ? 'thief'
+        : stanceStyle === 'flute_sonic'
+          ? 'mage'
+          : stanceStyle === 'six_pulse'
+            ? 'bowman'
+            : 'warrior';
+    this.playHeroAttackAnimation(animStyleClass, 1);
 
     const rollHit = (dmgMult: number, forceCrit: boolean = false): { dmg: number; isCrit: boolean } => {
       if (!this.stats) return { dmg: 10, isCrit: false };
@@ -1531,243 +1625,155 @@ export class DungeonScene extends Scene {
       : 0;
     const echoProcs = echoChance > 0 && this.rng() < echoChance;
 
-    if (classId === 'warrior') {
+    let projTexture = 'proj_palm_qi';
+    let projTint: number | null = null;
+    if (stanceStyle === 'jade_swords') {
+      projTexture = 'fx_jade_sword';
+      soundFX.playArrow();
+    } else if (stanceStyle === 'iron_cleave' || (stanceStyle === null && hasRelicWep)) {
+      projTexture = 'proj_wave';
       soundFX.playSwing();
-      const cleaveRange = this.draftedBuffIds.includes('prism_war_titan_cleave') ? 165 : 120;
-      const { dmg, isCrit } = rollHit(1);
-      for (const e of [...this.enemies]) {
-        if (Math.abs(e.sprite.x - this.heroX) <= cleaveRange + 40) {
-          this.spawnHitSpark(e.sprite.x, e.sprite.y, isCrit);
-          this.damageEnemy(e, dmg, isCrit);
-          if (!e.mutations.includes('juggernaut') && e.hp > 0) {
-            const pushedX = Math.min(this.scale.width - 55, e.sprite.x + this.stats.knockbackPower);
-            if (pushedX >= this.scale.width - 60 && this.hasEquippedLegendary('war_wep_worldbreaker')) {
-              this.damageEnemy(e, dmg, false, 'WALL SLAM');
-            }
-            e.sprite.x = pushedX;
-          }
-        }
-      }
-      if (this.hasEquippedLegendary('war_wep_ragnarok') && this.attackCount % 3 === 0) {
-        this.spawnProjectile('proj_wave', this.heroX + 20, this.groundY - 34, 460, 0, dmg * 1.4, isCrit, 99, false, false, true);
-      }
-      if (triggerStatic) {
-        this.triggerStaticDischarge(target);
-      }
-      if (echoProcs) {
-        this.time.delayedCall(90, () => {
-          if (this.phase !== 'combat' || !this.stats || !this.runConfig) return;
-          const echoTarget = this.getClosestEnemy();
-          if (!echoTarget) return;
-          this.playHeroAttackAnimation('warrior', 0.85);
-          soundFX.playSwing();
-          const echoHit = rollHit(0.75);
-          this.spawnHitSpark(echoTarget.sprite.x, echoTarget.sprite.y, echoHit.isCrit, 0x38bdf8);
-          this.damageEnemy(echoTarget, echoHit.dmg, echoHit.isCrit, 'ECHO');
-        });
-      }
-    } else if (classId === 'mage') {
+    } else if (stanceStyle === 'flute_sonic') {
+      projTexture = 'fx_flute_wave';
       soundFX.playSpell();
-      const boltCount = this.hasEquippedLegendary('mage_wep_starlight')
-        ? 3
-        : this.draftedBuffIds.includes('prism_mage_tri_elemental')
-          ? 2
-          : 1;
-      const vx = 520;
-      const baseVy = (target.sprite.y - (this.groundY - 28)) / Math.max(0.08, (target.sprite.x - (this.heroX + 24)) / vx);
-      for (let i = 0; i < boltCount; i++) {
-        const offset = i - (boltCount - 1) / 2;
-        const { dmg, isCrit } = rollHit(i === 0 ? 1 : 0.65);
-        this.spawnProjectile(
-          'proj_bolt',
-          this.heroX + 24,
-          this.groundY - 28 + offset * 12,
-          vx,
-          baseVy + offset * 24,
-          dmg,
-          isCrit,
-          1,
-          false,
-          this.hasEquippedLegendary('mage_wep_glacial'),
-          false,
-          target.id,
-          i === 0 && triggerStatic
-        );
-      }
-      if (this.hasEquippedLegendary('mage_wep_abyssal') && this.rng() < 0.2) {
-        for (const e of this.enemies) {
-          e.sprite.x = Phaser.Math.Linear(e.sprite.x, target.sprite.x, 0.55);
-        }
-        this.spawnFloatingText(target.sprite.x, target.sprite.y - 45, 'VOID PULL!', '#c084fc', 14);
-      }
-      if (echoProcs) {
-        this.time.delayedCall(90, () => {
-          if (this.phase !== 'combat' || !this.stats || !this.runConfig) return;
-          const echoTarget = this.getClosestEnemy();
-          if (!echoTarget) return;
-          soundFX.playSpell();
-          const echoHit = rollHit(0.75);
-          const evy =
-            (echoTarget.sprite.y - (this.groundY - 30)) /
-            Math.max(0.08, (echoTarget.sprite.x - (this.heroX + 24)) / vx);
-          this.spawnProjectile(
-            'proj_bolt',
-            this.heroX + 24,
-            this.groundY - 30,
-            vx,
-            evy,
-            echoHit.dmg,
-            echoHit.isCrit,
-            1,
-            false,
-            false,
-            false,
-            echoTarget.id,
-            false,
-            false,
-            'ECHO'
-          );
-        });
-      }
-    } else if (classId === 'thief') {
+    } else if (stanceStyle === 'venom_needles') {
+      projTexture = 'fx_ice_needle';
       soundFX.playArrow();
-      const pierce = this.hasEquippedLegendary('thief_head_bandana')
-        ? this.isEquippedLegendaryCursed('thief_head_bandana')
-          ? 2
-          : 3
-        : 1;
-      const vx = 620;
-      const starVy =
-        (target.sprite.y - (this.groundY - 28)) /
-        Math.max(0.08, (target.sprite.x - (this.heroX + 18)) / vx);
-      const { dmg, isCrit } = rollHit(1);
-      this.spawnProjectile(
-        'proj_star',
-        this.heroX + 18,
-        this.groundY - 28,
-        vx,
-        starVy,
-        dmg,
-        isCrit,
-        pierce,
-        false,
-        false,
-        false,
-        target.id,
-        triggerStatic
-      );
-      if (this.draftedBuffIds.includes('prism_thief_shadow_partner') || (isCrit && this.hasEquippedLegendary('thief_wep_shadowfang'))) {
-        const mult = this.isEquippedLegendaryCursed('thief_wep_shadowfang') ? 0.4 : 0.6;
-        this.spawnProjectile(
-          'proj_star',
-          this.heroX + 8,
-          this.groundY - 40,
-          vx,
-          starVy,
-          Math.round(dmg * mult),
-          false,
-          1,
-          false,
-          false,
-          false,
-          target.id,
-          false,
-          false,
-          'SHADOW'
-        );
-      }
-      if (echoProcs) {
-        this.time.delayedCall(85, () => {
-          if (this.phase !== 'combat' || !this.stats || !this.runConfig) return;
-          const echoTarget = this.getClosestEnemy();
-          if (!echoTarget) return;
-          soundFX.playArrow();
-          const echoHit = rollHit(0.75);
-          const evy =
-            (echoTarget.sprite.y - (this.groundY - 28)) /
-            Math.max(0.08, (echoTarget.sprite.x - (this.heroX + 18)) / vx);
-          this.spawnProjectile(
-            'proj_star',
-            this.heroX + 18,
-            this.groundY - 28,
-            vx,
-            evy,
-            echoHit.dmg,
-            echoHit.isCrit,
-            1,
-            false,
-            false,
-            false,
-            echoTarget.id,
-            false,
-            false,
-            'ECHO'
-          );
-        });
-      }
+    } else if (stanceStyle === 'staff_spin') {
+      projTexture = 'proj_palm_qi';
+      projTint = 0x34d399;
+      soundFX.playSwing();
     } else {
-      soundFX.playArrow();
-      const extraArrows =
-        (this.hasEquippedLegendary('bow_wep_galeforce') ? 2 : 0) +
-        (this.draftedBuffIds.includes('prism_bow_split_arrow') ? 2 : 0);
-      const totalArrows = 1 + extraArrows;
-      const guaranteedMark =
-        this.draftedBuffIds.includes('prism_bow_snipers_mark') && this.attackCount % 3 === 0;
-      const thunderInterval = this.isEquippedLegendaryCursed('bow_wep_thunderbird') ? 7 : 5;
-      const isThunder = this.hasEquippedLegendary('bow_wep_thunderbird') && this.attackCount % thunderInterval === 0;
-      const vx = 680;
-      const baseVy =
-        (target.sprite.y - (this.groundY - 30)) /
-        Math.max(0.08, (target.sprite.x - (this.heroX + 24)) / vx);
+      projTexture = 'proj_palm_qi';
+      soundFX.playSwing();
+    }
 
-      for (let i = 0; i < totalArrows; i++) {
-        const { dmg, isCrit } = rollHit(i === 0 ? 1 : 0.6, guaranteedMark && i === 0);
-        const spreadVy = (i - (totalArrows - 1) / 2) * 30;
+    const extraShots =
+      (this.hasEquippedLegendary('bow_wep_galeforce') ? 2 : 0) +
+      (this.draftedBuffIds.includes('prism_bow_split_arrow') ? 2 : 0) +
+      (this.hasEquippedLegendary('mage_wep_starlight') ? 2 : 0);
+    const totalShots = 1 + extraShots;
+    const guaranteedMark =
+      this.draftedBuffIds.includes('prism_bow_snipers_mark') && this.attackCount % 3 === 0;
+    const thunderInterval = this.isEquippedLegendaryCursed('bow_wep_thunderbird') ? 7 : 5;
+    const isThunder =
+      this.hasEquippedLegendary('bow_wep_thunderbird') && this.attackCount % thunderInterval === 0;
+    const pierce = this.hasEquippedLegendary('thief_head_bandana')
+      ? this.isEquippedLegendaryCursed('thief_head_bandana')
+        ? 2
+        : 3
+      : projTexture === 'proj_wave'
+        ? 2
+        : 1;
+
+    const vx = 650;
+    const startX = this.heroX + 24;
+    const startY = this.groundY - 30;
+    const baseVy =
+      (target.sprite.y - startY) / Math.max(0.08, (target.sprite.x - startX) / vx);
+
+    for (let i = 0; i < totalShots; i++) {
+      const { dmg, isCrit } = rollHit(i === 0 ? 1 : 0.6, guaranteedMark && i === 0);
+      const spreadVy = (i - (totalShots - 1) / 2) * 26;
+      const tex = isThunder && i === 0 ? 'proj_lightning' : projTexture;
+      this.spawnProjectile(
+        tex,
+        startX,
+        startY,
+        vx,
+        baseVy + spreadVy,
+        dmg * (guaranteedMark && i === 0 ? 1.25 : 1),
+        isCrit,
+        isThunder && i === 0 ? 4 : pierce,
+        this.hasEquippedLegendary('bow_wep_worldtree') && this.rng() < 0.25,
+        this.hasEquippedLegendary('mage_wep_glacial'),
+        tex === 'proj_wave',
+        target.id,
+        i === 0 && triggerStatic,
+        false,
+        null,
+        tex === 'proj_lightning' ? null : projTint
+      );
+    }
+
+    if (
+      this.draftedBuffIds.includes('prism_thief_shadow_partner') ||
+      (this.hasEquippedLegendary('thief_wep_shadowfang') && this.attackCount % 2 === 0)
+    ) {
+      const shadowHit = rollHit(this.isEquippedLegendaryCursed('thief_wep_shadowfang') ? 0.4 : 0.6);
+      this.spawnProjectile(
+        projTexture,
+        this.heroX + 10,
+        this.groundY - 40,
+        vx,
+        baseVy,
+        shadowHit.dmg,
+        false,
+        1,
+        false,
+        false,
+        projTexture === 'proj_wave',
+        target.id,
+        false,
+        false,
+        'SHADOW',
+        projTint
+      );
+    }
+
+    if (this.hasEquippedLegendary('war_wep_ragnarok') && this.attackCount % 3 === 0) {
+      const waveHit = rollHit(1.4);
+      this.spawnProjectile(
+        'proj_wave',
+        startX,
+        this.groundY - 34,
+        vx,
+        0,
+        waveHit.dmg,
+        waveHit.isCrit,
+        99,
+        false,
+        false,
+        true
+      );
+    }
+
+    if (this.hasEquippedLegendary('mage_wep_abyssal') && this.rng() < 0.2) {
+      for (const e of this.enemies) {
+        e.sprite.x = Phaser.Math.Linear(e.sprite.x, target.sprite.x, 0.55);
+      }
+      this.spawnFloatingText(target.sprite.x, target.sprite.y - 45, 'VOID PULL!', '#c084fc', 14);
+    }
+
+    if (echoProcs) {
+      this.time.delayedCall(90, () => {
+        if (this.phase !== 'combat' || !this.stats || !this.runConfig) return;
+        const echoTarget = this.getClosestEnemy();
+        if (!echoTarget) return;
+        soundFX.playSwing();
+        const echoHit = rollHit(0.75);
+        const evy =
+          (echoTarget.sprite.y - startY) /
+          Math.max(0.08, (echoTarget.sprite.x - startX) / vx);
         this.spawnProjectile(
-          isThunder && i === 0 ? 'proj_lightning' : 'proj_arrow',
-          this.heroX + 24,
-          this.groundY - 30,
+          projTexture,
+          startX,
+          startY,
           vx,
-          baseVy + spreadVy,
-          dmg * (guaranteedMark && i === 0 ? 1.25 : 1),
-          isCrit,
-          isThunder && i === 0 ? 4 : this.draftedBuffIds.includes('prism_bow_split_arrow') ? 2 : 1,
-          this.hasEquippedLegendary('bow_wep_worldtree') && this.rng() < 0.25,
+          evy,
+          echoHit.dmg,
+          echoHit.isCrit,
+          1,
           false,
           false,
-          target.id,
-          i === 0 && triggerStatic
+          projTexture === 'proj_wave',
+          echoTarget.id,
+          false,
+          false,
+          'ECHO',
+          projTint
         );
-      }
-      if (echoProcs) {
-        this.time.delayedCall(90, () => {
-          if (this.phase !== 'combat' || !this.stats || !this.runConfig) return;
-          const echoTarget = this.getClosestEnemy();
-          if (!echoTarget) return;
-          soundFX.playArrow();
-          const echoHit = rollHit(0.75);
-          const evy =
-            (echoTarget.sprite.y - (this.groundY - 30)) /
-            Math.max(0.08, (echoTarget.sprite.x - (this.heroX + 24)) / vx);
-          this.spawnProjectile(
-            'proj_arrow',
-            this.heroX + 24,
-            this.groundY - 30,
-            vx,
-            evy,
-            echoHit.dmg,
-            echoHit.isCrit,
-            1,
-            false,
-            false,
-            false,
-            echoTarget.id,
-            false,
-            false,
-            'ECHO'
-          );
-        });
-      }
+      });
     }
   }
 
@@ -1786,21 +1792,20 @@ export class DungeonScene extends Scene {
     targetId: number | null = null,
     isChainProc: boolean = false,
     dropFalconLoot: boolean = false,
-    labelTag: string | null = null
+    labelTag: string | null = null,
+    tintHex: number | null = null
   ): void {
     const sprite = this.add.image(x, y, textureKey).setDepth(7);
+    if (tintHex !== null) {
+      sprite.setTint(tintHex);
+    }
     if (
-      textureKey === 'proj_arrow' ||
-      textureKey === 'proj_hawk_feather' ||
-      textureKey === 'proj_wolf_fang' ||
-      textureKey === 'fx_jade_sword' ||
-      textureKey === 'fx_ice_needle' ||
-      textureKey === 'fx_dragon_palm' ||
-      textureKey === 'proj_wave'
+      textureKey !== 'proj_star' &&
+      textureKey !== 'fx_staff_wheel' &&
+      textureKey !== 'fx_taiji_seal' &&
+      textureKey !== 'proj_orb_hp'
     ) {
       sprite.setRotation(Math.atan2(vy, vx));
-    } else if (textureKey === 'fx_iron_cleave') {
-      sprite.setRotation(Math.atan2(vy, vx) + Math.PI / 2);
     }
     if (textureKey === 'fx_dragon_palm') {
       sprite.setScale(1.25);
@@ -1835,38 +1840,35 @@ export class DungeonScene extends Scene {
       p.sprite.y += p.vy * dt;
 
       const key = p.sprite.texture.key;
-      if (key === 'proj_star' || key === 'fx_flute_wave') {
+      if (key === 'proj_star' || key === 'fx_staff_wheel' || key === 'fx_taiji_seal') {
         p.sprite.rotation += 14 * dt;
-      } else if (key === 'fx_staff_wheel' || key === 'fx_taiji_seal') {
-        p.sprite.rotation += 18 * dt;
-      } else if (
-        key === 'proj_arrow' ||
-        key === 'proj_hawk_feather' ||
-        key === 'proj_wolf_fang' ||
-        key === 'fx_jade_sword' ||
-        key === 'fx_ice_needle' ||
-        key === 'fx_dragon_palm' ||
-        key === 'proj_wave'
-      ) {
+      } else if (key !== 'proj_orb_hp') {
         p.sprite.rotation = Math.atan2(p.vy, p.vx);
-      } else if (key === 'fx_iron_cleave') {
-        p.sprite.rotation = Math.atan2(p.vy, p.vx) + Math.PI / 2;
       }
 
-      if (key.startsWith('fx_') || key === 'proj_wave') {
-        if (this.rng() < 0.45) {
-          const trail = this.add
-            .image(p.sprite.x, p.sprite.y, key)
-            .setRotation(p.sprite.rotation)
-            .setScale(p.sprite.scaleX * 0.85, p.sprite.scaleY * 0.85)
-            .setAlpha(0.45)
+      if (key.startsWith('fx_') || key.startsWith('proj_')) {
+        if (this.rng() < 0.2) {
+          const sparkColor =
+            key === 'fx_dragon_palm' || key === 'proj_palm_qi' || key === 'proj_wave'
+              ? 0xfef08a
+              : key === 'fx_jade_sword'
+                ? 0x38bdf8
+                : key === 'fx_iron_cleave'
+                  ? 0xc084fc
+                  : key === 'fx_flute_wave'
+                    ? 0x5eead4
+                    : key === 'fx_ice_needle'
+                      ? 0xc4b5fd
+                      : 0xe2e8f0;
+          const spark = this.add
+            .rectangle(p.sprite.x - 6, p.sprite.y + (this.rng() - 0.5) * 6, 4, 4, sparkColor, 0.85)
             .setDepth(6.8);
           this.tweens.add({
-            targets: trail,
+            targets: spark,
             alpha: 0,
-            scale: 0.45,
+            scale: 0.4,
             duration: 110,
-            onComplete: () => trail.destroy(),
+            onComplete: () => spark.destroy(),
           });
         }
       }
@@ -2265,16 +2267,16 @@ export class DungeonScene extends Scene {
     if (this.draftedBuffIds.includes('silver_frostbite_aura') && e.sprite.x - this.heroX <= 165) {
       e.chillTimer = Math.max(e.chillTimer, 0.25);
     }
-    const baseY = this.groundY - (e.isBoss && !e.isMiniBoss ? 44 : e.isBoss ? 34 : 24);
+    const baseY = this.groundY - (e.isBoss && !e.isMiniBoss ? 52 : e.isBoss ? 40 : 24);
     const meleeDist = this.heroX + 74;
     if (e.stunTimer <= 0 && e.rootTimer <= 0 && e.sprite.x > meleeDist) {
       const slow = e.chillTimer > 0 ? 0.75 : 1;
       e.sprite.x = Math.max(meleeDist, e.sprite.x - e.speed * slow * dt);
-      e.sprite.y = baseY - Math.abs(Math.sin(this.elapsedRunMs * 0.011 + e.id)) * 4.5;
-      e.sprite.rotation = Math.sin(this.elapsedRunMs * 0.011 + e.id) * 0.06;
+      e.sprite.y = baseY - Math.abs(Math.sin(this.elapsedRunMs * 0.01 + e.id)) * 3.5;
+      e.sprite.setAngle(Math.sin(this.elapsedRunMs * 0.009 + e.id) * 3.2);
     } else if (!this.tweens.isTweening(e.sprite)) {
       e.sprite.y = baseY;
-      e.sprite.rotation = 0;
+      e.sprite.setAngle(0);
     }
 
     if (e.stunTimer <= 0 && (e.sprite.x <= meleeDist + 16 || (e.isBoss && heroInRange))) {
@@ -2289,8 +2291,8 @@ export class DungeonScene extends Scene {
           this.tweens.add({
             targets: e.sprite,
             x: e.sprite.x - 28,
-            scaleX: baseScaleX * 1.18,
-            scaleY: baseScaleY * 1.12,
+            scaleX: baseScaleX * 1.12,
+            scaleY: baseScaleY * 1.06,
             duration: 95,
             yoyo: true,
             ease: 'Quad.easeOut',
@@ -2310,12 +2312,13 @@ export class DungeonScene extends Scene {
       this.killEnemy(e);
       return;
     }
-    const barY = e.sprite.y - (e.isBoss ? 62 : 42);
+    const barOffset = e.isBoss && !e.isMiniBoss ? 68 : e.isBoss ? 56 : 42;
+    const barY = e.sprite.y - barOffset;
     e.hpBg.setPosition(e.sprite.x, barY);
     e.hpFill.setPosition(e.sprite.x, barY);
     const ratio = Math.max(0, Math.min(1, e.hp / e.maxHp));
-    e.hpFill.width = (e.isBoss ? 92 : 46) * ratio;
-    e.nameText.setPosition(e.sprite.x, barY - 13);
+    e.hpFill.width = (e.isBoss ? 96 : 46) * ratio;
+    e.nameText.setPosition(e.sprite.x, barY - 14);
   }
 
   private damageHero(rawAtk: number, attacker: EnemyEntity | null): void {
@@ -2409,8 +2412,8 @@ export class DungeonScene extends Scene {
     const art = getWuxiaActiveArtById(artId);
     if (!art) return;
 
-    const loadout = computeWuxiaLoadout(this.draftedBuffIds);
-    const level = Math.min(3, Math.max(1, loadout.activeLevels[artId] ?? 1));
+    const loadout = computeWuxiaLoadout(this.draftedBuffIds, this.floor);
+    const level = Math.min(5, Math.max(1, loadout.activeLevels[artId] ?? 1));
     const syn = loadout.awakenedSynergies.includes(art.synergyId)
       ? getWuxiaSynergyById(art.synergyId)
       : null;
@@ -2428,6 +2431,8 @@ export class DungeonScene extends Scene {
     );
     const target = this.getClosestEnemy() ?? this.enemies[0];
     if (!target) return;
+
+    this.syncHeroWuxiaWeapon(art.style);
 
     if (art.style === 'palm_wave') {
       if (syn || level >= 3) {
@@ -2599,25 +2604,12 @@ export class DungeonScene extends Scene {
       if (syn) {
         this.spawnFloatingText(this.heroX + 36, this.groundY - 96, 'AZURE SYMPHONY!', '#5eead4', 15);
       }
-      let prevX = this.heroX + 24;
-      let prevY = this.groundY - 32;
       const vx = 550;
       for (let i = 0; i < count; i++) {
         const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
         const vy =
           (aimEnemy.sprite.y - (this.groundY - 32)) /
           Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 22)) / vx);
-        if (i < this.enemies.length) {
-          this.spawnLightningVfx(
-            prevX,
-            prevY,
-            aimEnemy.sprite.x,
-            aimEnemy.sprite.y,
-            syn ? 0x5eead4 : 0x2dd4bf
-          );
-          prevX = aimEnemy.sprite.x;
-          prevY = aimEnemy.sprite.y;
-        }
         this.spawnProjectile(
           'fx_flute_wave',
           this.heroX + 22,
@@ -2631,10 +2623,87 @@ export class DungeonScene extends Scene {
           false,
           false,
           aimEnemy.id,
-          i === 0,
+          false,
           false,
           syn ? 'SYMPHONY' : 'NOTE'
         );
+      }
+    } else if (art.style === 'six_pulse') {
+      soundFX.playCrit();
+      this.playHeroAttackAnimation('bowman', syn ? 1.4 : 1.15);
+      this.spawnHeroAfterimage(syn ? 0x38bdf8 : 0x0ea5e9);
+      this.spawnQiShockwaveRing(this.heroX + 26, this.groundY - 30, 0x38bdf8, syn ? 160 : 95, 220);
+      if (syn) {
+        this.spawnFloatingText(this.heroX + 36, this.groundY - 98, 'HEAVEN-PIERCING SIX PULSE!', '#38bdf8', 15);
+      }
+      const vx = 760;
+      for (let i = 0; i < count; i++) {
+        const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
+        const spreadY = (i - (count - 1) / 2) * 10;
+        const vy =
+          (aimEnemy.sprite.y - (this.groundY - 32) + spreadY) /
+          Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 22)) / vx);
+        this.spawnProjectile(
+          'fx_jade_sword',
+          this.heroX + 24,
+          this.groundY - 32 + spreadY * 0.45,
+          vx,
+          vy,
+          dmg,
+          hitCrit,
+          syn ? 99 : level + 1,
+          false,
+          false,
+          true,
+          null,
+          false,
+          false,
+          syn ? 'SIX-PULSE★' : 'SIX-PULSE'
+        );
+      }
+    } else if (art.style === 'flicking_finger') {
+      soundFX.playSpell();
+      this.playHeroAttackAnimation('warrior', syn ? 1.45 : 1.15);
+      this.spawnQiShockwaveRing(
+        this.heroX + 28,
+        this.groundY - 30,
+        syn ? 0xfb923c : 0xfb7185,
+        syn ? 175 : 110,
+        240
+      );
+      if (syn) {
+        this.cameras.main.shake(105, 0.006);
+        this.spawnFloatingText(this.heroX + 36, this.groundY - 98, 'TEN-DRAGON FINGER CANNON!', '#fb923c', 15);
+      }
+      const vx = 680;
+      for (let i = 0; i < count; i++) {
+        const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
+        const offset = (i - (count - 1) / 2) * 14;
+        const vy =
+          (aimEnemy.sprite.y - (this.groundY - 32) + offset) /
+          Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 22)) / vx);
+        this.spawnProjectile(
+          'proj_palm_qi',
+          this.heroX + 24,
+          this.groundY - 32 + offset * 0.4,
+          vx,
+          vy,
+          dmg,
+          hitCrit,
+          syn ? 4 : 2,
+          false,
+          false,
+          true,
+          aimEnemy.id,
+          false,
+          false,
+          syn ? 'CANNON' : 'THRUM'
+        );
+      }
+      for (const e of [...this.enemies]) {
+        if (Math.abs(e.sprite.x - target.sprite.x) <= (syn ? 150 : 95) && e.hp > 0) {
+          this.damageEnemy(e, Math.round(dmg * 0.35), false, 'SHOCK');
+        }
       }
     } else {
       soundFX.playArrow();
@@ -2674,7 +2743,7 @@ export class DungeonScene extends Scene {
   public triggerActiveSkill(): void {
     if (this.phase !== 'combat' || !this.stats || !this.runConfig || this.skillTimer > 0) return;
 
-    const loadout = computeWuxiaLoadout(this.draftedBuffIds);
+    const loadout = computeWuxiaLoadout(this.draftedBuffIds, this.floor);
     const cdMult = 1 - this.stats.cooldownReductionPct / 100;
     this.skillTimer = Math.max(2.5, (loadout.actives.length > 0 ? 7.5 : 4.5) * cdMult);
 
@@ -2933,6 +3002,7 @@ export class DungeonScene extends Scene {
     }
     this.recomputeStats();
     this.spawnCompanionVisuals();
+    this.syncHeroWuxiaWeapon();
 
     if (this.stats && this.stats.maxHp > prevMaxHp) {
       this.heroHp += this.stats.maxHp - prevMaxHp;
@@ -2995,7 +3065,7 @@ export class DungeonScene extends Scene {
   private emitHud(): void {
     if (!this.runConfig || !this.stats) return;
     const boss = this.enemies.find((e) => e.isBoss);
-    const loadout = computeWuxiaLoadout(this.draftedBuffIds);
+    const loadout = computeWuxiaLoadout(this.draftedBuffIds, this.floor);
 
     const mutNames = this.currentBossMutations.map((m) => getMutationById(m).id);
     const cdMult = 1 - this.stats.cooldownReductionPct / 100;

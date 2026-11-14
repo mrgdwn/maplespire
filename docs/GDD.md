@@ -1,8 +1,8 @@
-# Game Design Document: *MapleSpire*
+# Game Design Document: *Wuxia Spire*
 
 ## 1. Game Overview & Core Loop
 * **Genre:** Side-Scrolling Auto-Battler Roguelite / Daily Grind RPG
-* **Visual Style:** 2D Pixel Art (Chibi proportions inspired by *MapleStory*, vibrant parallax backgrounds, bouncy physics-based loot drops, and chunky floating damage numbers).
+* **Visual Style:** 2D Pixel Art (Chibi proportions featuring classical Wuxia martial arts robes and sect landscapes, vibrant parallax backgrounds, bouncy physics-based loot drops, and chunky floating damage numbers).
 * **Target Session Length:** 2–4 minutes per day.
 
 ### The Daily Loop

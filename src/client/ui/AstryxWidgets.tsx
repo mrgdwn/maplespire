@@ -21,8 +21,8 @@ type ThemeSnapshot = {
   mode: ThemeMode;
 };
 
-const THEME_CHOICE_KEY = 'maplespire_astryx_theme_v1';
-const THEME_MODE_KEY = 'maplespire_astryx_mode_v1';
+const THEME_CHOICE_KEY = 'wuxiaspire_astryx_theme_v1';
+const THEME_MODE_KEY = 'wuxiaspire_astryx_mode_v1';
 
 function readStoredThemeChoice(): AstryxThemeChoice {
   try {

@@ -58,7 +58,7 @@ const markTested = (...buffIds: string[]): void => {
   }
 };
 
-void describe('MapleSpire All 44 Buffs Coverage Suite', async () => {
+void describe('Wuxia Spire All 44 Buffs Coverage Suite', async () => {
   await it('catalog exposes 44 unique buffs across all 5 tiers and respects class draft locks', () => {
     assert.equal(CORE_BUFFS.length, 32);
     assert.equal(PRISMATIC_CLASS_BUFFS.length, 12);

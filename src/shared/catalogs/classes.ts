@@ -52,8 +52,8 @@ export const GEAR_SLOTS: readonly GearSlot[] = ['weapon', 'headgear', 'top', 'ca
 export const CLASS_CATALOG: readonly ClassDefinition[] = [
   {
     id: 'warrior',
-    name: 'Warrior',
-    weaponLabel: '2H Greatsword',
+    name: 'External Body',
+    weaponLabel: 'Xuantie Greatsword',
     attackStyleLabel: 'Cleave + Knockback',
     synergyFocus: 'Thorns, Lifesteal, Cursed Buffs',
     colorHex: '#ef4444',
@@ -70,19 +70,19 @@ export const CLASS_CATALOG: readonly ClassDefinition[] = [
     hpPerLevel: 14,
     atkPerLevel: 1.8,
     armorPerLevel: 1.5,
-    linkSkillName: "Iron Will (per 10 Lvls)",
-    linkSkillDesc: '+3% Max HP to all classes',
-    activeSkillName: 'Earthshatter Slam',
-    activeSkillUltimateName: 'Berserker Cataclysm',
-    activeSkillDesc: '250% AoE cleave + stun (450% at Lv. 60 Ultimate)',
+    linkSkillName: 'Iron Will (per 10 Lvls)',
+    linkSkillDesc: '+3% Max HP to all styles',
+    activeSkillName: 'Earthshatter Palm',
+    activeSkillUltimateName: 'Asura Earth-Shatter',
+    activeSkillDesc: '250% AoE cleave + stun (450% at Lv. 60 Grandmaster)',
     activeSkillCooldownSec: 9,
     firstJobPassiveName: 'Unyielding Grit',
     firstJobPassiveDesc: 'Regenerate 1.5% Max HP/sec and +20% Knockback.',
   },
   {
     id: 'mage',
-    name: 'Mage',
-    weaponLabel: 'Arcane Staff',
+    name: 'Internal Qi',
+    weaponLabel: 'Jade Flute',
     attackStyleLabel: 'Floating Cast + AoE Spells',
     synergyFocus: 'Burn, Freeze, Chain Lightning',
     colorHex: '#3b82f6',
@@ -99,19 +99,19 @@ export const CLASS_CATALOG: readonly ClassDefinition[] = [
     hpPerLevel: 8,
     atkPerLevel: 2.2,
     armorPerLevel: 0.7,
-    linkSkillName: "Empirical Wisdom (per 10 Lvls)",
-    linkSkillDesc: '+3% Skill Damage to all classes',
-    activeSkillName: 'Arcane Nova',
-    activeSkillUltimateName: 'Genesis Meteor',
-    activeSkillDesc: '300% screen-wide elemental blast (520% at Lv. 60 Ultimate)',
+    linkSkillName: 'Heart-Qi Resonance (per 10 Lvls)',
+    linkSkillDesc: '+3% Skill Damage to all styles',
+    activeSkillName: 'Dantian Burst',
+    activeSkillUltimateName: 'Nine-Yin Tide Resonance',
+    activeSkillDesc: '300% chamber-wide Qi pulse (520% at Lv. 60 Grandmaster)',
     activeSkillCooldownSec: 8,
-    firstJobPassiveName: 'Elemental Resonance',
-    firstJobPassiveDesc: 'Every 3rd attack applies Burn, Chill, or Shock.',
+    firstJobPassiveName: 'Meridian Resonance',
+    firstJobPassiveDesc: 'Every 3rd attack inflicts Burn, Chill, or Thunder Qi.',
   },
   {
     id: 'thief',
-    name: 'Thief',
-    weaponLabel: 'Claw / Stars',
+    name: 'Shadow Qinggong',
+    weaponLabel: 'Frost Needles',
     attackStyleLabel: 'Dash + Rapid Hits',
     synergyFocus: 'Execute, Bleed, Bonus Gold',
     colorHex: '#a855f7',
@@ -128,19 +128,19 @@ export const CLASS_CATALOG: readonly ClassDefinition[] = [
     hpPerLevel: 9,
     atkPerLevel: 1.7,
     armorPerLevel: 0.9,
-    linkSkillName: "Thief's Cunning (per 10 Lvls)",
-    linkSkillDesc: '+2% Crit Rate to all classes',
-    activeSkillName: 'Shadow Assault',
-    activeSkillUltimateName: "Night Lord's Shuriken Storm",
-    activeSkillDesc: '4 rapid invuln crit strikes (8 strikes at Lv. 60 Ultimate)',
+    linkSkillName: 'Tang Sect Agility (per 10 Lvls)',
+    linkSkillDesc: '+2% Crit Rate to all styles',
+    activeSkillName: 'Phantom Cloud Strike',
+    activeSkillUltimateName: 'Tang Sect Meteor Needle Storm',
+    activeSkillDesc: '4 rapid invuln crit strikes (8 strikes at Lv. 60 Grandmaster)',
     activeSkillCooldownSec: 8.5,
     firstJobPassiveName: 'Opportunist',
     firstJobPassiveDesc: '+25% damage vs Bleeding, Poisoned, or Full-HP foes.',
   },
   {
     id: 'bowman',
-    name: 'Bowman',
-    weaponLabel: 'Longbow + Pet Hawk',
+    name: 'Sword Sovereign',
+    weaponLabel: 'Xiaolian Jade Sword',
     attackStyleLabel: 'Multi-Shot Volley',
     synergyFocus: 'On-Hit Procs, Summon Buffs',
     colorHex: '#22c55e',
@@ -157,14 +157,14 @@ export const CLASS_CATALOG: readonly ClassDefinition[] = [
     hpPerLevel: 10,
     atkPerLevel: 1.8,
     armorPerLevel: 1.0,
-    linkSkillName: "Keen Focus (per 10 Lvls)",
-    linkSkillDesc: '+3% Attack Speed to all classes',
-    activeSkillName: 'Arrow Rain',
-    activeSkillUltimateName: 'Phoenix Hurricane',
-    activeSkillDesc: '8-arrow lane barrage + Hawk frenzy (16 arrows at Lv. 60)',
+    linkSkillName: 'Keen Focus (per 10 Lvls)',
+    linkSkillDesc: '+3% Attack Speed to all styles',
+    activeSkillName: 'Hundred-Sword Rain',
+    activeSkillUltimateName: 'Vermilion Sword Hurricane',
+    activeSkillDesc: '8-blade lane barrage + Condor frenzy (16 blades at Lv. 60)',
     activeSkillCooldownSec: 9,
-    firstJobPassiveName: 'Hawk Eye Companion',
-    firstJobPassiveDesc: 'Pet Hawk strikes every 1.5s for 60% ATK.',
+    firstJobPassiveName: 'Divine Condor Companion',
+    firstJobPassiveDesc: 'Condor strikes every 1.5s for 60% ATK.',
   },
 ];
 
@@ -180,7 +180,7 @@ export const getJobAdvancementTitle = (level: number): { jobNumber: number; titl
   if (level >= 60) return { jobNumber: 3, title: 'Peerless Grandmaster' };
   if (level >= 35) return { jobNumber: 2, title: 'Inner Sect Master' };
   if (level >= 15) return { jobNumber: 1, title: 'Outer Sect Adept' };
-  return { jobNumber: 0, title: 'Jianghu Wanderer' };
+  return { jobNumber: 0, title: 'Wuxia Wanderer' };
 };
 
 export const computeLinkSkillBonuses = (classes: ClassesProgressMap): LinkSkillBonuses => {
@@ -347,7 +347,7 @@ export const computeHeroCombatStats = (
   }
 
   // Wuxia Inner Qi, Awakened Secret Synergies & Enlightenment Scrolls
-  const wuxia = computeWuxiaLoadout(draftedBuffIds);
+  const wuxia = computeWuxiaLoadout(draftedBuffIds, Math.max(1, floorsClearedThisRun + 1));
   const wStats = wuxia.aggregatedStats;
   maxHp *= 1 + wStats.hpPct;
   atk *= 1 + wStats.atkPct;

@@ -20,8 +20,8 @@
   "menu": {
     "items": [
       {
-        "label": "Create a new post",
-        "description": "MapleSpire - Daily Side-Scrolling Auto-Battler Roguelite",
+        "label": "Create Wuxia Spire Post",
+        "description": "Wuxia Spire - Endless Wuxia Martial Arts Roguelite",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-create"

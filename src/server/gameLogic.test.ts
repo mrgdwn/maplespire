@@ -24,7 +24,7 @@ import {
   parsePlayerProfile,
 } from '../shared/utils.ts';
 
-void describe('MapleSpire Shared Catalogs & Game Logic', async () => {
+void describe('Wuxia Spire Shared Catalogs & Game Logic', async () => {
   await it('contains exact catalog counts from GDD', () => {
     assert.equal(CLASS_CATALOG.length, 4);
     assert.equal(LEGENDARY_CATALOG.length, 48);
