@@ -5,19 +5,28 @@ import {
   getMutationById,
   rollBossMutations,
 } from '../../shared/catalogs/biomes.ts';
+import { CORE_BUFFS, getBuffById } from '../../shared/catalogs/buffs.ts';
 import {
-  ALL_BUFFS,
-  CORE_BUFFS,
-  getBuffById,
-  refreshSingleDraftCard,
-  rollDraftCards,
-} from '../../shared/catalogs/buffs.ts';
-import type { BuffDefinition } from '../../shared/catalogs/buffs.ts';
+  WUXIA_ACTIVE_ARTS,
+  WUXIA_INNER_QI,
+  WUXIA_MAX_ACTIVE_SLOTS,
+  WUXIA_MAX_INNER_QI_SLOTS,
+  WUXIA_SECRET_SYNERGIES,
+  computeWuxiaLoadout,
+  getWuxiaActiveArtById,
+  getWuxiaInnerQiById,
+  getWuxiaManualById,
+  getWuxiaSynergyById,
+  isCultLeaderFloor,
+  isRandomMiniBossFloor,
+  refreshWuxiaDraftCard,
+  rollWuxiaDraftCards,
+  type WuxiaDraftOption,
+} from '../../shared/catalogs/wuxia.ts';
 import {
   CLASS_CATALOG,
   GEAR_SLOTS,
   computeHeroCombatStats,
-  computeLinkSkillBonuses,
   getClassDefinition,
   getJobAdvancementTitle,
 } from '../../shared/catalogs/classes.ts';
@@ -89,6 +98,38 @@ import type {
 type CampTab = 'roster' | 'buildings' | 'codex' | 'leaderboard';
 
 const LOCAL_PROFILE_KEY = 'maplespire_local_profile';
+const DISCOVERED_SYNERGIES_KEY = 'wuxiaspire_discovered_synergies_v1';
+
+const loadDiscoveredSynergies = (): Set<string> => {
+  try {
+    const raw = window.localStorage.getItem(DISCOVERED_SYNERGIES_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    const result = new Set<string>();
+    for (const item of parsed) {
+      if (typeof item === 'string' && getWuxiaSynergyById(item)) {
+        result.add(item);
+      }
+    }
+    return result;
+  } catch {
+    return new Set();
+  }
+};
+
+const recordDiscoveredSynergy = (synergyId: string): boolean => {
+  if (!getWuxiaSynergyById(synergyId)) return false;
+  const set = loadDiscoveredSynergies();
+  if (set.has(synergyId)) return false;
+  set.add(synergyId);
+  try {
+    window.localStorage.setItem(DISCOVERED_SYNERGIES_KEY, JSON.stringify([...set]));
+  } catch {
+    // Ignore storage quota errors
+  }
+  return true;
+};
 
 export class OverlayManager {
   private root: HTMLElement;
@@ -96,7 +137,7 @@ export class OverlayManager {
   private state: AppState;
   private mode: 'camp' | 'dungeon' = 'camp';
   private activeTab: CampTab = 'roster';
-  private codexFilter: ClassId | 'buffs' = 'warrior';
+  private codexFilter: ClassId | 'synergies' | 'manuals' = 'synergies';
   private draftRng: () => number = mulberry32(1);
   private rouletteRng: () => number = mulberry32(2);
   private lastHud: RunHudSnapshot | null = null;
@@ -477,9 +518,7 @@ export class OverlayManager {
     const p = this.state.profile;
     const daily = this.state.daily;
     const biome = getBiomeById(daily.biomeId);
-    const bountyCls = getClassDefinition(daily.bountyClass);
     const dailyCompleted = p.dailyRankedCompletedDate === daily.dateKey;
-    const selectedDef = getClassDefinition(p.selectedClass);
     const accountLevel =
       p.classes.warrior.level +
       p.classes.mage.level +
@@ -506,8 +545,8 @@ export class OverlayManager {
           renderTopBar();
         },
         quickLaunchLabel: !dailyCompleted
-          ? `Enter Spire (${selectedDef.name})`
-          : `Practice (${selectedDef.name})`,
+          ? 'Enter Wuxia Spire'
+          : 'Endless Climb',
         onQuickLaunch: () => {
           void this.launchRun(!dailyCompleted ? 'daily' : 'practice', false);
         },
@@ -520,20 +559,25 @@ export class OverlayManager {
     const strip = this.el('div', 'astryx-block-slot');
     mountAstryxModalBanner(strip, {
       status: 'info',
-      title: `Daily Spire: ${biome.name} — ${biome.miniBossName} / ${biome.endBossName}`,
-      description: `${biome.mechanicName} • Daily Bounty: +2x Class EXP & +25% Gold`,
-      badgeText: `🎯 2x ${bountyCls.name}`,
+      title: `Daily Cult Sect: ${biome.name} — F10/20/30: ${biome.endBossName}`,
+      description: `${biome.mechanicName} • Classless Wanderer • Random Hall Master Mini-Bosses • 100% Loot Kept`,
+      badgeText: '☯️ CLASSLESS',
       badgeTier: 'bounty',
     });
     wrap.appendChild(strip);
 
     // Tabs (Astryx Button + Badge Strip)
     const tabs = this.el('div', 'camp-tabs');
+    const discoveredCount = loadDiscoveredSynergies().size;
     mountAstryxTabStrip(tabs, {
       items: [
-        { id: 'roster', label: '⚔️ Roster' },
-        { id: 'buildings', label: '🏰 Camp' },
-        { id: 'codex', label: '📖 Codex' },
+        { id: 'roster', label: '🥋 Wanderer' },
+        { id: 'buildings', label: '🏮 Courtyard' },
+        {
+          id: 'codex',
+          label: '📜 Secret Scroll',
+          badge: `${discoveredCount}/${WUXIA_SECRET_SYNERGIES.length}`,
+        },
         {
           id: 'leaderboard',
           label: '🏆 Ranks',
@@ -565,7 +609,7 @@ export class OverlayManager {
     const footerActions: AstryxActionButtonProps[] = [];
     if (!dailyCompleted) {
       footerActions.push({
-        label: `⚔️ START DAILY RANKED DELVE (${selectedDef.name})`,
+        label: '⚔️ BEGIN DAILY RANKED ASCENT (Unarmed Wanderer)',
         variant: 'primary',
         size: 'md',
         onClick: () => {
@@ -574,7 +618,7 @@ export class OverlayManager {
       });
     } else if (p.goldenTickets > 0) {
       footerActions.push({
-        label: `🎫 USE GOLDEN TICKET FOR RANKED DELVE (${p.goldenTickets} left)`,
+        label: `🎫 SPEND GOLDEN WRIT FOR RANKED ASCENT (${p.goldenTickets} left)`,
         variant: 'primary',
         size: 'md',
         onClick: () => {
@@ -584,8 +628,8 @@ export class OverlayManager {
     }
     footerActions.push({
       label: dailyCompleted
-        ? `🏕️ PLAY PRACTICE / GRIND DELVE (${selectedDef.name})`
-        : '🏕️ PRACTICE RUN (No Daily Lockout)',
+        ? '⛰️ ENDLESS PRACTICE CLIMB (10/20/30+)'
+        : '⛰️ PRACTICE CLIMB (No Daily Lockout)',
       variant: 'secondary',
       size: 'md',
       onClick: () => {
@@ -600,75 +644,34 @@ export class OverlayManager {
 
   private renderRosterTab(container: HTMLElement): void {
     const p = this.state.profile;
-    const links = computeLinkSkillBonuses(p.classes);
+    const discovered = loadDiscoveredSynergies();
 
-    const linkBar = this.el(
-      'div',
-      'muted',
-      `Links: +${links.maxHpPct}% HP • +${links.skillDmgPct}% Skill • +${links.critRatePct}% Crit • +${links.attackSpeedPct}% AS`
+    const rulesCard = this.el('div', 'card');
+    const rulesRow = this.el('div', 'row-between');
+    rulesRow.appendChild(
+      this.el('strong', '', '☯️ Classless Jianghu Wanderer — Empty-Handed Ascent')
     );
-    container.appendChild(linkBar);
+    const badgeWrap = this.el('span', 'astryx-inline-slot');
+    mountAstryxStatusBadge(badgeWrap, {
+      label: `${discovered.size}/${WUXIA_SECRET_SYNERGIES.length} Secret Synergies Discovered`,
+      tier: discovered.size > 0 ? 'prismatic' : 'silver',
+    });
+    rulesRow.appendChild(badgeWrap);
+    rulesCard.appendChild(rulesRow);
+    rulesCard.appendChild(
+      this.el(
+        'div',
+        'muted',
+        `Start every run unarmed with Taiji Fist & Qinggong Dash. Draft up to ${WUXIA_MAX_ACTIVE_SLOTS} Active Martial Arts (Lv.1→Lv.3 Ultimate) & ${WUXIA_MAX_INNER_QI_SLOTS} Inner Qi Manuals, then pair matching manuals to awaken hidden Peerless Synergies!`
+      )
+    );
+    container.appendChild(rulesCard);
 
-    const grid = this.el('div', 'grid-4');
-    grid.style.marginTop = '8px';
-
-    for (const def of CLASS_CATALOG) {
-      const prog = p.classes[def.id];
-      const nextExp = expForNextLevel(prog.level);
-      const job = getJobAdvancementTitle(prog.level);
-      const isSelected = p.selectedClass === def.id;
-      const isBounty = this.state.daily.bountyClass === def.id;
-
-      const card = this.el('div', `card class-selector ${isSelected ? 'selected' : ''}`);
-      card.title = `Link Skill: ${def.linkSkillDesc}`;
-      card.addEventListener('click', () => {
-        if (!isSelected) {
-          void this.sendCampAction({ action: 'select_class', classId: def.id });
-        }
-      });
-
-      const headRow = this.el('div', 'class-card-head');
-      const miniCanvas = document.createElement('canvas');
-      miniCanvas.width = 44;
-      miniCanvas.height = 44;
-      miniCanvas.className = 'paperdoll-mini';
-      renderHeroPaperdollCanvas(miniCanvas, def.id, prog.equipped);
-      headRow.appendChild(miniCanvas);
-
-      const infoCol = this.el('div', 'class-card-info');
-      const top = this.el('div', 'row-between');
-      const title = this.el('span', 'class-name', `${def.name} Lv.${prog.level}`);
-      title.style.color = def.colorHex;
-      top.appendChild(title);
-      if (isBounty) {
-        const badgeHost = this.el('span', 'astryx-inline-slot');
-        mountAstryxStatusBadge(badgeHost, { label: '2x', tier: 'bounty' });
-        top.appendChild(badgeHost);
-      } else if (isSelected) {
-        const badgeHost = this.el('span', 'astryx-inline-slot');
-        mountAstryxStatusBadge(badgeHost, { label: '✓ Active', tier: 'selected' });
-        top.appendChild(badgeHost);
-      }
-      infoCol.appendChild(top);
-      infoCol.appendChild(this.el('div', 'muted', `${job.title} • ${prog.exp}/${nextExp}`));
-
-      const track = this.el('div', 'bar-track');
-      const fill = this.el('div', 'bar-fill');
-      fill.style.width = `${Math.min(100, Math.round((prog.exp / nextExp) * 100))}%`;
-      track.appendChild(fill);
-      infoCol.appendChild(track);
-
-      headRow.appendChild(infoCol);
-      card.appendChild(headRow);
-      grid.appendChild(card);
-    }
-    container.appendChild(grid);
-
-    // Selected class paperdoll + stats + equipped gear + inventory
+    // Selected Wanderer paperdoll + stats + equipped Relics + bag
     const selId = p.selectedClass;
     const selProg = p.classes[selId];
-    const selDef = getClassDefinition(selId);
     const selJob = getJobAdvancementTitle(selProg.level);
+    const nextExp = expForNextLevel(selProg.level);
     const stats = computeHeroCombatStats(p, selId, [], 0, 0);
 
     const split = this.el('div', 'grid-2');
@@ -685,8 +688,12 @@ export class OverlayManager {
     showcase.appendChild(stageCanvas);
 
     const metaCol = this.el('div', 'paperdoll-meta');
-    const heroTitle = this.el('div', 'class-name', `${selDef.name} Lv.${selProg.level} • ${selJob.title}`);
-    heroTitle.style.color = selDef.colorHex;
+    const heroTitle = this.el(
+      'div',
+      'class-name',
+      `Jianghu Wanderer Lv.${selProg.level} • ${selJob.title} (${selProg.exp}/${nextExp})`
+    );
+    heroTitle.style.color = '#fbbf24';
     metaCol.appendChild(heroTitle);
 
     const statGrid = this.el('div', 'stat-grid');
@@ -1022,14 +1029,37 @@ export class OverlayManager {
   }
 
   private renderCodexTab(container: HTMLElement): void {
+    const discovered = loadDiscoveredSynergies();
     const filterRow = this.el('div', 'row-wrap');
     filterRow.style.marginBottom = '10px';
+
+    const synBtn = this.el(
+      'button',
+      `tab-btn ${this.codexFilter === 'synergies' ? 'active' : ''}`,
+      `🔮 Secret Synergies (${discovered.size}/${WUXIA_SECRET_SYNERGIES.length})`
+    );
+    synBtn.addEventListener('click', () => {
+      this.codexFilter = 'synergies';
+      this.renderCamp();
+    });
+    filterRow.appendChild(synBtn);
+
+    const manualsBtn = this.el(
+      'button',
+      `tab-btn ${this.codexFilter === 'manuals' ? 'active' : ''}`,
+      `🥋 Arts & Inner Qi (${WUXIA_ACTIVE_ARTS.length + WUXIA_INNER_QI.length})`
+    );
+    manualsBtn.addEventListener('click', () => {
+      this.codexFilter = 'manuals';
+      this.renderCamp();
+    });
+    filterRow.appendChild(manualsBtn);
 
     for (const c of CLASS_CATALOG) {
       const btn = this.el(
         'button',
         `tab-btn ${this.codexFilter === c.id ? 'active' : ''}`,
-        `${c.name} Legendaries (12)`
+        `🏺 Relics (${c.name})`
       );
       btn.addEventListener('click', () => {
         this.codexFilter = c.id;
@@ -1037,31 +1067,75 @@ export class OverlayManager {
       });
       filterRow.appendChild(btn);
     }
-    const buffBtn = this.el(
-      'button',
-      `tab-btn ${this.codexFilter === 'buffs' ? 'active' : ''}`,
-      `Draft Buffs (${ALL_BUFFS.length})`
-    );
-    buffBtn.addEventListener('click', () => {
-      this.codexFilter = 'buffs';
-      this.renderCamp();
-    });
-    filterRow.appendChild(buffBtn);
     container.appendChild(filterRow);
 
-    if (this.codexFilter === 'buffs') {
-      const grid = this.el('div', 'grid-4');
-      for (const b of ALL_BUFFS) {
-        const card = this.el('div', `draft-card tier-${b.tier}`);
-        card.appendChild(this.el('span', 'tier-badge', `${b.tier}${b.classId ? ` • ${b.classId}` : ''}`));
-        card.appendChild(this.el('strong', '', `${b.icon} ${b.name}`));
-        card.appendChild(this.el('div', 'muted', b.description));
-        if (b.downside) {
-          card.appendChild(this.el('div', 'muted', `Curse: ${b.downside}`));
+    if (this.codexFilter === 'synergies') {
+      container.appendChild(
+        this.el(
+          'div',
+          'muted',
+          'Secret Peerless Synergies awaken inside the Spire when a Lv.3 Ultimate Martial Art meets its hidden Inner Qi counterpart. Experiment during runs to unlock every entry below!'
+        )
+      );
+      const grid = this.el('div', 'grid-2');
+      grid.style.marginTop = '8px';
+      for (const syn of WUXIA_SECRET_SYNERGIES) {
+        const isKnown = discovered.has(syn.id);
+        const card = this.el('div', `draft-card ${isKnown ? 'tier-prismatic' : 'tier-cursed'}`);
+        if (isKnown) {
+          const art = getWuxiaActiveArtById(syn.activeId);
+          const qi = getWuxiaInnerQiById(syn.innerQiId);
+          card.appendChild(this.el('span', 'tier-badge', 'DISCOVERED SECRET SYNERGY'));
+          card.appendChild(this.el('strong', '', `${syn.icon} ${syn.name}`));
+          card.appendChild(
+            this.el(
+              'div',
+              'muted',
+              `Formula: ${art ? `${art.icon} ${art.name} (Lv.3)` : syn.activeId} + ${qi ? `${qi.icon} ${qi.name} (Lv.1+)` : syn.innerQiId}`
+            )
+          );
+          card.appendChild(this.el('div', 'muted', syn.description));
+        } else {
+          card.appendChild(this.el('span', 'tier-badge', '??? UNDISCOVERED'));
+          card.appendChild(this.el('strong', '', '❓ Hidden Peerless Technique'));
+          card.appendChild(this.el('div', 'muted', `Jianghu Clue: "${syn.riddleHint}"`));
         }
         grid.appendChild(card);
       }
       container.appendChild(grid);
+      return;
+    }
+
+    if (this.codexFilter === 'manuals') {
+      container.appendChild(this.el('strong', '', '🥋 Active Martial Arts (Max 3 Slots • Lv.1 → Lv.2 → Lv.3 Ultimate)'));
+      const activeGrid = this.el('div', 'grid-3');
+      activeGrid.style.marginTop = '6px';
+      for (const art of WUXIA_ACTIVE_ARTS) {
+        const card = this.el('div', 'draft-card tier-gold');
+        card.appendChild(this.el('span', 'tier-badge', `ACTIVE • ${art.sectOrigin}`));
+        card.appendChild(this.el('strong', '', `${art.icon} ${art.name}`));
+        card.appendChild(this.el('div', 'muted', `Lv.1: ${art.levelDescriptions[0]}`));
+        card.appendChild(this.el('div', 'muted', `Lv.2: ${art.levelDescriptions[1]}`));
+        card.appendChild(this.el('div', 'muted', `Lv.3: ${art.levelDescriptions[2]}`));
+        activeGrid.appendChild(card);
+      }
+      container.appendChild(activeGrid);
+
+      const qiHeading = this.el('strong', '', '☯️ Inner Qi / Neigong Manuals (Max 3 Slots • Lv.1 → Lv.3)');
+      qiHeading.style.display = 'block';
+      qiHeading.style.marginTop = '12px';
+      container.appendChild(qiHeading);
+      const qiGrid = this.el('div', 'grid-4');
+      qiGrid.style.marginTop = '6px';
+      for (const qi of WUXIA_INNER_QI) {
+        const card = this.el('div', 'draft-card tier-silver');
+        card.appendChild(this.el('span', 'tier-badge', `INNER QI • ${qi.sectOrigin}`));
+        card.appendChild(this.el('strong', '', `${qi.icon} ${qi.name}`));
+        card.appendChild(this.el('div', 'muted', `Lv.1: ${qi.levelDescriptions[0]}`));
+        card.appendChild(this.el('div', 'muted', `Lv.3: ${qi.levelDescriptions[2]}`));
+        qiGrid.appendChild(card);
+      }
+      container.appendChild(qiGrid);
       return;
     }
 
@@ -1207,7 +1281,7 @@ export class OverlayManager {
     top.id = 'hud-top';
 
     const left = this.el('div', 'hud-hp-box');
-    const floorLbl = this.el('strong', '', 'Floor 1/10 • Wave 1/2');
+    const floorLbl = this.el('strong', '', 'Floor 1 • Unarmed Start');
     floorLbl.id = 'hud-floor';
     const hpTrack = this.el('div', 'bar-track');
     const hpFill = this.el('div', 'bar-fill');
@@ -1259,10 +1333,9 @@ export class OverlayManager {
     });
     right.appendChild(muteBtn);
 
-    const retreatBtn = this.el('button', 'btn btn-sm', 'Camp');
+    const retreatBtn = this.el('button', 'btn btn-sm btn-green', '🏮 Retreat (Keep Loot)');
     retreatBtn.addEventListener('click', () => {
-      this.bridge?.stopToIdle();
-      this.renderCamp();
+      this.bridge?.retreatWithLoot();
     });
     right.appendChild(retreatBtn);
     top.appendChild(right);
@@ -1270,14 +1343,14 @@ export class OverlayManager {
     const bottom = this.el('div', 'hud-bottom');
     const controls = this.el('div', 'row-wrap');
 
-    const skillBtn = this.el('button', 'btn btn-sm btn-primary', '⚡ Skill [Q]');
+    const skillBtn = this.el('button', 'btn btn-sm btn-primary', '⚡ Taiji Strike [Q]');
     skillBtn.id = 'hud-skill-btn';
-    skillBtn.style.minWidth = '140px';
+    skillBtn.style.minWidth = '155px';
     skillBtn.addEventListener('click', () => {
       this.bridge?.triggerActiveSkill();
     });
 
-    const dashBtn = this.el('button', 'btn btn-sm btn-primary', '💨 Dash [Space]');
+    const dashBtn = this.el('button', 'btn btn-sm btn-primary', '💨 Qinggong [Space]');
     dashBtn.id = 'hud-dash-btn';
     dashBtn.addEventListener('click', () => {
       this.bridge?.triggerDash();
@@ -1290,7 +1363,7 @@ export class OverlayManager {
       autoBtn.textContent = `Auto: ${next ? 'ON' : 'OFF'}`;
     });
 
-    const potBtn = this.el('button', 'btn btn-sm btn-purple', '🧪 [W] (1)');
+    const potBtn = this.el('button', 'btn btn-sm btn-purple', '🧪 Pill [W] (1)');
     potBtn.id = 'hud-pot-btn';
     potBtn.addEventListener('click', () => {
       this.bridge?.triggerPotion();
@@ -1324,7 +1397,7 @@ export class OverlayManager {
     this.lastHud = hud;
 
     const floorEl = document.getElementById('hud-floor');
-    if (floorEl) floorEl.textContent = `Floor ${hud.floor}/${hud.maxFloors} • ${hud.waveLabel}`;
+    if (floorEl) floorEl.textContent = `Floor ${hud.floor} (Boss F${hud.maxFloors}) • ${hud.waveLabel}`;
 
     const hpFill = document.getElementById('hud-hp-fill');
     if (hpFill) {
@@ -1387,7 +1460,7 @@ export class OverlayManager {
     if (dashBtn instanceof HTMLButtonElement) {
       dashBtn.disabled = !hud.dashReady;
       dashBtn.textContent = hud.dashReady
-        ? '💨 Dash [Space]'
+        ? '💨 Qinggong [Space]'
         : `💨 ${Math.ceil(hud.dashCooldownPct * 5)}s`;
     }
 
@@ -1396,23 +1469,62 @@ export class OverlayManager {
       potBtn.disabled = hud.potionCharges <= 0 || hud.potionDisabledReason !== null;
       potBtn.textContent = hud.potionDisabledReason
         ? `🚫 ${hud.potionDisabledReason}`
-        : `🧪 (${hud.potionCharges})`;
+        : `🧪 Pill (${hud.potionCharges})`;
     }
 
     const buffStrip = document.getElementById('hud-buffs');
     if (buffStrip) {
       buffStrip.innerHTML = '';
-      const counts = new Map<string, number>();
-      for (const id of hud.draftedBuffIds) {
-        counts.set(id, (counts.get(id) ?? 0) + 1);
+      const loadout = computeWuxiaLoadout(hud.draftedBuffIds);
+
+      for (let i = 0; i < WUXIA_MAX_ACTIVE_SLOTS; i++) {
+        const slot = loadout.actives[i];
+        if (!slot) {
+          const empty = this.el('span', 'buff-chip', `[Art ${i + 1}: Empty]`);
+          empty.title = 'Empty Active Martial Art Slot (Max 3)';
+          buffStrip.appendChild(empty);
+          continue;
+        }
+        const art = getWuxiaActiveArtById(slot.id);
+        if (!art) continue;
+        const syn = loadout.awakenedSynergies.includes(art.synergyId)
+          ? getWuxiaSynergyById(art.synergyId)
+          : null;
+        const tierClass = syn ? 'tier-prismatic' : slot.level >= 3 ? 'tier-gold' : 'tier-silver';
+        const label = syn
+          ? `${syn.icon} ${syn.shortName} ★`
+          : `${art.icon} ${art.shortName} Lv.${slot.level}${slot.level >= 3 ? '★' : ''}`;
+        const chip = this.el('span', `buff-chip ${tierClass}`, label);
+        chip.title = syn
+          ? `${syn.name}: ${syn.description}`
+          : `${art.name} (Lv.${slot.level}/3): ${art.levelDescriptions[slot.level - 1] ?? ''}`;
+        buffStrip.appendChild(chip);
       }
-      const uniqueIds = [...counts.keys()].slice(-12);
-      for (const id of uniqueIds) {
-        const b = getBuffById(id);
-        if (!b) continue;
-        const stacks = counts.get(id) ?? 1;
-        const chip = this.el('span', `buff-chip tier-${b.tier}`, `${b.icon}${stacks > 1 ? ` ×${stacks}` : ''}`);
-        chip.title = `${b.name} (${b.tier.toUpperCase()}): ${b.description}`;
+
+      for (let i = 0; i < WUXIA_MAX_INNER_QI_SLOTS; i++) {
+        const slot = loadout.innerQis[i];
+        if (!slot) {
+          const empty = this.el('span', 'buff-chip', `[Qi ${i + 1}: Empty]`);
+          empty.title = 'Empty Inner Qi Slot (Max 3)';
+          buffStrip.appendChild(empty);
+          continue;
+        }
+        const qi = getWuxiaInnerQiById(slot.id);
+        if (!qi) continue;
+        const chip = this.el(
+          'span',
+          'buff-chip tier-silver',
+          `${qi.icon} ${qi.shortName} Lv.${slot.level}`
+        );
+        chip.title = `${qi.name} (Lv.${slot.level}/3): ${qi.levelDescriptions[slot.level - 1] ?? ''}`;
+        buffStrip.appendChild(chip);
+      }
+
+      for (const [scrollId, count] of Object.entries(loadout.enlightenmentCounts)) {
+        const manual = getWuxiaManualById(scrollId);
+        if (!manual || count <= 0) continue;
+        const chip = this.el('span', 'buff-chip tier-gold', `${manual.icon} ×${count}`);
+        chip.title = `${manual.name} (x${count})`;
         buffStrip.appendChild(chip);
       }
     }
@@ -1423,20 +1535,14 @@ export class OverlayManager {
 
   public openDraftModal(floor: number, equippedBuffIds: string[], silverMult: number): void {
     this.clearModal();
-    const clsId = this.state.profile.selectedClass;
-    const clsLevel = this.state.profile.classes[clsId].level;
-
-    const draftInput = {
-      floor,
-      rng: this.draftRng,
-      classId: clsId,
-      classLevel: clsLevel,
-      banishedIds: this.state.profile.banishedBuffIds,
+    void silverMult;
+    const loadout = computeWuxiaLoadout(equippedBuffIds);
+    let cards: readonly WuxiaDraftOption[] = rollWuxiaDraftCards(
+      this.draftRng,
       equippedBuffIds,
-      silverWeightMult: silverMult,
-    };
-
-    let cards: BuffDefinition[] = rollDraftCards(draftInput);
+      floor,
+      3
+    );
     let refreshesLeft = 2;
 
     const backdrop = this.el('div', 'modal-backdrop');
@@ -1444,11 +1550,11 @@ export class OverlayManager {
     const bannerHost = this.el('div', 'astryx-block-slot');
     const updateBanner = (): void => {
       mountAstryxModalBanner(bannerHost, {
-        status: 'info',
-        title: `Floor ${floor} Cleared — Draft 1 of 3 Buffs`,
-        description: `Targeted Card Refreshes Remaining: ${refreshesLeft} (Click Refresh on any card to keep the other 2 locked!)`,
-        badgeText: `${refreshesLeft} Refresh${refreshesLeft === 1 ? '' : 'es'} Left`,
-        badgeTier: 'silver',
+        status: loadout.availableSynergies.length > 0 ? 'success' : 'info',
+        title: `Floor ${floor} Cleared — Comprehend 1 Martial Manual`,
+        description: `Active Arts ${loadout.actives.length}/${WUXIA_MAX_ACTIVE_SLOTS} • Inner Qi ${loadout.innerQis.length}/${WUXIA_MAX_INNER_QI_SLOTS} • Refreshes Remaining: ${refreshesLeft}`,
+        badgeText: `${refreshesLeft} Roll${refreshesLeft === 1 ? '' : 's'} Left`,
+        badgeTier: loadout.availableSynergies.length > 0 ? 'prismatic' : 'silver',
       });
     };
     updateBanner();
@@ -1466,20 +1572,43 @@ export class OverlayManager {
       grid.innerHTML = '';
 
       cards.forEach((cardDef, idx) => {
-        const card = this.el('div', `draft-card tier-${cardDef.tier}`);
+        const tierCss = cardDef.isSecretAwakening
+          ? 'tier-prismatic'
+          : cardDef.kind === 'active' || cardDef.kind === 'enlightenment'
+            ? 'tier-gold'
+            : 'tier-silver';
+        const astryxTier = cardDef.isSecretAwakening
+          ? 'prismatic'
+          : cardDef.kind === 'active' || cardDef.kind === 'enlightenment'
+            ? 'gold'
+            : 'silver';
+
+        const card = this.el('div', `draft-card ${tierCss}`);
         const top = this.el('div', 'row-between');
         const badgeHost = this.el('span', 'astryx-inline-slot');
         mountAstryxStatusBadge(badgeHost, {
-          label: cardDef.tier.toUpperCase(),
-          tier: cardDef.tier,
+          label: cardDef.badge,
+          tier: astryxTier,
         });
         top.appendChild(badgeHost);
 
         const rollCard = (): void => {
           if (refreshesLeft <= 0) return;
+          const handIds = cards.map((entry) => entry.id);
+          const nextCard = refreshWuxiaDraftCard(
+            this.draftRng,
+            equippedBuffIds,
+            floor,
+            handIds,
+            cardDef.id
+          );
+          if (!nextCard) {
+            this.showToastSafe('No alternate manuals remain for this loadout!');
+            return;
+          }
           refreshesLeft -= 1;
           soundFX.playRouletteTick();
-          cards = refreshSingleDraftCard(draftInput, cards, idx);
+          cards = cards.map((existing, cIdx) => (cIdx === idx ? nextCard : existing));
           renderCards();
         };
 
@@ -1490,7 +1619,7 @@ export class OverlayManager {
             variant: 'secondary',
             size: 'sm',
             isDisabled: refreshesLeft <= 0,
-            tooltip: 'Reroll this buff card while locking the other 2',
+            tooltip: 'Reroll this manual while keeping the other 2',
             onClick: rollCard,
           },
         ]);
@@ -1498,10 +1627,8 @@ export class OverlayManager {
         card.appendChild(top);
 
         card.appendChild(this.el('strong', '', `${cardDef.icon} ${cardDef.name}`));
+        card.appendChild(this.el('div', 'muted', cardDef.tags.join(' • ')));
         card.appendChild(this.el('div', 'muted', cardDef.description));
-        if (cardDef.downside) {
-          card.appendChild(this.el('div', 'muted', `⚠️ Downside: ${cardDef.downside}`));
-        }
 
         const pickHost = this.el('div', 'astryx-inline-slot');
         mountAstryxActionRow(pickHost, [
@@ -1513,11 +1640,21 @@ export class OverlayManager {
             onClick: rollCard,
           },
           {
-            label: 'Choose Buff',
+            label: cardDef.isSecretAwakening
+              ? '🔮 Awaken Synergy!'
+              : cardDef.currentLevel > 0 && cardDef.kind !== 'enlightenment'
+                ? `Upgrade Lv.${cardDef.nextLevel}`
+                : 'Learn Manual',
             variant: 'primary',
             size: 'md',
             onClick: () => {
               soundFX.playDraft();
+              if (cardDef.kind === 'synergy') {
+                const newlyDiscovered = recordDiscoveredSynergy(cardDef.id);
+                if (newlyDiscovered) {
+                  this.showToastSafe(`🔮 New Secret Synergy Recorded: ${cardDef.name}!`);
+                }
+              }
               this.clearModal();
               this.bridge?.resumeAfterDraft(cardDef.id);
             },
@@ -1535,18 +1672,18 @@ export class OverlayManager {
     this.clearModal();
     const rolled = rollBossMutations(this.rouletteRng, count, exclude);
     const biome = getBiomeById(this.state.daily.biomeId);
+    const isLeader = isCultLeaderFloor(floor);
 
     const backdrop = this.el('div', 'modal-backdrop');
     const box = this.el('div', 'modal-box');
     const bannerHost = this.el('div', 'astryx-block-slot');
     mountAstryxModalBanner(bannerHost, {
       status: 'warning',
-      title:
-        floor === 4
-          ? `🎰 Floor 4 Mini-Boss Roulette: ${biome.miniBossName}`
-          : `🎰 Floor 10 End Boss Roulette: ${biome.endBossName}`,
+      title: isLeader
+        ? `🎰 Floor ${floor} Cult Leader: ${biome.endBossName}`
+        : `🎰 Floor ${floor} Hall Master Ambush: ${biome.miniBossName}`,
       description: `${biome.mechanicName}: ${biome.mechanicDescription}`,
-      badgeText: floor === 4 ? 'MINI-BOSS' : 'END BOSS',
+      badgeText: isLeader ? 'CULT LEADER' : 'HALL MASTER',
       badgeTier: 'boss',
     });
     box.appendChild(bannerHost);
@@ -1602,9 +1739,9 @@ export class OverlayManager {
     const bannerHost = this.el('div', 'astryx-block-slot');
     mountAstryxModalBanner(bannerHost, {
       status: 'success',
-      title: `🚁 Floor ${floor} Safe Haven Extraction Checkpoint`,
-      description: `Unbanked Loot: 🪙 ${gold} Gold • 💎 ${shards} Shards • 🔮 ${cores} Boss Cores — Extract safely to bank 100%, or push deeper (dying forfeits 50%!).`,
-      badgeText: `FLOOR ${floor}`,
+      title: `🏮 Floor ${floor} Cult Leader Vanquished — Milestone Checkpoint`,
+      description: `Loot Secured (100% Kept): 🪙 ${gold} Taels • 💎 ${shards} Shards • 🔮 ${cores} Cores — Retreat to bank 100% + bonus Cult Leader Relic, or ascend endlessly to Floor ${floor + 1}!`,
+      badgeText: `FLOOR ${floor} CLEAR`,
       badgeTier: 'prismatic',
     });
     box.appendChild(bannerHost);
@@ -1612,7 +1749,7 @@ export class OverlayManager {
     const row = this.el('div', 'camp-footer');
     mountAstryxActionRow(row, [
       {
-        label: '🚁 EXTRACT SAFELY (100% Loot)',
+        label: '🏮 RETREAT TO CAMP (100% Loot + Relic)',
         variant: 'secondary',
         size: 'md',
         onClick: () => {
@@ -1621,7 +1758,7 @@ export class OverlayManager {
         },
       },
       {
-        label: floor === 4 ? '🔥 PUSH TO FLOOR 5 -> 7' : '🔥 PUSH TO FLOOR 10 END BOSS!',
+        label: `⛰️ ASCEND TO FLOOR ${floor + 1} (Next Boss F${floor + 10})`,
         variant: 'primary',
         size: 'md',
         onClick: () => {
@@ -1698,30 +1835,36 @@ export class OverlayManager {
 
   private applyRunCompleteLocally(payload: RunEndPayload): RunRewardSummary {
     const p = this.state.profile;
-    const lootForfeited = payload.outcome === 'died';
-    const penalty = lootForfeited ? 0.5 : 1;
+    const lootForfeited = false;
+    const penalty = 1;
     const bountyApplied = payload.classId === this.state.daily.bountyClass;
     const restedApplied = p.restedStacks > 0;
+
+    const clearedFloors =
+      payload.outcome === 'died' ? Math.max(0, payload.floorReached - 1) : payload.floorReached;
+    const cultLeadersDefeated = Math.floor(clearedFloors / 10);
 
     const goldBanked = Math.round(
       payload.goldCollected * penalty * (bountyApplied ? 1.25 : 1) * (restedApplied ? 2 : 1)
     );
     const shardsBase = Math.round(payload.shardsCollected * penalty * (restedApplied ? 2 : 1));
     const coresBanked =
-      Math.round(payload.coresCollected * penalty) + (payload.outcome === 'cleared' ? 1 : 0);
+      Math.round(payload.coresCollected * penalty) +
+      Math.max(payload.outcome === 'cleared' ? 1 : 0, cultLeadersDefeated);
     const expBase =
       payload.floorReached * 42 +
+      cultLeadersDefeated * 90 +
       (payload.outcome === 'cleared' ? 120 : payload.outcome === 'extracted' ? 50 : 15);
     const expGained = expBase * (bountyApplied ? 2 : 1);
 
-    const rng = mulberry32(hashString(`${payload.runId}:${p.username}:${payload.floorReached}`));
+    const dropSeed = hashString(`${payload.runId}:${p.username}:${payload.floorReached}`);
+    const rng = mulberry32(dropSeed);
     const slots: readonly GearSlot[] = ['weapon', 'headgear', 'top', 'cape'];
     const rawDrops: GearItem[] = [];
-    const clearedFloors =
-      payload.outcome === 'died' ? Math.max(0, payload.floorReached - 1) : payload.floorReached;
 
     for (let f = 2; f <= clearedFloors; f++) {
-      if (f === 4 || f === 7) {
+      if (rawDrops.length >= 24) break;
+      if (isCultLeaderFloor(f) || isRandomMiniBossFloor(f, dropSeed)) {
         const slot = slots[Math.floor(rng() * slots.length)] ?? 'weapon';
         rawDrops.push(createGearItem(rng, payload.classId, slot, 'rare', f, `f${f}`));
       } else if (rng() < 0.45) {
@@ -1733,10 +1876,7 @@ export class OverlayManager {
     const keptDrops: GearItem[] = [];
     let autoDismantledCount = 0;
     let autoDismantledShards = 0;
-    const keepCount = lootForfeited ? Math.ceil(rawDrops.length * 0.5) : rawDrops.length;
-    for (let i = 0; i < keepCount; i++) {
-      const item = rawDrops[i];
-      if (!item) continue;
+    for (const item of rawDrops) {
       if (p.autoDismantleNormal && item.tier === 'normal') {
         autoDismantledCount += 1;
         autoDismantledShards += getDismantleShardValue(item);
@@ -1746,7 +1886,7 @@ export class OverlayManager {
     }
 
     let legendaryDrop: GearItem | null = null;
-    if (payload.outcome === 'cleared' && payload.mode === 'daily') {
+    if (cultLeadersDefeated >= 1 || (payload.outcome === 'cleared' && payload.mode === 'daily')) {
       legendaryDrop = createLegendaryGearItem(
         rng,
         payload.classId,
@@ -1844,32 +1984,46 @@ export class OverlayManager {
       summary = this.applyRunCompleteLocally(payload);
     }
 
+    for (const id of payload.draftedBuffIds) {
+      if (getWuxiaSynergyById(id)) {
+        recordDiscoveredSynergy(id);
+      }
+    }
+
     this.clearModal();
     const backdrop = this.el('div', 'modal-backdrop');
     const box = this.el('div', 'modal-box');
     const titleStr =
       payload.outcome === 'cleared'
-        ? '🏆 FLOOR 10 VICTORY!'
+        ? `🏆 CULT LEADER CONQUERED (FLOOR ${payload.floorReached})`
         : payload.outcome === 'extracted'
-          ? `🚁 EXTRACTED AT FLOOR ${payload.floorReached}!`
-          : `💀 DEFEATED ON FLOOR ${payload.floorReached}`;
+          ? `🏮 SAFE RETREAT AT FLOOR ${payload.floorReached}!`
+          : `⚔️ FELL AT FLOOR ${payload.floorReached} — 100% LOOT KEPT`;
 
     const bannerHost = this.el('div', 'astryx-block-slot');
     mountAstryxModalBanner(bannerHost, {
       status:
-        payload.outcome === 'cleared'
+        payload.outcome === 'cleared' || payload.outcome === 'extracted'
           ? 'success'
-          : payload.outcome === 'extracted'
-            ? 'info'
-            : 'error',
+          : 'warning',
       title: titleStr,
-      description: summary.lootForfeited
-        ? '⚠️ Defeat Penalty: 50% of unbanked loot was forfeited.'
-        : 'All banked loot, Shards, Cores, and EXP have been secured in Camp.',
-      badgeText: summary.playerRank ? `Rank #${summary.playerRank}` : `F${payload.floorReached}`,
-      badgeTier: payload.outcome === 'cleared' ? 'gold' : payload.outcome === 'extracted' ? 'prismatic' : 'boss',
+      description: '100% of Silver Taels, Jade Shards, Sect Cores, and Relics are banked in Camp.',
+      badgeText: summary.playerRank ? `Rank #${summary.playerRank}` : `FLOOR ${payload.floorReached}`,
+      badgeTier: payload.outcome === 'cleared' ? 'gold' : payload.outcome === 'extracted' ? 'prismatic' : 'silver',
     });
     box.appendChild(bannerHost);
+
+    const awakenedSyns = computeWuxiaLoadout(payload.draftedBuffIds).awakenedSynergies;
+    if (awakenedSyns.length > 0) {
+      const synNames = awakenedSyns
+        .map((id) => getWuxiaSynergyById(id))
+        .filter((s) => s !== null)
+        .map((s) => `${s.icon} ${s.name}`)
+        .join(' • ');
+      box.appendChild(
+        this.el('div', 'card', `🔮 Secret Synergies Discovered This Run: ${synNames}`)
+      );
+    }
 
     box.appendChild(
       this.el(
@@ -1966,6 +2120,11 @@ export class OverlayManager {
     onStatus: (next: 'idle' | 'posted' | 'copied') => void
   ): Promise<void> {
     try {
+      const uniqueManuals = [...new Set(payload.draftedBuffIds)].sort((a, b) => {
+        const aSyn = getWuxiaSynergyById(a) ? 0 : 1;
+        const bSyn = getWuxiaSynergyById(b) ? 0 : 1;
+        return aSyn - bSyn;
+      });
       const res = await fetch('/api/share-comment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1975,7 +2134,7 @@ export class OverlayManager {
           outcome: payload.outcome,
           durationMs: payload.durationMs,
           goldBanked: summary.goldBanked,
-          topBuffIds: payload.draftedBuffIds.slice(0, 5),
+          topBuffIds: uniqueManuals.slice(0, 5),
           bossMutations: payload.bossMutations,
           legendaryName: summary.legendaryDrop ? summary.legendaryDrop.name : null,
           legendaryCursed: summary.legendaryDrop ? summary.legendaryDrop.isCursed : false,

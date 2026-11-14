@@ -1,8 +1,14 @@
-# MapleSpire
+# Wuxia Spire
 
-**MapleSpire** is a 2D pixel-art side-scrolling auto-battler roguelite / daily grind RPG built for the **Reddit Daily Game Competition 2026** using [Devvit Web](https://developers.reddit.com/docs/capabilities/devvit-web/devvit_web_overview), Phaser, Hono, Vite, and TypeScript.
+**Wuxia Spire** is a classical Jianghu martial-arts pixel-art roguelite / endless dungeon RPG built for the **Reddit Daily Game Competition 2026** using [Devvit Web](https://developers.reddit.com/docs/capabilities/devvit-web/devvit_web_overview), Phaser, React + Meta Astryx UI, Hono, and TypeScript.
 
-See [docs/GDD.md](docs/GDD.md) for the full Game Design Document.
+## Gameplay & Wuxia Features
+
+- **Classless Jianghu Wanderer:** Every ascent starts unarmed with foundational **Taiji Fist** strikes and **Qinggong Cloud-Step** (`Space`), with zero class lockouts.
+- **6-Slot Martial & Inner Qi Loadout (Lv. 1 → Lv. 3):** Draft up to **3 Active Martial Arts** (e.g. *18 Dragon-Subduing Palms*, *Jade Maiden Swordplay*, *Beggar Dog-Beating Staff*, *Xuantie Heavy Iron Cleave*, *Peach Blossom Jade Flute*, *Soul-Chilling Ice Needles*) and **3 Inner Qi (Neigong) Manuals** (*Nine Yang Divine Qi*, *Nine Yin True Scripture*, *Void Step Qinggong*, etc.).
+- **Secret Peerless Synergies:** Pairs of Active Martial Arts (Lv. 3 Ultimate) and matching Inner Qi manuals awaken **6 hidden Peerless Synergies** (e.g. *True Dragon Sovereign Palm*, *Melancholic Sword of Parting*) that remain `???` until players discover them in battle and record them in their **Secret Synergy Scroll**.
+- **Endless Cult Spire (Floors 10 / 20 / 30 / 40+):** Battle Cult Disciples from 5 daily rotating Wuxia Cult Sects, ambush **Cult Hall Master Mini-Bosses** on random floors inside each 10-floor bracket, and confront **Cult Leaders** every 10th floor (`10, 20, 30...`) until you choose to retreat or fall.
+- **100% Loot Retention:** Retreat at any time (`🏮 Retreat (Keep Loot)`) or after any 10-floor Cult Leader checkpoint—or even upon defeat—while keeping 100% of collected Silver Taels, Jade Shards, Sect Cores, and Relics.
 
 ## Tech Stack
 

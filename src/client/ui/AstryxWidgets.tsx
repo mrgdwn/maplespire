@@ -169,10 +169,10 @@ export function AstryxCampTopBar(props: AstryxCampTopBarProps): ReactNode {
     <HStack justify="between" align="center" gap={2} wrap="wrap" style={{ width: '100%' }}>
       <HStack align="center" gap={1.5} wrap="wrap">
         <Text type="large" weight="bold" style={{ letterSpacing: '0.04em' }}>
-          MAPLESPIRE
+          WUXIA SPIRE
         </Text>
         <Badge variant="neutral" label={`u/${props.username}`} />
-        <Badge variant="cyan" label={`Total Lv.${props.accountLevel}`} />
+        <Badge variant="cyan" label={`Realm Lv.${props.accountLevel}`} />
         <Badge
           variant={props.restedStacks > 0 ? 'green' : 'orange'}
           label={`🔥 ${props.streakDays}d${props.restedStacks > 0 ? ` • ${props.restedStacks}x Rested` : ''}`}
@@ -396,20 +396,20 @@ export function AstryxRunHudHeader({
     <HStack align="center" gap={1.5} wrap="wrap">
       <Badge variant="info" label={runModeLabel} />
       <Badge variant="neutral" label={biomeName} />
-      <Badge variant="purple" label={`${buffCount} Buffs`} />
-      {isBossActive ? <Badge variant="red" label="BOSS ACTIVE" /> : null}
+      <Badge variant="purple" label={`${buffCount} Manuals`} />
+      {isBossActive ? <Badge variant="red" label="CULT BOSS" /> : null}
       <HStack align="center" gap={1}>
         <Kbd keys="q" />
         <Text type="supporting" size="2xs">
-          Skill
+          Burst
         </Text>
         <Kbd keys="space" />
         <Text type="supporting" size="2xs">
-          Dash
+          Qinggong
         </Text>
         <Kbd keys="w" />
         <Text type="supporting" size="2xs">
-          Potion
+          Pill
         </Text>
       </HStack>
     </HStack>

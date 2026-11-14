@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { context, redis, reddit } from '@devvit/web/server';
 import { getBiomeById, getMutationById } from '../../shared/catalogs/biomes.ts';
 import { getBuffById } from '../../shared/catalogs/buffs.ts';
+import { getWuxiaSynergyById, isCultLeaderFloor, isRandomMiniBossFloor } from '../../shared/catalogs/wuxia.ts';
 import { getClassDefinition } from '../../shared/catalogs/classes.ts';
 import type {
   CampActionResponse,
@@ -272,7 +273,7 @@ api.post('/run/complete', async (c) => {
   const mode: RunMode = body.mode === 'daily' ? 'daily' : 'practice';
   const classId: ClassId = isClassId(body.classId) ? body.classId : 'warrior';
   const floorReached = isNumber(body.floorReached)
-    ? Math.max(1, Math.min(10, Math.floor(body.floorReached)))
+    ? Math.max(1, Math.min(9999, Math.floor(body.floorReached)))
     : 1;
   const outcome: RunOutcome = isRunOutcome(body.outcome) ? body.outcome : 'died';
   const durationMs = isNumber(body.durationMs) ? Math.max(1000, Math.floor(body.durationMs)) : 60_000;
@@ -308,8 +309,8 @@ api.post('/run/complete', async (c) => {
     let profile = applyDailyLoginState(await loadProfile(username), dateKey);
     const dailyConfig = getDailyChallengeConfig(dateKey);
 
-    const lootForfeited = outcome === 'died';
-    const penaltyMult = lootForfeited ? 0.5 : 1;
+    const lootForfeited = false;
+    const penaltyMult = 1;
     const bountyApplied = classId === dailyConfig.bountyClass;
     const restedApplied = profile.restedStacks > 0;
 
@@ -317,22 +318,26 @@ api.post('/run/complete', async (c) => {
       goldCollected * penaltyMult * (bountyApplied ? 1.25 : 1) * (restedApplied ? 2 : 1)
     );
     const shardsBankedBase = Math.round(shardsCollected * penaltyMult * (restedApplied ? 2 : 1));
+    const clearedFloors = outcome === 'died' ? Math.max(0, floorReached - 1) : floorReached;
+    const cultLeadersDefeated = Math.floor(clearedFloors / 10);
     const coresBanked =
       Math.round(coresCollected * penaltyMult) +
-      (outcome === 'cleared' ? 1 : 0);
+      Math.max(outcome === 'cleared' ? 1 : 0, cultLeadersDefeated);
 
     const expBase =
       floorReached * 42 +
+      cultLeadersDefeated * 90 +
       (outcome === 'cleared' ? 120 : outcome === 'extracted' ? 50 : 15);
     const expGained = expBase * (bountyApplied ? 2 : 1);
 
-    const rng = mulberry32(hashString(`${runId}:${username}:${floorReached}`));
+    const dropSeed = hashString(`${runId}:${username}:${floorReached}`);
+    const rng = mulberry32(dropSeed);
     const slots: GearSlot[] = ['weapon', 'headgear', 'top', 'cape'];
     const rawDrops: GearItem[] = [];
 
-    const clearedFloors = outcome === 'died' ? Math.max(0, floorReached - 1) : floorReached;
     for (let f = 2; f <= clearedFloors; f++) {
-      if (f === 4 || f === 7) {
+      if (rawDrops.length >= 24) break;
+      if (isCultLeaderFloor(f) || isRandomMiniBossFloor(f, dropSeed)) {
         const slot = slots[Math.floor(rng() * slots.length)] ?? 'weapon';
         rawDrops.push(createGearItem(rng, classId, slot, 'rare', f, `f${f}`));
       } else if (rng() < 0.45) {
@@ -361,7 +366,9 @@ api.post('/run/complete', async (c) => {
     }
 
     let legendaryDrop: GearItem | null = null;
-    if (outcome === 'cleared' && mode === 'daily') {
+    const bossBracketsCleared =
+      outcome === 'died' ? Math.floor(Math.max(0, floorReached - 1) / 10) : Math.floor(floorReached / 10);
+    if (bossBracketsCleared >= 1 || (outcome === 'cleared' && mode === 'daily')) {
       legendaryDrop = createLegendaryGearItem(rng, classId, !greedGamblePurified, 'f10');
       keptDrops.push(legendaryDrop);
     }
@@ -819,27 +826,37 @@ api.post('/share-comment', async (c) => {
   const dateKey = getUtcDateKey();
   const cfg = getDailyChallengeConfig(dateKey);
   const biome = getBiomeById(cfg.biomeId);
-  const clsDef = getClassDefinition(classId);
+  void classId;
 
   const buffNames = topBuffIds
     .slice(0, 5)
     .map((id) => getBuffById(id)?.name ?? id)
     .join(', ');
+  const synergyNames: string[] = [];
+  for (const id of topBuffIds) {
+    const syn = getWuxiaSynergyById(id);
+    if (syn && !synergyNames.includes(syn.name)) {
+      synergyNames.push(syn.name);
+    }
+  }
   const mutNames = bossMutations.map((id) => getMutationById(id).name).join(' + ');
   const outcomeText =
     outcome === 'cleared'
-      ? `Cleared Floor 10 (${biome.endBossName})`
+      ? `Conquered Floor ${floorReached} (${biome.endBossName})`
       : outcome === 'extracted'
-        ? `Extracted Safely at Floor ${floorReached}`
+        ? `Retreated Safely at Floor ${floorReached}`
         : `Fell on Floor ${floorReached}`;
   const timeSec = (durationMs / 1000).toFixed(1);
 
   const lines = [
-    `**MapleSpire Daily Report (${dateKey}) — u/${username}**`,
-    `- **Class:** ${clsDef.name} | **Result:** ${outcomeText} in ${timeSec}s`,
-    `- **Biome:** ${biome.name}${mutNames ? ` (${mutNames})` : ''}`,
-    `- **Gold Banked:** ${goldBanked}g`,
+    `**Wuxia Spire Daily Report (${dateKey}) — u/${username}**`,
+    `- **Path:** Jianghu Wanderer | **Result:** ${outcomeText} in ${timeSec}s`,
+    `- **Cult Sect:** ${biome.name}${mutNames ? ` (${mutNames})` : ''}`,
+    `- **Silver Taels Banked:** ${goldBanked}`,
   ];
+  if (synergyNames.length > 0) {
+    lines.push(`- **Secret Synergies:** ${synergyNames.join(', ')}`);
+  }
   if (buffNames) {
     lines.push(`- **Core Draft Build:** ${buffNames}`);
   }

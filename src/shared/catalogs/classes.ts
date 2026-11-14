@@ -7,6 +7,7 @@ import type {
   PlayerProfile,
 } from '../types.ts';
 import { getLegendaryById } from './legendaries.ts';
+import { computeWuxiaLoadout } from './wuxia.ts';
 
 export type JobMilestone = {
   level: number;
@@ -176,10 +177,10 @@ export const getClassDefinition = (classId: ClassId): ClassDefinition => {
 };
 
 export const getJobAdvancementTitle = (level: number): { jobNumber: number; title: string } => {
-  if (level >= 60) return { jobNumber: 3, title: '3rd Job Master' };
-  if (level >= 35) return { jobNumber: 2, title: '2nd Job Specialist' };
-  if (level >= 15) return { jobNumber: 1, title: '1st Job Vanguard' };
-  return { jobNumber: 0, title: 'Novice Adventurer' };
+  if (level >= 60) return { jobNumber: 3, title: 'Peerless Grandmaster' };
+  if (level >= 35) return { jobNumber: 2, title: 'Inner Sect Master' };
+  if (level >= 15) return { jobNumber: 1, title: 'Outer Sect Adept' };
+  return { jobNumber: 0, title: 'Jianghu Wanderer' };
 };
 
 export const computeLinkSkillBonuses = (classes: ClassesProgressMap): LinkSkillBonuses => {
@@ -344,6 +345,20 @@ export const computeHeroCombatStats = (
     dodgeRate = Math.max(0, dodgeRate - 0.3);
     armor *= 0.7;
   }
+
+  // Wuxia Inner Qi, Awakened Secret Synergies & Enlightenment Scrolls
+  const wuxia = computeWuxiaLoadout(draftedBuffIds);
+  const wStats = wuxia.aggregatedStats;
+  maxHp *= 1 + wStats.hpPct;
+  atk *= 1 + wStats.atkPct;
+  attackSpeed *= 1 + wStats.speedPct;
+  armor += wStats.armorFlat;
+  critRate += wStats.critChance;
+  critDmg += wStats.critDamage;
+  dodgeRate += wStats.dodgeChance;
+  cooldownReductionPct += wStats.cooldownReduction * 100;
+  lifestealPct += wStats.lifesteal * 100;
+  goldBonusPct += wStats.goldBonusPct * 100;
 
   // Legendary static stat modifiers (Pristine + Tuned Cursed)
   if (equippedLegIds.has('war_wep_worldbreaker')) {

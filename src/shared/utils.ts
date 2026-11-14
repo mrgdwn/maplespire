@@ -292,8 +292,15 @@ export const calculateLeaderboardScore = (
   goldEarned: number
 ): number => {
   const clearBonus = outcome === 'cleared' ? 1_000_000 : outcome === 'extracted' ? 200_000 : 0;
+  const milestoneBonus = Math.floor(Math.max(0, floorReached) / 10) * 250_000;
   const speedBonus = Math.max(0, 300_000 - Math.min(300_000, Math.floor(durationMs)));
-  return clearBonus + floorReached * 100_000 + speedBonus + Math.min(99_999, Math.floor(goldEarned));
+  return (
+    clearBonus +
+    milestoneBonus +
+    floorReached * 100_000 +
+    speedBonus +
+    Math.min(99_999, Math.floor(goldEarned))
+  );
 };
 
 // ======================== SAFE RUNTIME TYPE GUARDS (NO `as` CASTS) ========================

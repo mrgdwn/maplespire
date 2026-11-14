@@ -1,4 +1,6 @@
 import type { BuffTier, ClassId } from '../types.ts';
+import type { WuxiaManualEntry } from './wuxia.ts';
+import { getWuxiaManualById } from './wuxia.ts';
 
 export type BuffDefinition = {
   id: string;
@@ -471,8 +473,37 @@ export const PRISMATIC_CLASS_BUFFS: readonly BuffDefinition[] = [
 
 export const ALL_BUFFS: readonly BuffDefinition[] = [...CORE_BUFFS, ...PRISMATIC_CLASS_BUFFS];
 
-export const getBuffById = (id: string): BuffDefinition | null =>
-  ALL_BUFFS.find((buff) => buff.id === id) ?? null;
+const manualToBuffDefinition = (manual: WuxiaManualEntry): BuffDefinition => {
+  const tier: BuffTier =
+    manual.kind === 'synergy'
+      ? 'prismatic'
+      : manual.kind === 'enlightenment'
+        ? 'gold'
+        : manual.kind === 'active'
+          ? 'gold'
+          : 'silver';
+  const description =
+    manual.kind === 'active' || manual.kind === 'inner_qi'
+      ? manual.levelDescriptions[0]
+      : manual.description;
+  return {
+    id: manual.id,
+    name: manual.name,
+    tier,
+    classId: null,
+    icon: manual.icon,
+    description,
+    downside: null,
+    stackable: true,
+  };
+};
+
+export const getBuffById = (id: string): BuffDefinition | null => {
+  const legacy = ALL_BUFFS.find((buff) => buff.id === id);
+  if (legacy) return legacy;
+  const wuxia = getWuxiaManualById(id);
+  return wuxia ? manualToBuffDefinition(wuxia) : null;
+};
 
 export const getFloorBracketWeights = (
   floor: number,

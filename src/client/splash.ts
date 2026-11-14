@@ -19,13 +19,13 @@ const renderDailyInfo = (
   dailyDone: boolean
 ): void => {
   const biome = getBiomeById(biomeId);
-  const bounty = getClassDefinition(bountyClassId);
+  void bountyClassId;
 
   setText('date-pill', dateKey);
   setText('biome-name', biome.name);
-  setText('biome-sub', `${biome.subtitle} • 10 Floors`);
-  setText('bounty-pill', `2x BOUNTY: ${bounty.name.toUpperCase()}`);
-  setText('boss-line', `F4: ${biome.miniBossName} -> F10: ${biome.endBossName}`);
+  setText('biome-sub', `${biome.subtitle} • Endless (10/20/30+)`);
+  setText('bounty-pill', `CLASSLESS • 3 ARTS + 3 QI`);
+  setText('boss-line', `Random Mini-Bosses • F10/20/30 Cult Leader: ${biome.endBossName}`);
   setText('mechanic-tip', `${biome.mechanicName}: ${biome.mechanicDescription} (${biome.counterTip})`);
   setText('stat-delves', String(delves));
   setText('stat-clears', String(clears));
@@ -37,13 +37,13 @@ const renderDailyInfo = (
   }
 
   if (dailyDone) {
-    setText('sub-status', 'Daily Ranked Run complete! Play Practice/Grind runs or enter Camp.');
+    setText('sub-status', 'Daily Sect Run logged! Climb Endless Practice floors or upgrade Relics.');
   }
 };
 
 const initSplash = async (): Promise<void> => {
-  const username = context.username ?? 'Adventurer';
-  setText('greeting', `Welcome back, u/${username}`);
+  const username = context.username ?? 'Wanderer';
+  setText('greeting', `Welcome to the Jianghu, u/${username}`);
 
   const dateKey = getUtcDateKey();
   const fallback = getDailyChallengeConfig(dateKey);
@@ -60,7 +60,7 @@ const initSplash = async (): Promise<void> => {
   if (howToBtn instanceof HTMLButtonElement) {
     howToBtn.addEventListener('click', () => {
       showToast(
-        'Auto-battle 10 floors, draft 1 of 3 buffs with 2 targeted refreshes, extract at F4/F7 or gamble F10 for a Unique Legendary!'
+        'Start classless & unarmed! Draft Lv.1→3 Martial Arts & Inner Qi (3+3 slots), discover Secret Synergies, fight random Mini-Bosses + F10/20/30 Cult Leaders, and always keep 100% of your loot!'
       );
     });
   }

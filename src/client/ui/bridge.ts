@@ -78,4 +78,5 @@ export type DungeonBridge = {
   resumeAfterDraft: (buffId: string) => void;
   resumeAfterRoulette: (mutations: MutationId[]) => void;
   resumeAfterExtraction: (extractNow: boolean) => void;
+  retreatWithLoot: () => void;
 };

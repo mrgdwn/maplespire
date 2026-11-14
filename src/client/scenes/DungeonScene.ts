@@ -4,6 +4,13 @@ import { getBiomeById, getMutationById } from '../../shared/catalogs/biomes.ts';
 import { getClassDefinition } from '../../shared/catalogs/classes.ts';
 import { computeHeroCombatStats } from '../../shared/catalogs/classes.ts';
 import {
+  computeWuxiaLoadout,
+  getWuxiaActiveArtById,
+  getWuxiaSynergyById,
+  isCultLeaderFloor,
+  isRandomMiniBossFloor,
+} from '../../shared/catalogs/wuxia.ts';
+import {
   computeBossChestCount,
   computeBossRouletteCount,
   computeEnemySpawnHpMult,
@@ -178,6 +185,7 @@ export class DungeonScene extends Scene {
   private shardsCollected: number = 0;
   private coresCollected: number = 0;
   private draftedBuffIds: string[] = [];
+  private wuxiaArtTimers: Record<string, number> = {};
   private currentBossMutations: MutationId[] = [];
   private lastBossMutations: MutationId[] = [];
   private floorsCleared: number = 0;
@@ -206,6 +214,7 @@ export class DungeonScene extends Scene {
       resumeAfterDraft: (buffId) => this.resumeAfterDraft(buffId),
       resumeAfterRoulette: (mutations) => this.resumeAfterRoulette(mutations),
       resumeAfterExtraction: (extractNow) => this.resumeAfterExtraction(extractNow),
+      retreatWithLoot: () => this.retreatWithLoot(),
     });
   }
 
@@ -250,6 +259,7 @@ export class DungeonScene extends Scene {
         resumeAfterDraft: (buffId) => this.resumeAfterDraft(buffId),
         resumeAfterRoulette: (mutations) => this.resumeAfterRoulette(mutations),
         resumeAfterExtraction: (extractNow) => this.resumeAfterExtraction(extractNow),
+        retreatWithLoot: () => this.retreatWithLoot(),
       });
     }
   }
@@ -463,12 +473,13 @@ export class DungeonScene extends Scene {
 
     this.floor = 1;
     this.waveIndex = 1;
-    this.totalWavesOnFloor = 2;
+    this.totalWavesOnFloor = 1;
     this.elapsedRunMs = 0;
     this.goldCollected = 0;
     this.shardsCollected = 0;
     this.coresCollected = 0;
     this.draftedBuffIds = [];
+    this.wuxiaArtTimers = {};
     this.currentBossMutations = [];
     this.lastBossMutations = [];
     this.floorsCleared = 0;
@@ -562,12 +573,14 @@ export class DungeonScene extends Scene {
 
   private applyFloorStartShieldsAndPassives(): void {
     if (!this.stats) return;
-    this.heroShield = computeFloorStartShield(
-      this.stats.maxHp,
-      this.draftedBuffIds,
-      this.hasEquippedLegendary('war_cape_aegis'),
-      this.isEquippedLegendaryCursed('war_cape_aegis')
-    );
+    const wuxia = computeWuxiaLoadout(this.draftedBuffIds);
+    this.heroShield =
+      computeFloorStartShield(
+        this.stats.maxHp,
+        this.draftedBuffIds,
+        this.hasEquippedLegendary('war_cape_aegis'),
+        this.isEquippedLegendaryCursed('war_cape_aegis')
+      ) + wuxia.aggregatedStats.shieldOnFloor;
     if (this.hasEquippedLegendary('war_head_balrog')) {
       this.invulnHitsLeft = this.isEquippedLegendaryCursed('war_head_balrog') ? 1 : 3;
     } else {
@@ -582,16 +595,22 @@ export class DungeonScene extends Scene {
     this.currentBossMutations = [];
     this.applyFloorStartShieldsAndPassives();
 
-    if (floorNum === 4 || floorNum === 10) {
+    if (
+      isCultLeaderFloor(floorNum) ||
+      isRandomMiniBossFloor(floorNum, this.runConfig?.seed ?? 1)
+    ) {
       this.totalWavesOnFloor = 1;
       this.phase = 'paused';
-      const count = computeBossRouletteCount(floorNum, this.draftedBuffIds);
+      const baseCount = isCultLeaderFloor(floorNum)
+        ? Math.min(3, Math.max(1, Math.floor(floorNum / 10)))
+        : 1;
+      const count = Math.max(baseCount, computeBossRouletteCount(floorNum, this.draftedBuffIds));
       this.callbacks?.onRequestRoulette(floorNum, count, this.lastBossMutations);
       this.emitHud();
       return;
     }
 
-    this.totalWavesOnFloor = floorNum === 7 ? 1 : 2;
+    this.totalWavesOnFloor = floorNum <= 1 ? 1 : 2;
     this.phase = 'walking';
     this.walkTimer = 1.1;
     this.spawnFloatingText(this.scale.width / 2, this.groundY - 140, `FLOOR ${floorNum}`, '#fde047', 26);
@@ -603,11 +622,11 @@ export class DungeonScene extends Scene {
     this.lastBossMutations = [...mutations];
     this.phase = 'walking';
     this.walkTimer = 0.9;
-    const label =
-      this.floor === 4
-        ? `MINI-BOSS: ${this.activeBiome.miniBossName}`
-        : `END BOSS: ${this.activeBiome.endBossName}`;
-    this.spawnFloatingText(this.scale.width / 2, this.groundY - 150, label, '#f97316', 24);
+    const isCultLeader = isCultLeaderFloor(this.floor);
+    const label = isCultLeader
+      ? `CULT LEADER (F${this.floor}): ${this.activeBiome.endBossName}`
+      : `HALL MASTER AMBUSH: ${this.activeBiome.miniBossName}`;
+    this.spawnFloatingText(this.scale.width / 2, this.groundY - 150, label, '#f97316', 22);
     soundFX.playBossRoar();
     this.emitHud();
   }
@@ -615,12 +634,20 @@ export class DungeonScene extends Scene {
   private spawnWave(): void {
     const w = this.scale.width || 1024;
     const hpMult = computeEnemySpawnHpMult(this.draftedBuffIds);
+    const runSeed = this.runConfig?.seed ?? 1;
+    const isCultLeader = isCultLeaderFloor(this.floor);
+    const isMiniBoss = isRandomMiniBossFloor(this.floor, runSeed);
 
-    if (this.floor === 4 || this.floor === 10) {
-      const isEndBoss = this.floor === 10;
-      const baseHp = isEndBoss ? 2250 : 720;
-      const baseAtk = isEndBoss ? 36 : 20;
-      const name = isEndBoss ? this.activeBiome.endBossName : this.activeBiome.miniBossName;
+    if (isCultLeader || isMiniBoss) {
+      const isEndBoss = isCultLeader;
+      const leaderTier = Math.max(0, Math.floor(this.floor / 10) - 1);
+      const baseHp = isEndBoss
+        ? Math.round(2250 * Math.pow(1.75, leaderTier))
+        : Math.round(560 * (1 + (this.floor - 1) * 0.16));
+      const baseAtk = isEndBoss
+        ? Math.round(34 + leaderTier * 14)
+        : Math.round(18 + this.floor * 1.4);
+      const name = isEndBoss ? `${this.activeBiome.endBossName} (F${this.floor})` : this.activeBiome.miniBossName;
 
       if (this.currentBossMutations.includes('twin_soul')) {
         this.spawnBossEntity(name, w - 160, Math.round(baseHp * 0.65 * hpMult), baseAtk, isEndBoss, false);
@@ -638,8 +665,10 @@ export class DungeonScene extends Scene {
       return;
     }
 
+    const bracketScale = 1 + Math.max(0, Math.floor((this.floor - 1) / 10)) * 0.45;
+    const isEliteWave = this.floor > 1 && (this.floor % 10 === 7 || this.floor % 10 === 9);
     const mobCount =
-      this.floor === 1 ? 2 : this.floor === 7 ? 5 : 3 + Math.min(2, Math.floor(this.floor / 4));
+      this.floor === 1 ? 3 : isEliteWave ? 5 : 3 + Math.min(3, Math.floor(this.floor / 5));
     const spacing = Math.min(
       95,
       Math.max(38, Math.floor((w - this.heroX - 180) / Math.max(1, mobCount - 1)))
@@ -648,12 +677,12 @@ export class DungeonScene extends Scene {
       const kindIdx = Math.floor(this.rng() * 3);
       const textureKey = `mob_${kindIdx}`;
       const tint = this.activeBiome.mobColors[kindIdx] ?? 0x6ede8a;
-      const mobName = this.activeBiome.mobNames[kindIdx] ?? 'Monster';
-      const isElite = this.floor === 7 && i === mobCount - 1;
+      const mobName = this.activeBiome.mobNames[kindIdx] ?? 'Cultist';
+      const isElite = isEliteWave && i === mobCount - 1;
       const maxHp = Math.round(
-        (42 + this.floor * 26 + this.waveIndex * 10) * (isElite ? 2.1 : 1) * hpMult
+        (42 + this.floor * 24 + this.waveIndex * 10) * bracketScale * (isElite ? 2.0 : 1) * hpMult
       );
-      const atk = Math.round((6 + this.floor * 2.0) * (isElite ? 1.35 : 1));
+      const atk = Math.round((6 + this.floor * 1.8) * (isElite ? 1.3 : 1));
       const x = Math.max(this.heroX + 130, w - 75 - i * spacing);
       const y = this.groundY - 24;
 
@@ -909,9 +938,31 @@ export class DungeonScene extends Scene {
       this.healHero(this.stats.maxHp * 0.015 * dt, false);
     }
 
-    // Auto-Skill check
+    // Auto-Skill check (Dantian Burst)
     if (this.autoSkill && this.skillTimer <= 0 && this.enemies.length > 0) {
       this.triggerActiveSkill();
+    }
+
+    // Vampire-Survivors-style passive auto-cycle for drafted Wuxia Martial Arts
+    if (this.enemies.length > 0) {
+      const loadout = computeWuxiaLoadout(this.draftedBuffIds);
+      const cdMult = 1 - this.stats.cooldownReductionPct / 100;
+      for (const slot of loadout.actives) {
+        const art = getWuxiaActiveArtById(slot.id);
+        if (!art) continue;
+        const syn = loadout.awakenedSynergies.includes(art.synergyId)
+          ? getWuxiaSynergyById(art.synergyId)
+          : null;
+        const baseCdMs = syn ? syn.cooldownMs : (art.cooldownsMs[slot.level - 1] ?? 2600);
+        const cdSec = Math.max(0.75, (baseCdMs / 1000) * cdMult);
+        const curTimer = (this.wuxiaArtTimers[art.id] ?? 0.35) - dt;
+        if (curTimer <= 0) {
+          this.wuxiaArtTimers[art.id] = cdSec;
+          this.castWuxiaActiveArt(art.id, false);
+        } else {
+          this.wuxiaArtTimers[art.id] = curTimer;
+        }
+      }
     }
 
     // Cape: Cloak of the Arcane Tempest meteor every 10s (14s cursed)
@@ -1899,7 +1950,7 @@ export class DungeonScene extends Scene {
         this.spawnLootDrop(ex, ey, 'chest', enemy.isBoss ? 1 : 0);
       }
       this.shardsCollected += enemy.isBoss ? 12 : 5;
-      if (enemy.isBoss && this.floor === 4) {
+      if (enemy.isBoss) {
         this.coresCollected += 1;
       }
     }
@@ -2114,75 +2165,262 @@ export class DungeonScene extends Scene {
     }
   }
 
-  public triggerActiveSkill(): void {
-    if (this.phase !== 'combat' || !this.stats || !this.runConfig || this.skillTimer > 0) return;
+  private castWuxiaActiveArt(artId: string, isBurst = false): void {
+    if (this.phase !== 'combat' || !this.stats || this.enemies.length === 0) return;
+    const art = getWuxiaActiveArtById(artId);
+    if (!art) return;
 
-    const clsId = this.runConfig.classId;
-    const def = getClassDefinition(clsId);
-    const clsLvl = this.runConfig.profile.classes[clsId].level;
-    const isUltimate = clsLvl >= 60;
-    const cdMult = 1 - this.stats.cooldownReductionPct / 100;
-    this.skillTimer = Math.max(2.5, def.activeSkillCooldownSec * cdMult);
+    const loadout = computeWuxiaLoadout(this.draftedBuffIds);
+    const level = Math.min(3, Math.max(1, loadout.activeLevels[artId] ?? 1));
+    const syn = loadout.awakenedSynergies.includes(art.synergyId)
+      ? getWuxiaSynergyById(art.synergyId)
+      : null;
 
-    const skillMult = (1 + this.stats.skillPowerPct / 100) * this.stats.allDamageMult;
-    const critMult = this.stats.critDmg;
-    const skillName = isUltimate ? def.activeSkillUltimateName : def.activeSkillName;
-    this.spawnFloatingText(this.heroX + 40, this.groundY - 105, skillName.toUpperCase(), '#38bdf8', 16);
-    this.playHeroAttackAnimation(clsId, 1.3);
+    const powerMult =
+      (syn ? syn.powerMult : (art.powerMults[level - 1] ?? 1.2)) *
+      (isBurst ? 1.3 : 1) *
+      this.stats.allDamageMult *
+      (1 + this.stats.skillPowerPct / 100);
+    const count = syn ? syn.projectileCount : (art.projectileCounts[level - 1] ?? 1);
+    const hitCrit = syn !== null || isBurst || this.rng() < this.stats.critRate;
+    const dmg = Math.max(
+      1,
+      Math.round(this.stats.atk * powerMult * (hitCrit ? this.stats.critDmg : 1))
+    );
+    const target = this.getClosestEnemy() ?? this.enemies[0];
+    if (!target) return;
 
-    if (clsId === 'warrior') {
-      soundFX.playBossRoar();
-      const mult = isUltimate ? 4.5 : 2.5;
-      for (const e of [...this.enemies]) {
-        this.spawnHitSpark(e.sprite.x, e.sprite.y, true, 0xf97316);
-        this.damageEnemy(e, this.stats.atk * mult * skillMult * critMult, true, 'SLAM');
-        if (e.hp > 0) e.stunTimer = Math.max(e.stunTimer, 1.4);
+    if (art.style === 'palm_wave') {
+      if (syn || level >= 3) {
+        soundFX.playBossRoar();
+      } else {
+        soundFX.playSwing();
       }
-    } else if (clsId === 'mage') {
-      soundFX.playSpell();
-      const mult = isUltimate ? 5.2 : 3.0;
-      const echoes = this.draftedBuffIds.includes('prism_mage_spell_echo') ? 2 : 1;
-      for (let pass = 0; pass < echoes; pass++) {
-        const power = pass === 0 ? mult : mult * 0.65;
-        for (const e of [...this.enemies]) {
-          this.spawnHitSpark(e.sprite.x, e.sprite.y, true, 0x38bdf8);
-          this.damageEnemy(e, this.stats.atk * power * skillMult * critMult, true, 'NOVA');
+      this.playHeroAttackAnimation('warrior', syn ? 1.35 : 1.05);
+      this.spawnFloatingText(
+        this.heroX + 36,
+        this.groundY - 102,
+        syn ? 'SOVEREIGN DRAGON!' : level >= 3 ? '18 DRAGON PALMS!' : 'DRAGON PALM!',
+        '#fbbf24',
+        syn ? 15 : 13
+      );
+      for (let i = 0; i < count; i++) {
+        const offset = i - (count - 1) / 2;
+        this.spawnProjectile(
+          'proj_wave',
+          this.heroX + 24,
+          this.groundY - 34 + offset * 14,
+          syn ? 560 : 470,
+          offset * 24,
+          dmg,
+          hitCrit,
+          syn ? 99 : level >= 3 ? 6 : 3,
+          false,
+          false,
+          true,
+          null,
+          false,
+          false,
+          syn ? 'DRAGON' : 'PALM'
+        );
+      }
+      for (const e of [...this.enemies]) {
+        if (Math.abs(e.sprite.x - this.heroX) <= 180 && !e.mutations.includes('juggernaut') && e.hp > 0) {
+          e.sprite.x = Math.min((this.scale.width || 1024) - 55, e.sprite.x + 28);
         }
       }
-    } else if (clsId === 'thief') {
+    } else if (art.style === 'jade_swords') {
       soundFX.playCrit();
-      this.invulnHitsLeft = Math.max(this.invulnHitsLeft, 2);
-      const hits = isUltimate ? 8 : 4;
-      for (let i = 0; i < hits; i++) {
-        const t = this.enemies[i % Math.max(1, this.enemies.length)];
-        if (t && t.hp > 0) {
-          t.bleedStacks = Math.min(5, t.bleedStacks + 1);
-          t.bleedTimer = 3;
-          this.spawnSlashVfx(t.sprite.x, t.sprite.y, 0xc084fc, 0.9);
-          this.damageEnemy(t, this.stats.atk * 0.85 * skillMult * critMult, true, 'SHADOW');
-          if (!t.mutations.includes('juggernaut') && t.hp > 0) {
-            t.sprite.x = Math.min((this.scale.width || 1024) - 55, t.sprite.x + 45);
+      this.playHeroAttackAnimation('thief', syn ? 1.3 : 1.0);
+      if (syn) {
+        this.spawnFloatingText(this.heroX + 36, this.groundY - 98, 'PARTING SWORD!', '#7dd3fc', 14);
+      }
+      const vx = 620;
+      for (let i = 0; i < count; i++) {
+        const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
+        const spreadY = (i - (count - 1) / 2) * 10;
+        const vy =
+          (aimEnemy.sprite.y - (this.groundY - 30) + spreadY) /
+          Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 20)) / vx);
+        this.spawnProjectile(
+          'proj_star',
+          this.heroX + 20,
+          this.groundY - 30 + spreadY * 0.5,
+          vx,
+          vy,
+          dmg,
+          hitCrit,
+          syn ? 3 : 1,
+          false,
+          false,
+          false,
+          aimEnemy.id,
+          false,
+          false,
+          syn ? 'CONDOR' : 'JADE'
+        );
+      }
+    } else if (art.style === 'staff_spin') {
+      soundFX.playSwing();
+      this.playHeroAttackAnimation('warrior', syn ? 1.35 : 1.1);
+      const radius = syn ? 330 : 155 + level * 35;
+      this.spawnSlashVfx(
+        this.heroX + 24,
+        this.groundY - 28,
+        syn ? 0x6ee7b7 : 0x10b981,
+        syn ? 1.65 : 1.0 + level * 0.16
+      );
+      this.spawnSlashVfx(this.heroX - 18, this.groundY - 32, 0x34d399, 0.95);
+      if (syn) {
+        this.spawnFloatingText(this.heroX + 32, this.groundY - 98, 'HEAVEN UNDER STAFF!', '#6ee7b7', 14);
+      }
+      for (const e of [...this.enemies]) {
+        if (e.hp <= 0) continue;
+        if (Math.abs(e.sprite.x - this.heroX) <= radius) {
+          this.spawnHitSpark(e.sprite.x, e.sprite.y, hitCrit, 0x10b981);
+          this.damageEnemy(e, dmg, hitCrit, syn ? 'STAFF' : 'SWEEP');
+          if (e.hp > 0) {
+            e.chillTimer = Math.max(e.chillTimer, 1.5);
+            if (syn || level >= 2) e.stunTimer = Math.max(e.stunTimer, syn ? 0.75 : 0.35);
           }
         }
       }
-    } else {
-      soundFX.playArrow();
-      const arrows = isUltimate ? 16 : 8;
-      for (let i = 0; i < arrows; i++) {
+    } else if (art.style === 'iron_cleave') {
+      soundFX.playSwing();
+      this.playHeroAttackAnimation('warrior', syn ? 1.45 : 1.2);
+      const strikeX = target.sprite.x;
+      this.spawnSlashVfx(
+        strikeX,
+        target.sprite.y,
+        syn ? 0xe879f9 : 0xa855f7,
+        syn ? 1.8 : 1.15 + level * 0.15
+      );
+      if (syn) {
+        this.spawnFloatingText(strikeX, target.sprite.y - 54, 'SWORD TOMB!', '#e879f9', 15);
+      }
+      for (const e of [...this.enemies]) {
+        if (e.hp <= 0) continue;
+        if (Math.abs(e.sprite.x - strikeX) <= (syn ? 185 : 130)) {
+          this.spawnHitSpark(e.sprite.x, e.sprite.y, hitCrit, 0xc084fc);
+          this.damageEnemy(e, dmg, hitCrit, syn ? 'TOMB' : 'IRON');
+          if (e.hp > 0) e.stunTimer = Math.max(e.stunTimer, syn ? 1.1 : 0.6);
+        }
+      }
+      if (syn) {
+        for (let i = 0; i < count; i++) {
+          const offset = i - (count - 1) / 2;
+          this.spawnProjectile(
+            'proj_wave',
+            this.heroX + 24,
+            this.groundY - 40 + offset * 10,
+            520,
+            offset * 18,
+            Math.round(dmg * 0.45),
+            true,
+            5,
+            false,
+            false,
+            true,
+            null,
+            false,
+            false,
+            'SWORD'
+          );
+        }
+      }
+    } else if (art.style === 'flute_sonic') {
+      soundFX.playSpell();
+      this.playHeroAttackAnimation('mage', syn ? 1.25 : 1.0);
+      if (syn) {
+        this.spawnFloatingText(this.heroX + 36, this.groundY - 96, 'AZURE SYMPHONY!', '#5eead4', 14);
+      }
+      const vx = 540;
+      for (let i = 0; i < count; i++) {
+        const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
+        const vy =
+          (aimEnemy.sprite.y - (this.groundY - 32)) /
+          Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 22)) / vx);
         this.spawnProjectile(
-          'proj_arrow',
-          this.heroX + 20,
-          this.groundY - 56 + (i % 4) * 14,
-          640,
-          (i % 3 - 1) * 18,
-          this.stats.atk * 0.85 * skillMult * critMult,
-          true,
-          2,
+          'proj_bolt',
+          this.heroX + 22,
+          this.groundY - 32 + ((i % 3) - 1) * 8,
+          vx,
+          vy,
+          dmg,
+          hitCrit,
+          syn ? 5 : 2 + level,
           false,
           false,
-          false
+          false,
+          aimEnemy.id,
+          i === 0,
+          false,
+          syn ? 'SYMPHONY' : 'NOTE'
         );
       }
+    } else {
+      soundFX.playArrow();
+      this.playHeroAttackAnimation('bowman', syn ? 1.25 : 1.0);
+      if (syn) {
+        this.spawnFloatingText(this.heroX + 36, this.groundY - 96, 'FROST LOTUS!', '#c4b5fd', 14);
+      }
+      const vx = 640;
+      for (let i = 0; i < count; i++) {
+        const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
+        const spreadY = (i - (count - 1) / 2) * 8;
+        const vy =
+          (aimEnemy.sprite.y - (this.groundY - 36) + spreadY) /
+          Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 18)) / vx);
+        this.spawnProjectile(
+          'proj_arrow',
+          this.heroX + 18,
+          this.groundY - 36 + spreadY * 0.4,
+          vx,
+          vy,
+          dmg,
+          hitCrit,
+          syn ? 2 : 1,
+          syn !== null,
+          true,
+          false,
+          aimEnemy.id,
+          false,
+          false,
+          syn ? 'LOTUS' : 'NEEDLE'
+        );
+      }
+    }
+  }
+
+  public triggerActiveSkill(): void {
+    if (this.phase !== 'combat' || !this.stats || !this.runConfig || this.skillTimer > 0) return;
+
+    const loadout = computeWuxiaLoadout(this.draftedBuffIds);
+    const cdMult = 1 - this.stats.cooldownReductionPct / 100;
+    this.skillTimer = Math.max(2.5, (loadout.actives.length > 0 ? 7.5 : 4.5) * cdMult);
+
+    if (loadout.actives.length === 0) {
+      soundFX.playSwing();
+      this.playHeroAttackAnimation('warrior', 1.25);
+      this.spawnFloatingText(this.heroX + 35, this.groundY - 102, 'TAIJI PALM BREAK!', '#fef08a', 15);
+      const dmg = Math.max(
+        1,
+        Math.round(this.stats.atk * 2.1 * this.stats.allDamageMult * this.stats.critDmg)
+      );
+      for (const e of [...this.enemies]) {
+        if (Math.abs(e.sprite.x - this.heroX) <= 190) {
+          this.spawnHitSpark(e.sprite.x, e.sprite.y, true, 0xfef08a);
+          this.damageEnemy(e, dmg, true, 'TAIJI');
+          if (e.hp > 0) e.stunTimer = Math.max(e.stunTimer, 0.75);
+        }
+      }
+      this.emitHud();
+      return;
+    }
+
+    this.spawnFloatingText(this.heroX + 40, this.groundY - 110, 'DANTIAN UNLEASHED!', '#fde047', 16);
+    for (const slot of loadout.actives) {
+      this.castWuxiaActiveArt(slot.id, true);
     }
     this.emitHud();
   }
@@ -2368,10 +2606,15 @@ export class DungeonScene extends Scene {
       }
     }
 
-    if (this.floor >= 10) {
+    if (isCultLeaderFloor(this.floor)) {
       soundFX.playVictory();
-      this.finishRun('cleared');
-      return;
+      this.spawnFloatingText(
+        this.heroX + 35,
+        this.groundY - 125,
+        `CULT LEADER FLOOR ${this.floor} VANQUISHED!`,
+        '#fde047',
+        18
+      );
     }
 
     // Pause for 3-Buff Draft after floors 1-9
@@ -2394,13 +2637,13 @@ export class DungeonScene extends Scene {
     this.recomputeStats();
     this.spawnCompanionVisuals();
 
-    if (this.stats && this.stats.maxHp > prevMaxHp && chosenBuffId === 'bronze_hearty_constitution') {
+    if (this.stats && this.stats.maxHp > prevMaxHp) {
       this.heroHp += this.stats.maxHp - prevMaxHp;
     } else if (this.stats) {
       this.heroHp = Math.min(this.heroHp, this.stats.maxHp);
     }
 
-    if (this.floor === 4 || this.floor === 7) {
+    if (isCultLeaderFloor(this.floor)) {
       this.phase = 'paused';
       this.callbacks?.onRequestExtraction(
         this.floor,
@@ -2422,6 +2665,12 @@ export class DungeonScene extends Scene {
       return;
     }
     this.beginFloor(this.floor + 1);
+  }
+
+  public retreatWithLoot(): void {
+    if (!this.runConfig || this.phase === 'idle') return;
+    soundFX.playVictory();
+    this.finishRun('extracted');
   }
 
   private finishRun(outcome: 'cleared' | 'extracted' | 'died'): void {
@@ -2448,26 +2697,22 @@ export class DungeonScene extends Scene {
 
   private emitHud(): void {
     if (!this.runConfig || !this.stats) return;
-    const def = getClassDefinition(this.runConfig.classId);
-    const clsLvl = this.runConfig.profile.classes[this.runConfig.classId].level;
     const boss = this.enemies.find((e) => e.isBoss);
+    const loadout = computeWuxiaLoadout(this.draftedBuffIds);
 
     const mutNames = this.currentBossMutations.map((m) => getMutationById(m).id);
     const cdMult = 1 - this.stats.cooldownReductionPct / 100;
-    const totalCd = Math.max(2.5, def.activeSkillCooldownSec * cdMult);
+    const totalCd = Math.max(2.5, (loadout.actives.length > 0 ? 7.5 : 4.5) * cdMult);
     const totalDashCd = Math.max(2.0, 5 * cdMult);
 
     this.callbacks?.onHudUpdate({
       floor: this.floor,
-      maxFloors: 10,
-      waveLabel:
-        this.floor === 4
-          ? 'Mini-Boss'
-          : this.floor === 7
-            ? 'Elite Ambush'
-            : this.floor === 10
-              ? 'End Boss'
-              : `Wave ${this.waveIndex}/${this.totalWavesOnFloor}`,
+      maxFloors: Math.ceil(Math.max(1, this.floor) / 10) * 10,
+      waveLabel: isCultLeaderFloor(this.floor)
+        ? `Cult Leader F${this.floor}`
+        : isRandomMiniBossFloor(this.floor, this.runConfig.seed)
+          ? 'Hall Master Ambush'
+          : `Wave ${this.waveIndex}/${this.totalWavesOnFloor}`,
       hp: Math.round(this.heroHp),
       maxHp: this.stats.maxHp,
       shield: Math.round(this.heroShield),
@@ -2476,7 +2721,7 @@ export class DungeonScene extends Scene {
       cores: this.coresCollected,
       skillCooldownPct: Math.min(1, Math.max(0, this.skillTimer / totalCd)),
       skillReady: this.skillTimer <= 0,
-      skillName: clsLvl >= 60 ? def.activeSkillUltimateName : def.activeSkillName,
+      skillName: loadout.actives.length > 0 ? 'Dantian Burst' : 'Taiji Palm Break',
       dashCooldownPct: Math.min(1, Math.max(0, this.dashCooldown / totalDashCd)),
       dashReady: this.dashCooldown <= 0,
       potionCharges: this.potionCharges,
