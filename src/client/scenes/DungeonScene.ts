@@ -136,6 +136,7 @@ export class DungeonScene extends Scene {
   private weaponAngle: number = 0;
   private weaponSwingOffsetX: number = 0;
   private weaponSwingOffsetY: number = 0;
+  private weaponTween: Phaser.Tweens.Tween | null = null;
   private heroAura: Phaser.GameObjects.Arc | null = null;
   private heroGlow: Phaser.GameObjects.Arc | null = null;
   private hawkSprite: Phaser.GameObjects.Image | null = null;
@@ -1164,47 +1165,202 @@ export class DungeonScene extends Scene {
     return best;
   }
 
+  private spawnHeroAfterimage(tintHex: number): void {
+    if (!this.heroSprite) return;
+    const x = this.heroSprite.x;
+    const y = this.heroSprite.y;
+    const ghost = this.add
+      .image(x, y, this.heroSprite.texture.key)
+      .setTint(tintHex)
+      .setAlpha(0.55)
+      .setScale(this.heroSprite.scaleX, this.heroSprite.scaleY)
+      .setDepth(5.6);
+    this.tweens.add({
+      targets: ghost,
+      x: x - 14,
+      alpha: 0,
+      duration: 210,
+      ease: 'Quad.easeOut',
+      onComplete: () => ghost.destroy(),
+    });
+  }
+
+  private spawnQiShockwaveRing(
+    x: number,
+    y: number,
+    colorHex: number,
+    maxRadius: number,
+    durationMs = 260
+  ): void {
+    const ring = this.add
+      .circle(x, y, 14)
+      .setStrokeStyle(5, colorHex, 0.95)
+      .setFillStyle(colorHex, 0.08)
+      .setDepth(10);
+    this.tweens.add({
+      targets: ring,
+      scale: Math.max(1.5, maxRadius / 14),
+      alpha: 0,
+      duration: durationMs,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  private spawnWhirlingStaffVfx(
+    x: number,
+    y: number,
+    radius: number,
+    tintHex: number
+  ): void {
+    const wheel = this.add
+      .image(x, y, 'fx_staff_wheel')
+      .setTint(tintHex)
+      .setScale(0.65)
+      .setAlpha(0.95)
+      .setDepth(11);
+    this.tweens.add({
+      targets: wheel,
+      scale: Math.max(1.4, radius / 48),
+      rotation: Math.PI * 3.5,
+      alpha: 0.05,
+      duration: 320,
+      ease: 'Cubic.easeOut',
+      onComplete: () => wheel.destroy(),
+    });
+    this.spawnQiShockwaveRing(x, y, tintHex, Math.min(280, radius * 0.72), 280);
+  }
+
+  private spawnFallingGreatswordVfx(
+    targetX: number,
+    targetY: number,
+    tintHex: number,
+    isSynergy: boolean
+  ): void {
+    const sword = this.add
+      .image(targetX, targetY - 175, 'fx_iron_cleave')
+      .setTint(tintHex)
+      .setScale(isSynergy ? 1.55 : 1.2)
+      .setDepth(12);
+    this.tweens.add({
+      targets: sword,
+      y: targetY - 8,
+      scaleY: isSynergy ? 1.65 : 1.3,
+      duration: 110,
+      ease: 'Cubic.easeIn',
+      onComplete: () => {
+        this.spawnQiShockwaveRing(
+          targetX,
+          targetY,
+          tintHex,
+          isSynergy ? 185 : 125,
+          280
+        );
+        const fissure = this.add
+          .rectangle(targetX, targetY + 18, isSynergy ? 195 : 130, 8, tintHex, 0.9)
+          .setDepth(9);
+        this.tweens.add({
+          targets: fissure,
+          scaleX: 1.25,
+          alpha: 0,
+          duration: 240,
+          onComplete: () => fissure.destroy(),
+        });
+        this.cameras.main.shake(120, isSynergy ? 0.009 : 0.005);
+        this.tweens.add({
+          targets: sword,
+          alpha: 0,
+          duration: 190,
+          onComplete: () => sword.destroy(),
+        });
+      },
+    });
+  }
+
   private playHeroAttackAnimation(classId: ClassId, scaleMult = 1): void {
     if (this.heroSprite) {
       this.tweens.killTweensOf(this.heroSprite);
-      this.heroSprite.x = this.heroX;
+      this.heroSprite.setPosition(this.heroX, this.groundY - 28).setScale(1, 1).setRotation(0);
+      this.spawnHeroAfterimage(
+        classId === 'thief' ? 0x38bdf8 : classId === 'mage' ? 0x2dd4bf : 0xfbbf24
+      );
       this.tweens.add({
         targets: this.heroSprite,
-        x: this.heroX + (classId === 'warrior' || classId === 'thief' ? 18 : 8) * scaleMult,
-        duration: 75,
+        x: this.heroX + (classId === 'warrior' || classId === 'thief' ? 36 : 20) * scaleMult,
+        y: this.groundY - 28 - 10 * scaleMult,
+        rotation: 0.16,
+        scaleX: 1.18,
+        scaleY: 0.9,
+        duration: 105,
         yoyo: true,
         ease: 'Quad.easeOut',
+        onComplete: () => {
+          if (this.heroSprite?.active) {
+            this.heroSprite
+              .setPosition(this.heroX, this.groundY - 28)
+              .setScale(1, 1)
+              .setRotation(0);
+          }
+        },
       });
     }
 
-    this.tweens.killTweensOf(this);
-    if (classId === 'warrior') {
-      this.weaponAngle = -0.85;
-      this.weaponSwingOffsetX = 4;
-      this.weaponSwingOffsetY = -8;
+    if (this.weaponTween) {
+      this.weaponTween.stop();
+      this.weaponTween = null;
+    }
+
+    const isUnarmed = !this.heroWeaponSprite?.visible;
+    if (isUnarmed) {
+      const seal = this.add
+        .image(this.heroX + 34, this.groundY - 30, 'fx_taiji_seal')
+        .setScale(0.45 * scaleMult)
+        .setAlpha(0.92)
+        .setDepth(10);
       this.tweens.add({
+        targets: seal,
+        x: this.heroX + 54,
+        scale: 1.15 * scaleMult,
+        rotation: Math.PI,
+        alpha: 0,
+        duration: 210,
+        ease: 'Quad.easeOut',
+        onComplete: () => seal.destroy(),
+      });
+      this.spawnSlashVfx(this.heroX + 46, this.groundY - 28, 0xfef08a, 1.25 * scaleMult);
+      this.spawnSlashVfx(this.heroX + 34, this.groundY - 36, 0x38bdf8, 0.95 * scaleMult);
+    }
+
+    if (classId === 'warrior') {
+      this.weaponAngle = -0.95;
+      this.weaponSwingOffsetX = 4;
+      this.weaponSwingOffsetY = -10;
+      this.weaponTween = this.tweens.add({
         targets: this,
-        weaponAngle: 1.25,
-        weaponSwingOffsetX: 18,
-        weaponSwingOffsetY: 8,
-        duration: 105,
+        weaponAngle: 1.35,
+        weaponSwingOffsetX: 22,
+        weaponSwingOffsetY: 10,
+        duration: 115,
         ease: 'Cubic.easeOut',
         yoyo: true,
         onComplete: () => {
           this.weaponAngle = 0;
           this.weaponSwingOffsetX = 0;
           this.weaponSwingOffsetY = 0;
+          this.weaponTween = null;
         },
       });
-      this.spawnSlashVfx(this.heroX + 46, this.groundY - 28, 0xfef08a, 1.05 * scaleMult);
+      if (!isUnarmed) {
+        this.spawnSlashVfx(this.heroX + 48, this.groundY - 28, 0xfef08a, 1.2 * scaleMult);
+      }
     } else if (classId === 'mage') {
-      this.weaponAngle = -0.3;
+      this.weaponAngle = -0.35;
       this.weaponSwingOffsetX = 6;
       this.weaponSwingOffsetY = -10;
-      this.tweens.add({
+      this.weaponTween = this.tweens.add({
         targets: this,
-        weaponAngle: 0.15,
-        weaponSwingOffsetX: 10,
+        weaponAngle: 0.2,
+        weaponSwingOffsetX: 12,
         weaponSwingOffsetY: -4,
         duration: 110,
         yoyo: true,
@@ -1212,35 +1368,37 @@ export class DungeonScene extends Scene {
           this.weaponAngle = 0;
           this.weaponSwingOffsetX = 0;
           this.weaponSwingOffsetY = 0;
+          this.weaponTween = null;
         },
       });
-      this.spawnHitSpark(this.heroX + 30, this.groundY - 36, false, 0x38bdf8);
+      this.spawnHitSpark(this.heroX + 32, this.groundY - 36, false, 0x38bdf8);
     } else if (classId === 'thief') {
-      this.weaponAngle = -0.5;
+      this.weaponAngle = -0.55;
       this.weaponSwingOffsetX = 16;
       this.weaponSwingOffsetY = 0;
-      this.tweens.add({
+      this.weaponTween = this.tweens.add({
         targets: this,
-        weaponAngle: 0.85,
-        weaponSwingOffsetX: 22,
+        weaponAngle: 0.95,
+        weaponSwingOffsetX: 24,
         weaponSwingOffsetY: 4,
-        duration: 75,
+        duration: 85,
         yoyo: true,
         onComplete: () => {
           this.weaponAngle = 0;
           this.weaponSwingOffsetX = 0;
           this.weaponSwingOffsetY = 0;
+          this.weaponTween = null;
         },
       });
-      this.spawnSlashVfx(this.heroX + 34, this.groundY - 28, 0xc084fc, 0.75 * scaleMult);
+      this.spawnSlashVfx(this.heroX + 36, this.groundY - 28, 0xc084fc, 0.95 * scaleMult);
     } else {
-      this.weaponAngle = -0.18;
+      this.weaponAngle = -0.2;
       this.weaponSwingOffsetX = -5;
       this.weaponSwingOffsetY = 0;
-      this.tweens.add({
+      this.weaponTween = this.tweens.add({
         targets: this,
-        weaponAngle: 0.08,
-        weaponSwingOffsetX: 5,
+        weaponAngle: 0.1,
+        weaponSwingOffsetX: 6,
         weaponSwingOffsetY: 0,
         duration: 85,
         yoyo: true,
@@ -1248,6 +1406,7 @@ export class DungeonScene extends Scene {
           this.weaponAngle = 0;
           this.weaponSwingOffsetX = 0;
           this.weaponSwingOffsetY = 0;
+          this.weaponTween = null;
         },
       });
     }
@@ -1633,9 +1792,20 @@ export class DungeonScene extends Scene {
     if (
       textureKey === 'proj_arrow' ||
       textureKey === 'proj_hawk_feather' ||
-      textureKey === 'proj_wolf_fang'
+      textureKey === 'proj_wolf_fang' ||
+      textureKey === 'fx_jade_sword' ||
+      textureKey === 'fx_ice_needle' ||
+      textureKey === 'fx_dragon_palm' ||
+      textureKey === 'proj_wave'
     ) {
       sprite.setRotation(Math.atan2(vy, vx));
+    } else if (textureKey === 'fx_iron_cleave') {
+      sprite.setRotation(Math.atan2(vy, vx) + Math.PI / 2);
+    }
+    if (textureKey === 'fx_dragon_palm') {
+      sprite.setScale(1.25);
+    } else if (textureKey === 'fx_jade_sword' || textureKey === 'fx_iron_cleave') {
+      sprite.setScale(1.15);
     }
     this.projectiles.push({
       sprite,
@@ -1665,19 +1835,51 @@ export class DungeonScene extends Scene {
       p.sprite.y += p.vy * dt;
 
       const key = p.sprite.texture.key;
-      if (key === 'proj_star') {
-        p.sprite.rotation += 16 * dt;
-      } else if (key === 'proj_arrow' || key === 'proj_hawk_feather' || key === 'proj_wolf_fang') {
+      if (key === 'proj_star' || key === 'fx_flute_wave') {
+        p.sprite.rotation += 14 * dt;
+      } else if (key === 'fx_staff_wheel' || key === 'fx_taiji_seal') {
+        p.sprite.rotation += 18 * dt;
+      } else if (
+        key === 'proj_arrow' ||
+        key === 'proj_hawk_feather' ||
+        key === 'proj_wolf_fang' ||
+        key === 'fx_jade_sword' ||
+        key === 'fx_ice_needle' ||
+        key === 'fx_dragon_palm' ||
+        key === 'proj_wave'
+      ) {
         p.sprite.rotation = Math.atan2(p.vy, p.vx);
+      } else if (key === 'fx_iron_cleave') {
+        p.sprite.rotation = Math.atan2(p.vy, p.vx) + Math.PI / 2;
+      }
+
+      if (key.startsWith('fx_') || key === 'proj_wave') {
+        if (this.rng() < 0.45) {
+          const trail = this.add
+            .image(p.sprite.x, p.sprite.y, key)
+            .setRotation(p.sprite.rotation)
+            .setScale(p.sprite.scaleX * 0.85, p.sprite.scaleY * 0.85)
+            .setAlpha(0.45)
+            .setDepth(6.8);
+          this.tweens.add({
+            targets: trail,
+            alpha: 0,
+            scale: 0.45,
+            duration: 110,
+            onComplete: () => trail.destroy(),
+          });
+        }
       }
 
       let destroyed = p.life <= 0 || p.sprite.x > (this.scale.width || 1024) + 60;
       if (!destroyed) {
+        const hitX = p.isWave || key.startsWith('fx_') ? 68 : 42;
+        const hitY = p.isWave || key.startsWith('fx_') ? 88 : 76;
         for (const e of [...this.enemies]) {
           if (e.hp <= 0 || p.hitIds.has(e.id)) continue;
           const dx = Math.abs(p.sprite.x - e.sprite.x);
           const dy = Math.abs(p.sprite.y - e.sprite.y);
-          if (dx <= (p.isWave ? 56 : 42) && dy <= 76) {
+          if (dx <= hitX && dy <= hitY) {
             p.hitIds.add(e.id);
             this.spawnHitSpark(e.sprite.x, e.sprite.y, p.isCrit);
             this.damageEnemy(e, p.damage, p.isCrit, p.labelTag);
@@ -1767,10 +1969,38 @@ export class DungeonScene extends Scene {
     enemy.hp = Math.max(0, enemy.hp - finalDmg);
 
     if (enemy.sprite.active) {
-      enemy.sprite.setAlpha(0.55);
+      enemy.sprite.setAlpha(0.45);
       this.time.delayedCall(75, () => {
         if (enemy.sprite.active) enemy.sprite.setAlpha(1);
       });
+      if (enemy.hp > 0 && !this.tweens.isTweening(enemy.sprite)) {
+        const baseScaleX = enemy.sprite.scaleX;
+        const baseScaleY = enemy.sprite.scaleY;
+        const recoilX = Math.min((this.scale.width || 1024) - 45, enemy.sprite.x + 8);
+        this.tweens.add({
+          targets: enemy.sprite,
+          x: recoilX,
+          scaleX: baseScaleX * 1.18,
+          scaleY: baseScaleY * 0.88,
+          duration: 75,
+          yoyo: true,
+          ease: 'Quad.easeOut',
+          onComplete: () => {
+            if (enemy.sprite.active) {
+              enemy.sprite.setScale(baseScaleX, baseScaleY);
+            }
+          },
+        });
+      }
+    }
+
+    if (isCrit || labelTag !== null) {
+      this.spawnSlashVfx(
+        enemy.sprite.x,
+        enemy.sprite.y,
+        isCrit ? 0xfbbf24 : 0xe0f2fe,
+        isCrit ? 1.15 : 0.85
+      );
     }
 
     if (isCrit) {
@@ -2054,13 +2284,22 @@ export class DungeonScene extends Scene {
       if (e.atkTimer <= 0) {
         e.atkTimer = e.atkIntervalSec;
         if (!this.tweens.isTweening(e.sprite)) {
+          const baseScaleX = e.sprite.scaleX;
+          const baseScaleY = e.sprite.scaleY;
           this.tweens.add({
             targets: e.sprite,
-            x: e.sprite.x - 16,
-            duration: 75,
+            x: e.sprite.x - 28,
+            scaleX: baseScaleX * 1.18,
+            scaleY: baseScaleY * 1.12,
+            duration: 95,
             yoyo: true,
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+              if (e.sprite.active) e.sprite.setScale(baseScaleX, baseScaleY);
+            },
           });
         }
+        this.spawnSlashVfx(this.heroX + 18, this.groundY - 28, 0xef4444, 1.1);
         this.spawnHitSpark(this.heroX + 12, this.groundY - 28, false, 0xf87171);
         this.damageHero(e.atk, e);
       }
@@ -2193,25 +2432,28 @@ export class DungeonScene extends Scene {
     if (art.style === 'palm_wave') {
       if (syn || level >= 3) {
         soundFX.playBossRoar();
+        this.cameras.main.shake(110, syn ? 0.008 : 0.004);
       } else {
         soundFX.playSwing();
       }
-      this.playHeroAttackAnimation('warrior', syn ? 1.35 : 1.05);
+      this.playHeroAttackAnimation('warrior', syn ? 1.45 : 1.15);
+      this.spawnHeroAfterimage(syn ? 0xfef08a : 0xf59e0b);
+      this.spawnQiShockwaveRing(this.heroX + 30, this.groundY - 30, syn ? 0xfef08a : 0xf59e0b, syn ? 165 : 105, 250);
       this.spawnFloatingText(
         this.heroX + 36,
         this.groundY - 102,
         syn ? 'SOVEREIGN DRAGON!' : level >= 3 ? '18 DRAGON PALMS!' : 'DRAGON PALM!',
         '#fbbf24',
-        syn ? 15 : 13
+        syn ? 16 : 14
       );
       for (let i = 0; i < count; i++) {
         const offset = i - (count - 1) / 2;
         this.spawnProjectile(
-          'proj_wave',
-          this.heroX + 24,
-          this.groundY - 34 + offset * 14,
-          syn ? 560 : 470,
-          offset * 24,
+          'fx_dragon_palm',
+          this.heroX + 26,
+          this.groundY - 34 + offset * 16,
+          syn ? 580 : 480,
+          offset * 28,
           dmg,
           hitCrit,
           syn ? 99 : level >= 3 ? 6 : 3,
@@ -2231,20 +2473,23 @@ export class DungeonScene extends Scene {
       }
     } else if (art.style === 'jade_swords') {
       soundFX.playCrit();
-      this.playHeroAttackAnimation('thief', syn ? 1.3 : 1.0);
+      this.playHeroAttackAnimation('thief', syn ? 1.35 : 1.1);
+      this.spawnHeroAfterimage(syn ? 0xf472b6 : 0x38bdf8);
+      this.spawnSlashVfx(this.heroX + 38, this.groundY - 32, syn ? 0xf472b6 : 0x38bdf8, syn ? 1.55 : 1.15);
       if (syn) {
-        this.spawnFloatingText(this.heroX + 36, this.groundY - 98, 'PARTING SWORD!', '#7dd3fc', 14);
+        this.spawnQiShockwaveRing(this.heroX + 20, this.groundY - 30, 0x7dd3fc, 130, 240);
+        this.spawnFloatingText(this.heroX + 36, this.groundY - 98, 'PARTING SWORD!', '#7dd3fc', 15);
       }
-      const vx = 620;
+      const vx = 640;
       for (let i = 0; i < count; i++) {
         const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
-        const spreadY = (i - (count - 1) / 2) * 10;
+        const spreadY = (i - (count - 1) / 2) * 12;
         const vy =
           (aimEnemy.sprite.y - (this.groundY - 30) + spreadY) /
           Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 20)) / vx);
         this.spawnProjectile(
-          'proj_star',
-          this.heroX + 20,
+          'fx_jade_sword',
+          this.heroX + 22,
           this.groundY - 30 + spreadY * 0.5,
           vx,
           vy,
@@ -2262,17 +2507,24 @@ export class DungeonScene extends Scene {
       }
     } else if (art.style === 'staff_spin') {
       soundFX.playSwing();
-      this.playHeroAttackAnimation('warrior', syn ? 1.35 : 1.1);
-      const radius = syn ? 330 : 155 + level * 35;
+      this.playHeroAttackAnimation('warrior', syn ? 1.45 : 1.15);
+      const radius = syn ? 330 : 165 + level * 35;
+      this.spawnHeroAfterimage(syn ? 0x6ee7b7 : 0x10b981);
+      this.spawnWhirlingStaffVfx(
+        this.heroX + 20,
+        this.groundY - 28,
+        radius,
+        syn ? 0x6ee7b7 : 0x10b981
+      );
       this.spawnSlashVfx(
         this.heroX + 24,
         this.groundY - 28,
         syn ? 0x6ee7b7 : 0x10b981,
-        syn ? 1.65 : 1.0 + level * 0.16
+        syn ? 1.7 : 1.1 + level * 0.16
       );
-      this.spawnSlashVfx(this.heroX - 18, this.groundY - 32, 0x34d399, 0.95);
       if (syn) {
-        this.spawnFloatingText(this.heroX + 32, this.groundY - 98, 'HEAVEN UNDER STAFF!', '#6ee7b7', 14);
+        this.cameras.main.shake(100, 0.006);
+        this.spawnFloatingText(this.heroX + 32, this.groundY - 98, 'HEAVEN UNDER STAFF!', '#6ee7b7', 15);
       }
       for (const e of [...this.enemies]) {
         if (e.hp <= 0) continue;
@@ -2286,21 +2538,27 @@ export class DungeonScene extends Scene {
         }
       }
     } else if (art.style === 'iron_cleave') {
-      soundFX.playSwing();
-      this.playHeroAttackAnimation('warrior', syn ? 1.45 : 1.2);
+      soundFX.playBossRoar();
+      this.playHeroAttackAnimation('warrior', syn ? 1.5 : 1.25);
       const strikeX = target.sprite.x;
+      this.spawnFallingGreatswordVfx(
+        strikeX,
+        target.sprite.y,
+        syn ? 0xe879f9 : 0xa855f7,
+        syn !== null
+      );
       this.spawnSlashVfx(
         strikeX,
         target.sprite.y,
         syn ? 0xe879f9 : 0xa855f7,
-        syn ? 1.8 : 1.15 + level * 0.15
+        syn ? 1.9 : 1.25 + level * 0.16
       );
       if (syn) {
-        this.spawnFloatingText(strikeX, target.sprite.y - 54, 'SWORD TOMB!', '#e879f9', 15);
+        this.spawnFloatingText(strikeX, target.sprite.y - 54, 'SWORD TOMB!', '#e879f9', 16);
       }
       for (const e of [...this.enemies]) {
         if (e.hp <= 0) continue;
-        if (Math.abs(e.sprite.x - strikeX) <= (syn ? 185 : 130)) {
+        if (Math.abs(e.sprite.x - strikeX) <= (syn ? 195 : 135)) {
           this.spawnHitSpark(e.sprite.x, e.sprite.y, hitCrit, 0xc084fc);
           this.damageEnemy(e, dmg, hitCrit, syn ? 'TOMB' : 'IRON');
           if (e.hp > 0) e.stunTimer = Math.max(e.stunTimer, syn ? 1.1 : 0.6);
@@ -2310,11 +2568,11 @@ export class DungeonScene extends Scene {
         for (let i = 0; i < count; i++) {
           const offset = i - (count - 1) / 2;
           this.spawnProjectile(
-            'proj_wave',
+            'fx_iron_cleave',
             this.heroX + 24,
-            this.groundY - 40 + offset * 10,
-            520,
-            offset * 18,
+            this.groundY - 40 + offset * 12,
+            530,
+            offset * 20,
             Math.round(dmg * 0.45),
             true,
             5,
@@ -2330,20 +2588,40 @@ export class DungeonScene extends Scene {
       }
     } else if (art.style === 'flute_sonic') {
       soundFX.playSpell();
-      this.playHeroAttackAnimation('mage', syn ? 1.25 : 1.0);
+      this.playHeroAttackAnimation('mage', syn ? 1.3 : 1.05);
+      this.spawnQiShockwaveRing(
+        this.heroX + 18,
+        this.groundY - 30,
+        syn ? 0x5eead4 : 0x2dd4bf,
+        syn ? 160 : 105,
+        240
+      );
       if (syn) {
-        this.spawnFloatingText(this.heroX + 36, this.groundY - 96, 'AZURE SYMPHONY!', '#5eead4', 14);
+        this.spawnFloatingText(this.heroX + 36, this.groundY - 96, 'AZURE SYMPHONY!', '#5eead4', 15);
       }
-      const vx = 540;
+      let prevX = this.heroX + 24;
+      let prevY = this.groundY - 32;
+      const vx = 550;
       for (let i = 0; i < count; i++) {
         const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
         const vy =
           (aimEnemy.sprite.y - (this.groundY - 32)) /
           Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 22)) / vx);
+        if (i < this.enemies.length) {
+          this.spawnLightningVfx(
+            prevX,
+            prevY,
+            aimEnemy.sprite.x,
+            aimEnemy.sprite.y,
+            syn ? 0x5eead4 : 0x2dd4bf
+          );
+          prevX = aimEnemy.sprite.x;
+          prevY = aimEnemy.sprite.y;
+        }
         this.spawnProjectile(
-          'proj_bolt',
+          'fx_flute_wave',
           this.heroX + 22,
-          this.groundY - 32 + ((i % 3) - 1) * 8,
+          this.groundY - 32 + ((i % 3) - 1) * 10,
           vx,
           vy,
           dmg,
@@ -2360,21 +2638,22 @@ export class DungeonScene extends Scene {
       }
     } else {
       soundFX.playArrow();
-      this.playHeroAttackAnimation('bowman', syn ? 1.25 : 1.0);
+      this.playHeroAttackAnimation('bowman', syn ? 1.3 : 1.05);
       if (syn) {
-        this.spawnFloatingText(this.heroX + 36, this.groundY - 96, 'FROST LOTUS!', '#c4b5fd', 14);
+        this.spawnQiShockwaveRing(this.heroX + 20, this.groundY - 34, 0xc4b5fd, 140, 240);
+        this.spawnFloatingText(this.heroX + 36, this.groundY - 96, 'FROST LOTUS!', '#c4b5fd', 15);
       }
-      const vx = 640;
+      const vx = 650;
       for (let i = 0; i < count; i++) {
         const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
-        const spreadY = (i - (count - 1) / 2) * 8;
+        const spreadY = (i - (count - 1) / 2) * 10;
         const vy =
           (aimEnemy.sprite.y - (this.groundY - 36) + spreadY) /
           Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 18)) / vx);
         this.spawnProjectile(
-          'proj_arrow',
+          'fx_ice_needle',
           this.heroX + 18,
-          this.groundY - 36 + spreadY * 0.4,
+          this.groundY - 36 + spreadY * 0.45,
           vx,
           vy,
           dmg,
@@ -2400,15 +2679,31 @@ export class DungeonScene extends Scene {
     this.skillTimer = Math.max(2.5, (loadout.actives.length > 0 ? 7.5 : 4.5) * cdMult);
 
     if (loadout.actives.length === 0) {
-      soundFX.playSwing();
-      this.playHeroAttackAnimation('warrior', 1.25);
-      this.spawnFloatingText(this.heroX + 35, this.groundY - 102, 'TAIJI PALM BREAK!', '#fef08a', 15);
+      soundFX.playBossRoar();
+      this.playHeroAttackAnimation('warrior', 1.4);
+      this.spawnHeroAfterimage(0xfef08a);
+      this.spawnQiShockwaveRing(this.heroX + 25, this.groundY - 30, 0xfef08a, 185, 290);
+      const taijiSeal = this.add
+        .image(this.heroX + 35, this.groundY - 32, 'fx_taiji_seal')
+        .setScale(1.1)
+        .setDepth(11);
+      this.tweens.add({
+        targets: taijiSeal,
+        scale: 2.3,
+        rotation: Math.PI * 2,
+        alpha: 0,
+        duration: 340,
+        ease: 'Cubic.easeOut',
+        onComplete: () => taijiSeal.destroy(),
+      });
+      this.cameras.main.shake(100, 0.005);
+      this.spawnFloatingText(this.heroX + 35, this.groundY - 102, 'TAIJI PALM BREAK!', '#fef08a', 16);
       const dmg = Math.max(
         1,
         Math.round(this.stats.atk * 2.1 * this.stats.allDamageMult * this.stats.critDmg)
       );
       for (const e of [...this.enemies]) {
-        if (Math.abs(e.sprite.x - this.heroX) <= 190) {
+        if (Math.abs(e.sprite.x - this.heroX) <= 210) {
           this.spawnHitSpark(e.sprite.x, e.sprite.y, true, 0xfef08a);
           this.damageEnemy(e, dmg, true, 'TAIJI');
           if (e.hp > 0) e.stunTimer = Math.max(e.stunTimer, 0.75);
@@ -2418,6 +2713,8 @@ export class DungeonScene extends Scene {
       return;
     }
 
+    this.spawnQiShockwaveRing(this.heroX + 25, this.groundY - 30, 0xfde047, 175, 280);
+    this.cameras.main.shake(110, 0.006);
     this.spawnFloatingText(this.heroX + 40, this.groundY - 110, 'DANTIAN UNLEASHED!', '#fde047', 16);
     for (const slot of loadout.actives) {
       this.castWuxiaActiveArt(slot.id, true);

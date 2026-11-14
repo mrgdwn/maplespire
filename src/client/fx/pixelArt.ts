@@ -730,14 +730,14 @@ export const registerPixelTextures = (scene: Phaser.Scene): void => {
     'fx_slash_arc',
     SLASH_ARC_GRID,
     { T: '#ffffff', M: '#fef08a' },
-    4
+    5
   );
   drawPixelGrid(
     scene,
     'fx_hit_spark',
     HIT_SPARK_GRID,
     { T: '#ffffff', M: '#fde047' },
-    3
+    4
   );
 
   // Companions
@@ -848,13 +848,193 @@ export const registerPixelTextures = (scene: Phaser.Scene): void => {
   }
 
   if (!scene.textures.exists('proj_wave')) {
-    const tex = scene.textures.createCanvas('proj_wave', 26, 68);
+    const tex = scene.textures.createCanvas('proj_wave', 40, 76);
     if (tex) {
       const ctx = tex.getContext();
-      ctx.fillStyle = '#f97316';
-      ctx.fillRect(0, 4, 18, 60);
+      ctx.strokeStyle = '#f97316';
+      ctx.lineWidth = 10;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(8, 38, 30, -Math.PI * 0.42, Math.PI * 0.42);
+      ctx.stroke();
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(11, 38, 29, -Math.PI * 0.38, Math.PI * 0.38);
+      ctx.stroke();
+      tex.refresh();
+    }
+  }
+
+  // Taiji / Dantian Bagua Seal
+  if (!scene.textures.exists('fx_taiji_seal')) {
+    const tex = scene.textures.createCanvas('fx_taiji_seal', 52, 52);
+    if (tex) {
+      const ctx = tex.getContext();
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(26, 26, 22, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(26, 26, 15, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.fill();
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath();
+      ctx.arc(26, 26, 15, -Math.PI * 0.5, Math.PI * 0.5);
+      ctx.fill();
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath();
+      ctx.arc(26, 18.5, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(26, 33.5, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(26, 18.5, 2.5, 0, Math.PI * 2);
+      ctx.arc(26, 33.5, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      tex.refresh();
+    }
+  }
+
+  // 18 Dragon-Subduing Palms Qi Wave
+  if (!scene.textures.exists('fx_dragon_palm')) {
+    const tex = scene.textures.createCanvas('fx_dragon_palm', 56, 42);
+    if (tex) {
+      const ctx = tex.getContext();
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.38)';
+      ctx.beginPath();
+      ctx.arc(24, 21, 20, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(6, 11, 22, 20);
+      for (let i = 0; i < 4; i++) {
+        const cy = 6 + i * 9;
+        ctx.fillStyle = '#fde047';
+        ctx.fillRect(24, cy, 22 + (i === 1 || i === 2 ? 8 : 0), 5);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(40, cy + 1, 10, 3);
+      }
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath();
+      ctx.arc(22, 21, 8, 0, Math.PI * 2);
+      ctx.fill();
+      tex.refresh();
+    }
+  }
+
+  // Jade Maiden Flying Sword
+  if (!scene.textures.exists('fx_jade_sword')) {
+    const tex = scene.textures.createCanvas('fx_jade_sword', 44, 16);
+    if (tex) {
+      const ctx = tex.getContext();
+      ctx.fillStyle = '#f43f5e';
+      ctx.fillRect(0, 6, 7, 4);
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(10, 3, 4, 10);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(14, 5, 22, 6);
+      ctx.fillStyle = '#e0f2fe';
+      ctx.fillRect(15, 7, 26, 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(36, 4);
+      ctx.lineTo(44, 8);
+      ctx.lineTo(36, 12);
+      ctx.closePath();
+      ctx.fill();
+      tex.refresh();
+    }
+  }
+
+  // Beggar Sect Whirling Emerald Staff Wheel
+  if (!scene.textures.exists('fx_staff_wheel')) {
+    const tex = scene.textures.createCanvas('fx_staff_wheel', 68, 68);
+    if (tex) {
+      const ctx = tex.getContext();
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.55)';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(34, 34, 28, 0.2, Math.PI * 0.9);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(34, 34, 28, Math.PI + 0.2, Math.PI * 1.9);
+      ctx.stroke();
+      ctx.strokeStyle = '#a7f3d0';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(34, 34, 22, -0.5, 0.9);
+      ctx.stroke();
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(6, 31, 56, 6);
       ctx.fillStyle = '#fef08a';
-      ctx.fillRect(10, 0, 14, 68);
+      ctx.fillRect(16, 32, 36, 2);
+      tex.refresh();
+    }
+  }
+
+  // Xuantie Heavy Iron Greatsword
+  if (!scene.textures.exists('fx_iron_cleave')) {
+    const tex = scene.textures.createCanvas('fx_iron_cleave', 36, 76);
+    if (tex) {
+      const ctx = tex.getContext();
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(15, 2, 6, 14);
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(6, 14, 24, 6);
+      ctx.fillStyle = '#3b0764';
+      ctx.fillRect(9, 20, 18, 48);
+      ctx.fillStyle = '#a855f7';
+      ctx.fillRect(13, 22, 10, 44);
+      ctx.fillStyle = '#f5d0fe';
+      ctx.fillRect(16, 24, 4, 48);
+      tex.refresh();
+    }
+  }
+
+  // Peach Blossom Jade Flute Sonic Wave
+  if (!scene.textures.exists('fx_flute_wave')) {
+    const tex = scene.textures.createCanvas('fx_flute_wave', 40, 40);
+    if (tex) {
+      const ctx = tex.getContext();
+      ctx.strokeStyle = '#2dd4bf';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(20, 20, 16, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#99f6e4';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(20, 20, 10, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(20, 20, 4, 0, Math.PI * 2);
+      ctx.fill();
+      tex.refresh();
+    }
+  }
+
+  // Soul-Chilling Ice Needle
+  if (!scene.textures.exists('fx_ice_needle')) {
+    const tex = scene.textures.createCanvas('fx_ice_needle', 36, 12);
+    if (tex) {
+      const ctx = tex.getContext();
+      ctx.fillStyle = '#818cf8';
+      ctx.fillRect(2, 4, 24, 4);
+      ctx.fillStyle = '#e0e7ff';
+      ctx.fillRect(8, 5, 22, 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(24, 2);
+      ctx.lineTo(36, 6);
+      ctx.lineTo(24, 10);
+      ctx.closePath();
+      ctx.fill();
       tex.refresh();
     }
   }
