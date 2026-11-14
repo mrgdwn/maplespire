@@ -185,10 +185,10 @@ export function AstryxCampTopBar(props: AstryxCampTopBarProps): ReactNode {
         <Badge variant="purple" label={`🔮 ${props.bossCores} Cores`} />
         <Badge variant="neutral" label={`🎫 ${props.goldenTickets}`} />
         <Button
-          label={snapshot.choice === 'gothic' ? 'Astryx: Gothic' : 'Astryx: Neutral'}
+          label={snapshot.choice === 'gothic' ? 'Theme: Gothic' : 'Theme: Slate'}
           variant="secondary"
           size="sm"
-          tooltip="Toggle between Meta Astryx Gothic and Neutral design themes"
+          tooltip="Switch between Gothic and Slate UI themes"
           onClick={() =>
             setAstryxThemeChoice(snapshot.choice === 'gothic' ? 'neutral' : 'gothic')
           }
