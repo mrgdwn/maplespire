@@ -137,6 +137,32 @@ void describe('Wuxia Spire Shared Catalogs & Game Logic', async () => {
     assert.equal(roundTrip.username, 'snoo_hero');
     assert.equal(roundTrip.classes.warrior.equipped.weapon?.id, 'starter_wep_warrior');
 
+    // Migrates legacy saved Legendary & Normal/Rare gear names on profile load
+    const legacySaved = JSON.parse(JSON.stringify(profile));
+    legacySaved.classes.warrior.equipped.headgear = {
+      id: 'leg_legacy_bandana',
+      name: 'Bandana of the Night Lord',
+      slot: 'headgear',
+      classId: 'thief',
+      tier: 'legendary',
+      level: 10,
+      baseStatBonus: 42,
+      affixText: 'Throwing stars/daggers pierce through up to 3 enemies in a line.',
+      sockets: [],
+      maxSockets: 0,
+      legendaryId: 'thief_head_bandana',
+      isCursed: true,
+    };
+    const migrated = parsePlayerProfile(legacySaved, 'fallback');
+    assert.equal(
+      migrated.classes.warrior.equipped.headgear?.name,
+      'Tang Sect Rainstorm Headband'
+    );
+    assert.equal(
+      migrated.classes.warrior.equipped.headgear?.affixText,
+      'Hidden needles & Qi projectiles pierce through up to 3 cultists in a line.'
+    );
+
     const clearedScore = calculateLeaderboardScore(10, 'cleared', 95_000, 1200);
     const extractedScore = calculateLeaderboardScore(7, 'extracted', 60_000, 800);
     assert.ok(clearedScore > extractedScore);

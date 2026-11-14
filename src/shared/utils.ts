@@ -1,6 +1,6 @@
 import { BIOME_CATALOG } from './catalogs/biomes.ts';
 import { CLASS_IDS, GEAR_SLOTS, getClassDefinition } from './catalogs/classes.ts';
-import { getLegendariesForClass } from './catalogs/legendaries.ts';
+import { getLegendariesForClass, getLegendaryById } from './catalogs/legendaries.ts';
 import type {
   BiomeId,
   ClassId,
@@ -332,6 +332,9 @@ export const isRunOutcome = (val: unknown): val is RunOutcome =>
 export const isLegionStatKey = (val: unknown): val is LegionStatKey =>
   val === 'atk' || val === 'hp' || val === 'gold' || val === 'critDmg';
 
+const LEGACY_GEAR_PATTERN =
+  /Mithril|Rune-Etched|Shadow-Forged|Iron Cap|Leather Tunic|Traveler|Warblade|Grimoire|Dagger|Recurve|Cloak|Helm|Armor|Boots/;
+
 export const parseGearItem = (raw: unknown): GearItem | null => {
   if (!isRecord(raw)) return null;
   if (
@@ -356,15 +359,41 @@ export const parseGearItem = (raw: unknown): GearItem | null => {
   const maxSockets: 0 | 1 | 2 = rawMax === 2 ? 2 : rawMax === 1 ? 1 : 0;
   const legendaryId = isString(raw.legendaryId) ? raw.legendaryId : null;
   const isCursed = isBoolean(raw.isCursed) ? raw.isCursed : false;
+
+  let name = raw.name;
+  let affixText = raw.affixText;
+  const leg = getLegendaryById(legendaryId);
+  if (leg) {
+    name = leg.name;
+    affixText = leg.signatureText;
+  } else if (raw.id.startsWith('starter_wep_')) {
+    name = 'Unarmed Taiji Fist';
+    affixText = 'Empty-handed Wuxia martial stance.';
+  } else {
+    if (affixText === 'Standard adventurer gear.') {
+      affixText = 'Standard sect disciple attire.';
+    }
+    if (LEGACY_GEAR_PATTERN.test(name)) {
+      const def = getClassDefinition(raw.classId);
+      const baseName = raw.slot === 'weapon' ? def.weaponLabel : NORMAL_NAMES[raw.slot];
+      name =
+        raw.tier === 'rare'
+          ? `Jade-Forged ${baseName}`
+          : raw.slot === 'weapon'
+            ? `Basic ${baseName}`
+            : baseName;
+    }
+  }
+
   return {
     id: raw.id,
-    name: raw.name,
+    name,
     slot: raw.slot,
     classId: raw.classId,
     tier: raw.tier,
     level: raw.level,
     baseStatBonus: raw.baseStatBonus,
-    affixText: raw.affixText,
+    affixText,
     sockets,
     maxSockets,
     legendaryId,

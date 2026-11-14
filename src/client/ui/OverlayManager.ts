@@ -732,6 +732,9 @@ export class OverlayManager {
 
     for (const slot of GEAR_SLOTS) {
       const item = selProg.equipped[slot];
+      const leg = item?.legendaryId ? getLegendaryById(item.legendaryId) : null;
+      const displayName = leg ? leg.name : item ? item.name : `Empty ${slot}`;
+      const displayAffix = leg ? leg.signatureText : item ? item.affixText : '';
       const slotLvl = selProg.slotLevels[slot];
       const box = this.el(
         'div',
@@ -745,9 +748,7 @@ export class OverlayManager {
           `${slotIcons[slot]} ${
             slot === 'weapon' && (!item || item.id.startsWith('starter_wep_'))
               ? 'Unarmed (Taiji Fist)'
-              : item
-                ? item.name
-                : `Empty ${slot}`
+              : displayName
           }`
         )
       );
@@ -759,14 +760,11 @@ export class OverlayManager {
       row.appendChild(rightTags);
       box.appendChild(row);
       if (item) {
-        box.appendChild(this.el('div', 'muted', `+${item.baseStatBonus} Power • ${item.affixText}`));
-        if (item.legendaryId && item.isCursed) {
-          const leg = getLegendaryById(item.legendaryId);
-          if (leg) {
-            box.appendChild(
-              this.el('div', 'muted', `⚠️ ${leg.cursedName}: ${leg.cursedText}`)
-            );
-          }
+        box.appendChild(this.el('div', 'muted', `+${item.baseStatBonus} Power • ${displayAffix}`));
+        if (leg && item.isCursed) {
+          box.appendChild(
+            this.el('div', 'muted', `⚠️ ${leg.cursedName}: ${leg.cursedText}`)
+          );
         }
         if (item.maxSockets > 0) {
           const hybrid = getHybridElement(item.sockets);
@@ -819,6 +817,9 @@ export class OverlayManager {
       bagBox.appendChild(emptyHost);
     } else {
       for (const item of p.inventory) {
+        const leg = item.legendaryId ? getLegendaryById(item.legendaryId) : null;
+        const displayName = leg ? leg.name : item.name;
+        const displayAffix = leg ? leg.signatureText : item.affixText;
         const card = this.el(
           'div',
           `gear-item tier-${item.tier} ${item.isCursed ? 'cursed-tag' : ''}`
@@ -828,7 +829,7 @@ export class OverlayManager {
           this.el(
             'strong',
             '',
-            `${item.name} (${getRelicLineageLabel(item.classId)} ${item.slot})`
+            `${displayName} (${getRelicLineageLabel(item.classId)} ${item.slot})`
           )
         );
         const itemBadgeHost = this.el('span', 'astryx-inline-slot');
@@ -838,7 +839,7 @@ export class OverlayManager {
         });
         top.appendChild(itemBadgeHost);
         card.appendChild(top);
-        card.appendChild(this.el('div', 'muted', `+${item.baseStatBonus} Power • ${item.affixText}`));
+        card.appendChild(this.el('div', 'muted', `+${item.baseStatBonus} Power • ${displayAffix}`));
 
         const acts = this.el('div', 'astryx-inline-slot');
         mountAstryxActionRow(acts, [
@@ -950,7 +951,7 @@ export class OverlayManager {
       for (const item of cursedItems) {
         const leg = getLegendaryById(item.legendaryId);
         const row = this.el('div', 'gear-item tier-legendary cursed-tag');
-        row.appendChild(this.el('strong', '', item.name));
+        row.appendChild(this.el('strong', '', leg ? leg.name : item.name));
         if (leg) {
           row.appendChild(this.el('div', 'muted', `Curse: ${leg.cursedName} — ${leg.cursedText}`));
         }
