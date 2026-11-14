@@ -1454,6 +1454,11 @@ export class OverlayManager {
     updateBanner();
 
     const grid = this.el('div', 'draft-grid');
+    box.appendChild(bannerHost);
+    box.appendChild(grid);
+    backdrop.appendChild(box);
+    this.root.appendChild(backdrop);
+    this.activeModal = backdrop;
 
     const renderCards = (): void => {
       updateBanner();
@@ -1470,20 +1475,23 @@ export class OverlayManager {
         });
         top.appendChild(badgeHost);
 
+        const rollCard = (): void => {
+          if (refreshesLeft <= 0) return;
+          refreshesLeft -= 1;
+          soundFX.playRouletteTick();
+          cards = refreshSingleDraftCard(draftInput, cards, idx);
+          renderCards();
+        };
+
         const refreshHost = this.el('span', 'astryx-inline-slot');
         mountAstryxActionRow(refreshHost, [
           {
-            label: `🔄 Refresh (${refreshesLeft})`,
+            label: `🎲 Roll (${refreshesLeft})`,
             variant: 'secondary',
             size: 'sm',
             isDisabled: refreshesLeft <= 0,
-            onClick: () => {
-              if (refreshesLeft <= 0) return;
-              refreshesLeft -= 1;
-              soundFX.playRouletteTick();
-              cards = refreshSingleDraftCard(draftInput, cards, idx);
-              renderCards();
-            },
+            tooltip: 'Reroll this buff card while locking the other 2',
+            onClick: rollCard,
           },
         ]);
         top.appendChild(refreshHost);
@@ -1497,6 +1505,13 @@ export class OverlayManager {
 
         const pickHost = this.el('div', 'astryx-inline-slot');
         mountAstryxActionRow(pickHost, [
+          {
+            label: `🎲 Roll (${refreshesLeft})`,
+            variant: 'secondary',
+            size: 'sm',
+            isDisabled: refreshesLeft <= 0,
+            onClick: rollCard,
+          },
           {
             label: 'Choose Buff',
             variant: 'primary',
@@ -1514,11 +1529,6 @@ export class OverlayManager {
     };
 
     renderCards();
-    box.appendChild(bannerHost);
-    box.appendChild(grid);
-    backdrop.appendChild(box);
-    this.root.appendChild(backdrop);
-    this.activeModal = backdrop;
   }
 
   public openRouletteModal(floor: number, count: number, exclude: MutationId[]): void {

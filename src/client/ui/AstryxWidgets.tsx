@@ -126,21 +126,17 @@ const mountedRoots = new Map<HTMLElement, Root>();
 
 export function unmountAstryxRootsInside(container: HTMLElement): void {
   for (const [host, root] of mountedRoots.entries()) {
-    if (host === container || container.contains(host) || !host.isConnected) {
-      root.unmount();
+    if (host === container || container.contains(host)) {
       mountedRoots.delete(host);
+      // Defer unmount cleanly so click handlers inside an island can re-render without synchronous unmount warnings.
+      queueMicrotask(() => {
+        root.unmount();
+      });
     }
   }
 }
 
 export function mountAstryxNode(container: HTMLElement, element: ReactNode): void {
-  for (const [host, root] of mountedRoots.entries()) {
-    if (!host.isConnected && host !== container) {
-      root.unmount();
-      mountedRoots.delete(host);
-    }
-  }
-
   let root = mountedRoots.get(container);
   if (!root) {
     container.innerHTML = '';
