@@ -3,6 +3,13 @@ import * as Phaser from 'phaser';
 import { getBiomeById, getMutationById } from '../../shared/catalogs/biomes.ts';
 import { getClassDefinition } from '../../shared/catalogs/classes.ts';
 import { computeHeroCombatStats } from '../../shared/catalogs/classes.ts';
+import {
+  computeBossChestCount,
+  computeBossRouletteCount,
+  computeEnemySpawnHpMult,
+  computeFloorClearHeal,
+  computeFloorStartShield,
+} from '../../shared/buffCombat.ts';
 import { getHybridElement } from '../../shared/catalogs/legendaries.ts';
 import type {
   BiomeDefinition,
@@ -499,18 +506,12 @@ export class DungeonScene extends Scene {
 
   private applyFloorStartShieldsAndPassives(): void {
     if (!this.stats) return;
-    this.heroShield = 0;
-
-    if (this.draftedBuffIds.includes('gold_aegis_bastion')) {
-      this.heroShield += Math.round(this.stats.maxHp * 0.3);
-    }
-    if (this.draftedBuffIds.includes('prism_mage_mana_barrier')) {
-      this.heroShield += Math.round(this.stats.maxHp * 0.25);
-    }
-    if (this.hasEquippedLegendary('war_cape_aegis')) {
-      const pct = this.isEquippedLegendaryCursed('war_cape_aegis') ? 0.15 : 0.25;
-      this.heroShield += Math.round(this.stats.maxHp * pct);
-    }
+    this.heroShield = computeFloorStartShield(
+      this.stats.maxHp,
+      this.draftedBuffIds,
+      this.hasEquippedLegendary('war_cape_aegis'),
+      this.isEquippedLegendaryCursed('war_cape_aegis')
+    );
     if (this.hasEquippedLegendary('war_head_balrog')) {
       this.invulnHitsLeft = this.isEquippedLegendaryCursed('war_head_balrog') ? 1 : 3;
     } else {
@@ -528,8 +529,7 @@ export class DungeonScene extends Scene {
     if (floorNum === 4 || floorNum === 10) {
       this.totalWavesOnFloor = 1;
       this.phase = 'paused';
-      const count =
-        floorNum === 10 && this.draftedBuffIds.includes('cursed_double_edged_fate') ? 2 : 1;
+      const count = computeBossRouletteCount(floorNum, this.draftedBuffIds);
       this.callbacks?.onRequestRoulette(floorNum, count, this.lastBossMutations);
       this.emitHud();
       return;
@@ -558,7 +558,7 @@ export class DungeonScene extends Scene {
 
   private spawnWave(): void {
     const w = this.scale.width || 1024;
-    const hpMult = this.draftedBuffIds.includes('cursed_gilded_avarice') ? 1.25 : 1;
+    const hpMult = computeEnemySpawnHpMult(this.draftedBuffIds);
 
     if (this.floor === 4 || this.floor === 10) {
       const isEndBoss = this.floor === 10;
@@ -1399,7 +1399,10 @@ export class DungeonScene extends Scene {
       this.spawnLootDrop(ex, ey, 'coin', Math.round(baseGold * goldBonusMult));
     }
     if (enemy.isBoss || enemy.isMiniBoss) {
-      this.spawnLootDrop(ex, ey, 'chest', enemy.isBoss ? 1 : 0);
+      const chestCount = computeBossChestCount(this.draftedBuffIds);
+      for (let c = 0; c < chestCount; c++) {
+        this.spawnLootDrop(ex, ey, 'chest', enemy.isBoss ? 1 : 0);
+      }
       this.shardsCollected += enemy.isBoss ? 12 : 5;
       if (enemy.isBoss && this.floor === 4) {
         this.coresCollected += 1;
@@ -1483,6 +1486,9 @@ export class DungeonScene extends Scene {
     }
 
     // Movement & Attack
+    if (this.draftedBuffIds.includes('silver_frostbite_aura') && e.sprite.x - this.heroX <= 165) {
+      e.chillTimer = Math.max(e.chillTimer, 0.25);
+    }
     const meleeDist = this.heroX + 74;
     if (e.stunTimer <= 0 && e.rootTimer <= 0 && e.sprite.x > meleeDist) {
       const slow = e.chillTimer > 0 ? 0.75 : 1;
@@ -1838,8 +1844,14 @@ export class DungeonScene extends Scene {
     if (this.fastingFloorsLeft > 0) this.fastingFloorsLeft -= 1;
 
     if (this.stats) {
-      const recoveryPct = this.draftedBuffIds.includes('silver_second_wind') ? 0.27 : 0.15;
-      this.healHero(this.stats.maxHp * recoveryPct, true);
+      const floorHeal = computeFloorClearHeal(
+        this.stats.maxHp,
+        this.draftedBuffIds,
+        this.fastingFloorsLeft
+      );
+      if (floorHeal > 0) {
+        this.healHero(floorHeal, true);
+      }
     }
 
     if (this.floor >= 10) {
