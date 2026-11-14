@@ -1,14 +1,28 @@
+:root {
+  color-scheme: dark;
+  --color-background-body: #101314;
+  --color-background-surface: #191d20;
+  --color-background-card: #1f1f22;
+  --color-border-emphasized: #494d53;
+  --color-border-yellow: #b47700;
+  --color-text-primary: #dfe2e5;
+  --color-text-secondary: #aaafb5;
+  --color-text-yellow: #fbce03;
+  --radius-container: 12px;
+  --radius-element: 8px;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas, monospace;
+  font-family: Fustat, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, ui-monospace, monospace;
 }
 
 body.app {
   min-height: 100vh;
-  background: radial-gradient(circle at top, #283655 0%, #141926 70%, #0b0e17 100%);
-  color: #f8fafc;
+  background: radial-gradient(circle at top, #1f2731 0%, var(--color-background-surface) 70%, var(--color-background-body) 100%);
+  color: var(--color-text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -18,10 +32,10 @@ body.app {
 .splash-card {
   width: 100%;
   max-width: 480px;
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  border: 3px solid #f59e0b;
-  box-shadow: 0 0 0 3px #090d16, 0 12px 30px rgba(0, 0, 0, 0.6);
-  border-radius: 10px;
+  background: linear-gradient(180deg, var(--color-background-card) 0%, var(--color-background-surface) 100%);
+  border: 2px solid var(--color-border-yellow);
+  box-shadow: 0 0 0 2px var(--color-border-emphasized), 0 12px 30px rgba(0, 0, 0, 0.55);
+  border-radius: var(--radius-container);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;

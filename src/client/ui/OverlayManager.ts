@@ -67,6 +67,18 @@ import {
 } from '../../shared/utils.ts';
 import { renderHeroPaperdollCanvas } from '../fx/pixelArt.ts';
 import { soundFX } from '../fx/sound.ts';
+import {
+  initAstryxRootAttributes,
+  mountAstryxActionRow,
+  mountAstryxCampTopBar,
+  mountAstryxEmptyPanel,
+  mountAstryxModalBanner,
+  mountAstryxRunHudHeader,
+  mountAstryxStatusBadge,
+  mountAstryxTabStrip,
+  unmountAstryxRootsInside,
+  type AstryxActionButtonProps,
+} from './AstryxWidgets.tsx';
 import type {
   AppState,
   DungeonBridge,
@@ -88,7 +100,8 @@ export class OverlayManager {
   private draftRng: () => number = mulberry32(1);
   private rouletteRng: () => number = mulberry32(2);
   private lastHud: RunHudSnapshot | null = null;
-
+  private currentRunMode: RunMode = 'practice';
+  private lastHudHeaderKey: string = '';
   private activeModal: HTMLElement | null = null;
 
   constructor(root: HTMLElement) {
@@ -133,6 +146,7 @@ export class OverlayManager {
   }
 
   public async initialize(): Promise<void> {
+    initAstryxRootAttributes();
     const cached = this.loadLocalProfile();
     if (cached) {
       this.state.profile = cached;
@@ -199,6 +213,7 @@ export class OverlayManager {
 
   private clearModal(): void {
     if (this.activeModal) {
+      unmountAstryxRootsInside(this.activeModal);
       this.activeModal.remove();
       this.activeModal = null;
     }
@@ -456,6 +471,7 @@ export class OverlayManager {
   public renderCamp(): void {
     this.mode = 'camp';
     this.clearModal();
+    unmountAstryxRootsInside(this.root);
     this.root.innerHTML = '';
 
     const p = this.state.profile;
@@ -463,79 +479,77 @@ export class OverlayManager {
     const biome = getBiomeById(daily.biomeId);
     const bountyCls = getClassDefinition(daily.bountyClass);
     const dailyCompleted = p.dailyRankedCompletedDate === daily.dateKey;
+    const selectedDef = getClassDefinition(p.selectedClass);
+    const accountLevel =
+      p.classes.warrior.level +
+      p.classes.mage.level +
+      p.classes.thief.level +
+      p.classes.bowman.level;
 
     const wrap = this.el('div', 'camp-backdrop');
 
-    // Header
+    // Header (Astryx React Island)
     const header = this.el('div', 'camp-header');
-    const leftGroup = this.el('div', 'camp-title-group');
-    leftGroup.appendChild(this.el('span', 'camp-logo', 'MAPLESPIRE'));
-    leftGroup.appendChild(this.el('span', 'pill', `u/${p.username}`));
-    leftGroup.appendChild(
-      this.el(
-        'span',
-        'pill',
-        `🔥 ${p.streakDays}d Streak${p.restedStacks > 0 ? ` • ${p.restedStacks}x Rested` : ''}`
-      )
-    );
-    header.appendChild(leftGroup);
-
-    const resRow = this.el('div', 'resource-row');
-    resRow.appendChild(this.el('span', 'pill pill-gold', `🪙 ${p.gold}g`));
-    resRow.appendChild(this.el('span', 'pill pill-shard', `💎 ${p.shards} Shards`));
-    resRow.appendChild(this.el('span', 'pill pill-core', `🔮 ${p.bossCores} Cores`));
-    resRow.appendChild(this.el('span', 'pill', `🎫 ${p.goldenTickets} Tickets`));
-    const muteBtn = this.el(
-      'button',
-      'btn btn-sm',
-      soundFX.isMuted() ? '🔇 Muted' : '🔊 SFX'
-    );
-    muteBtn.addEventListener('click', () => {
-      const m = soundFX.toggleMute();
-      muteBtn.textContent = m ? '🔇 Muted' : '🔊 SFX';
-    });
-    resRow.appendChild(muteBtn);
-    header.appendChild(resRow);
+    const renderTopBar = (): void => {
+      mountAstryxCampTopBar(header, {
+        username: p.username,
+        streakDays: p.streakDays,
+        restedStacks: p.restedStacks,
+        gold: p.gold,
+        shards: p.shards,
+        bossCores: p.bossCores,
+        goldenTickets: p.goldenTickets,
+        accountLevel,
+        isMuted: soundFX.isMuted(),
+        onToggleMute: () => {
+          soundFX.toggleMute();
+          renderTopBar();
+        },
+        quickLaunchLabel: !dailyCompleted
+          ? `Enter Spire (${selectedDef.name})`
+          : `Practice (${selectedDef.name})`,
+        onQuickLaunch: () => {
+          void this.launchRun(!dailyCompleted ? 'daily' : 'practice', false);
+        },
+      });
+    };
+    renderTopBar();
     wrap.appendChild(header);
 
-    // Daily Banner
-    const strip = this.el('div', 'daily-strip');
-    strip.appendChild(
-      this.el(
-        'div',
-        '',
-        `🗺️ ${biome.name} • ${biome.miniBossName} / ${biome.endBossName} (${biome.mechanicName})`
-      )
-    );
-    const bountyPill = this.el(
-      'span',
-      'pill pill-bounty',
-      `🎯 2x ${bountyCls.name}`
-    );
-    bountyPill.title = 'Daily Bounty Class: +2x Class EXP & +25% Gold';
-    strip.appendChild(bountyPill);
+    // Daily Banner (Astryx Banner)
+    const strip = this.el('div', 'astryx-block-slot');
+    mountAstryxModalBanner(strip, {
+      status: 'info',
+      title: `Daily Spire: ${biome.name} — ${biome.miniBossName} / ${biome.endBossName}`,
+      description: `${biome.mechanicName} • Daily Bounty: +2x Class EXP & +25% Gold`,
+      badgeText: `🎯 2x ${bountyCls.name}`,
+      badgeTier: 'bounty',
+    });
     wrap.appendChild(strip);
 
-    // Tabs
+    // Tabs (Astryx Button + Badge Strip)
     const tabs = this.el('div', 'camp-tabs');
-    const tabDefs: readonly { id: CampTab; label: string }[] = [
-      { id: 'roster', label: '⚔️ Roster' },
-      { id: 'buildings', label: '🏰 Camp' },
-      { id: 'codex', label: '📖 Codex' },
-      { id: 'leaderboard', label: '🏆 Ranks' },
-    ];
-    for (const td of tabDefs) {
-      const btn = this.el(
-        'button',
-        `tab-btn ${this.activeTab === td.id ? 'active' : ''}`,
-        td.label
-      );
-      btn.addEventListener('click', () => {
-        this.activeTab = td.id;
-        this.renderCamp();
-      });
-      tabs.appendChild(btn);
-    }
+    mountAstryxTabStrip(tabs, {
+      items: [
+        { id: 'roster', label: '⚔️ Roster' },
+        { id: 'buildings', label: '🏰 Camp' },
+        { id: 'codex', label: '📖 Codex' },
+        {
+          id: 'leaderboard',
+          label: '🏆 Ranks',
+          ...(this.state.leaderboard.length > 0
+            ? { badge: String(this.state.leaderboard.length) }
+            : {}),
+        },
+      ],
+      activeId: this.activeTab,
+      onSelect: (id) => {
+        if (id === 'roster' || id === 'buildings' || id === 'codex' || id === 'leaderboard') {
+          this.activeTab = id;
+          this.renderCamp();
+        }
+      },
+    });
     wrap.appendChild(tabs);
 
     // Body
@@ -546,43 +560,39 @@ export class OverlayManager {
     else this.renderLeaderboardTab(body);
     wrap.appendChild(body);
 
-    // Footer Launch Buttons
+    // Footer Launch Buttons (Astryx Action Row)
     const footer = this.el('div', 'camp-footer');
-    const selectedDef = getClassDefinition(p.selectedClass);
-
+    const footerActions: AstryxActionButtonProps[] = [];
     if (!dailyCompleted) {
-      const dailyBtn = this.el(
-        'button',
-        'btn btn-primary',
-        `⚔️ START DAILY RANKED DELVE (${selectedDef.name})`
-      );
-      dailyBtn.addEventListener('click', () => {
-        void this.launchRun('daily', false);
+      footerActions.push({
+        label: `⚔️ START DAILY RANKED DELVE (${selectedDef.name})`,
+        variant: 'primary',
+        size: 'md',
+        onClick: () => {
+          void this.launchRun('daily', false);
+        },
       });
-      footer.appendChild(dailyBtn);
     } else if (p.goldenTickets > 0) {
-      const ticketBtn = this.el(
-        'button',
-        'btn btn-primary',
-        `🎫 USE GOLDEN TICKET FOR RANKED DELVE (${p.goldenTickets} left)`
-      );
-      ticketBtn.addEventListener('click', () => {
-        void this.launchRun('daily', true);
+      footerActions.push({
+        label: `🎫 USE GOLDEN TICKET FOR RANKED DELVE (${p.goldenTickets} left)`,
+        variant: 'primary',
+        size: 'md',
+        onClick: () => {
+          void this.launchRun('daily', true);
+        },
       });
-      footer.appendChild(ticketBtn);
     }
-
-    const practiceBtn = this.el(
-      'button',
-      'btn btn-secondary',
-      dailyCompleted
+    footerActions.push({
+      label: dailyCompleted
         ? `🏕️ PLAY PRACTICE / GRIND DELVE (${selectedDef.name})`
-        : `🏕️ PRACTICE RUN (No Daily Lockout)`
-    );
-    practiceBtn.addEventListener('click', () => {
-      void this.launchRun('practice', false);
+        : '🏕️ PRACTICE RUN (No Daily Lockout)',
+      variant: 'secondary',
+      size: 'md',
+      onClick: () => {
+        void this.launchRun('practice', false);
+      },
     });
-    footer.appendChild(practiceBtn);
+    mountAstryxActionRow(footer, footerActions);
 
     wrap.appendChild(footer);
     this.root.appendChild(wrap);
@@ -631,9 +641,13 @@ export class OverlayManager {
       title.style.color = def.colorHex;
       top.appendChild(title);
       if (isBounty) {
-        top.appendChild(this.el('span', 'pill pill-bounty', '2x'));
+        const badgeHost = this.el('span', 'astryx-inline-slot');
+        mountAstryxStatusBadge(badgeHost, { label: '2x', tier: 'bounty' });
+        top.appendChild(badgeHost);
       } else if (isSelected) {
-        top.appendChild(this.el('span', 'pill pill-gold', '✓'));
+        const badgeHost = this.el('span', 'astryx-inline-slot');
+        mountAstryxStatusBadge(badgeHost, { label: '✓ Active', tier: 'selected' });
+        top.appendChild(badgeHost);
       }
       infoCol.appendChild(top);
       infoCol.appendChild(this.el('div', 'muted', `${job.title} • ${prog.exp}/${nextExp}`));
@@ -772,9 +786,13 @@ export class OverlayManager {
     bagBox.appendChild(bagHead);
 
     if (p.inventory.length === 0) {
-      bagBox.appendChild(
-        this.el('div', 'muted', 'No items in bag yet. Complete a delve to collect Normal, Rare, and Unique Legendary gear!')
-      );
+      const emptyHost = this.el('div', 'astryx-block-slot');
+      mountAstryxEmptyPanel(emptyHost, {
+        title: 'Inventory Bag Empty',
+        description:
+          'Complete a delve to collect Normal, Rare, and Unique Legendary gear!',
+      });
+      bagBox.appendChild(emptyHost);
     } else {
       for (const item of p.inventory) {
         const card = this.el(
@@ -789,27 +807,34 @@ export class OverlayManager {
             `${item.name} (${getClassDefinition(item.classId).name} ${item.slot})`
           )
         );
-        top.appendChild(
-          this.el('span', 'muted', `${item.tier.toUpperCase()}${item.isCursed ? ' • CURSED' : ''}`)
-        );
+        const itemBadgeHost = this.el('span', 'astryx-inline-slot');
+        mountAstryxStatusBadge(itemBadgeHost, {
+          label: `${item.tier.toUpperCase()}${item.isCursed ? ' • CURSED' : ''}`,
+          tier: item.isCursed ? 'cursed' : item.tier,
+        });
+        top.appendChild(itemBadgeHost);
         card.appendChild(top);
         card.appendChild(this.el('div', 'muted', `+${item.baseStatBonus} Power • ${item.affixText}`));
 
-        const acts = this.el('div', 'row-wrap');
-        const eqBtn = this.el('button', 'btn btn-sm btn-green', 'Equip');
-        eqBtn.addEventListener('click', () => {
-          void this.sendCampAction({ action: 'equip_item', itemId: item.id });
-        });
-        const disBtn = this.el(
-          'button',
-          'btn btn-sm',
-          `Dismantle (+${getDismantleShardValue(item)}💎)`
-        );
-        disBtn.addEventListener('click', () => {
-          void this.sendCampAction({ action: 'dismantle_item', itemId: item.id });
-        });
-        acts.appendChild(eqBtn);
-        acts.appendChild(disBtn);
+        const acts = this.el('div', 'astryx-inline-slot');
+        mountAstryxActionRow(acts, [
+          {
+            label: 'Equip',
+            variant: 'primary',
+            size: 'sm',
+            onClick: () => {
+              void this.sendCampAction({ action: 'equip_item', itemId: item.id });
+            },
+          },
+          {
+            label: `Dismantle (+${getDismantleShardValue(item)}💎)`,
+            variant: 'secondary',
+            size: 'sm',
+            onClick: () => {
+              void this.sendCampAction({ action: 'dismantle_item', itemId: item.id });
+            },
+          },
+        ]);
         card.appendChild(acts);
         bagBox.appendChild(card);
       }
@@ -1159,6 +1184,8 @@ export class OverlayManager {
     this.rouletteRng = mulberry32(seed ^ 0x85ebca6b);
 
     this.mode = 'dungeon';
+    this.currentRunMode = actualMode;
+    this.lastHudHeaderKey = '';
     this.renderDungeonHudShell();
 
     this.bridge.startRun({
@@ -1173,6 +1200,7 @@ export class OverlayManager {
   }
 
   private renderDungeonHudShell(): void {
+    unmountAstryxRootsInside(this.root);
     this.root.innerHTML = '';
 
     const top = this.el('div', 'hud-top');
@@ -1191,6 +1219,17 @@ export class OverlayManager {
     left.appendChild(hpTrack);
     left.appendChild(hpText);
     top.appendChild(left);
+
+    const astryxMetaHost = this.el('div', 'astryx-inline-slot');
+    astryxMetaHost.id = 'hud-astryx-meta';
+    const dailyBiome = getBiomeById(this.state.daily.biomeId);
+    mountAstryxRunHudHeader(astryxMetaHost, {
+      biomeName: dailyBiome.name,
+      runModeLabel: this.currentRunMode === 'daily' ? 'DAILY RANKED' : 'PRACTICE',
+      buffCount: 0,
+      isBossActive: false,
+    });
+    top.appendChild(astryxMetaHost);
 
     const bossBox = this.el('div', 'hud-boss-box');
     bossBox.id = 'hud-boss-box';
@@ -1320,6 +1359,22 @@ export class OverlayManager {
     const lootEl = document.getElementById('hud-loot');
     if (lootEl) lootEl.textContent = `🪙 ${hud.gold}g • 💎 ${hud.shards} • 🔮 ${hud.cores}`;
 
+    const isBossActive = hud.activeBossName !== null;
+    const headerKey = `${hud.draftedBuffIds.length}:${isBossActive ? '1' : '0'}`;
+    if (headerKey !== this.lastHudHeaderKey) {
+      this.lastHudHeaderKey = headerKey;
+      const astryxMetaHost = document.getElementById('hud-astryx-meta');
+      if (astryxMetaHost) {
+        const dailyBiome = getBiomeById(this.state.daily.biomeId);
+        mountAstryxRunHudHeader(astryxMetaHost, {
+          biomeName: dailyBiome.name,
+          runModeLabel: this.currentRunMode === 'daily' ? 'DAILY RANKED' : 'PRACTICE',
+          buffCount: hud.draftedBuffIds.length,
+          isBossActive,
+        });
+      }
+    }
+
     const skillBtn = document.getElementById('hud-skill-btn');
     if (skillBtn instanceof HTMLButtonElement) {
       skillBtn.disabled = !hud.skillReady;
@@ -1386,38 +1441,52 @@ export class OverlayManager {
 
     const backdrop = this.el('div', 'modal-backdrop');
     const box = this.el('div', 'modal-box');
-    const title = this.el('div', 'modal-title', `Floor ${floor} Cleared — Draft 1 of 3 Buffs`);
-    const subtitle = this.el(
-      'div',
-      'muted',
-      `Targeted Card Refreshes Remaining: ${refreshesLeft} (Click Refresh on any individual card to keep the other 2 locked!)`
-    );
-    subtitle.style.textAlign = 'center';
+    const bannerHost = this.el('div', 'astryx-block-slot');
+    const updateBanner = (): void => {
+      mountAstryxModalBanner(bannerHost, {
+        status: 'info',
+        title: `Floor ${floor} Cleared — Draft 1 of 3 Buffs`,
+        description: `Targeted Card Refreshes Remaining: ${refreshesLeft} (Click Refresh on any card to keep the other 2 locked!)`,
+        badgeText: `${refreshesLeft} Refresh${refreshesLeft === 1 ? '' : 'es'} Left`,
+        badgeTier: 'silver',
+      });
+    };
+    updateBanner();
 
     const grid = this.el('div', 'draft-grid');
 
     const renderCards = (): void => {
-      subtitle.textContent = `Targeted Card Refreshes Remaining: ${refreshesLeft} (Click Refresh on any individual card to keep the other 2 locked!)`;
+      updateBanner();
+      unmountAstryxRootsInside(grid);
       grid.innerHTML = '';
 
       cards.forEach((cardDef, idx) => {
         const card = this.el('div', `draft-card tier-${cardDef.tier}`);
         const top = this.el('div', 'row-between');
-        top.appendChild(this.el('span', 'tier-badge', cardDef.tier));
-        const refreshBtn = this.el(
-          'button',
-          'btn btn-sm',
-          `🔄 Refresh (${refreshesLeft})`
-        );
-        refreshBtn.disabled = refreshesLeft <= 0;
-        refreshBtn.addEventListener('click', () => {
-          if (refreshesLeft <= 0) return;
-          refreshesLeft -= 1;
-          soundFX.playRouletteTick();
-          cards = refreshSingleDraftCard(draftInput, cards, idx);
-          renderCards();
+        const badgeHost = this.el('span', 'astryx-inline-slot');
+        mountAstryxStatusBadge(badgeHost, {
+          label: cardDef.tier.toUpperCase(),
+          tier: cardDef.tier,
         });
-        top.appendChild(refreshBtn);
+        top.appendChild(badgeHost);
+
+        const refreshHost = this.el('span', 'astryx-inline-slot');
+        mountAstryxActionRow(refreshHost, [
+          {
+            label: `🔄 Refresh (${refreshesLeft})`,
+            variant: 'secondary',
+            size: 'sm',
+            isDisabled: refreshesLeft <= 0,
+            onClick: () => {
+              if (refreshesLeft <= 0) return;
+              refreshesLeft -= 1;
+              soundFX.playRouletteTick();
+              cards = refreshSingleDraftCard(draftInput, cards, idx);
+              renderCards();
+            },
+          },
+        ]);
+        top.appendChild(refreshHost);
         card.appendChild(top);
 
         card.appendChild(this.el('strong', '', `${cardDef.icon} ${cardDef.name}`));
@@ -1426,20 +1495,26 @@ export class OverlayManager {
           card.appendChild(this.el('div', 'muted', `⚠️ Downside: ${cardDef.downside}`));
         }
 
-        const pickBtn = this.el('button', 'btn btn-gold', 'Choose Buff');
-        pickBtn.addEventListener('click', () => {
-          soundFX.playDraft();
-          this.clearModal();
-          this.bridge?.resumeAfterDraft(cardDef.id);
-        });
-        card.appendChild(pickBtn);
+        const pickHost = this.el('div', 'astryx-inline-slot');
+        mountAstryxActionRow(pickHost, [
+          {
+            label: 'Choose Buff',
+            variant: 'primary',
+            size: 'md',
+            onClick: () => {
+              soundFX.playDraft();
+              this.clearModal();
+              this.bridge?.resumeAfterDraft(cardDef.id);
+            },
+          },
+        ]);
+        card.appendChild(pickHost);
         grid.appendChild(card);
       });
     };
 
     renderCards();
-    box.appendChild(title);
-    box.appendChild(subtitle);
+    box.appendChild(bannerHost);
     box.appendChild(grid);
     backdrop.appendChild(box);
     this.root.appendChild(backdrop);
@@ -1453,29 +1528,42 @@ export class OverlayManager {
 
     const backdrop = this.el('div', 'modal-backdrop');
     const box = this.el('div', 'modal-box');
-    box.appendChild(
-      this.el(
-        'div',
-        'modal-title',
+    const bannerHost = this.el('div', 'astryx-block-slot');
+    mountAstryxModalBanner(bannerHost, {
+      status: 'warning',
+      title:
         floor === 4
           ? `🎰 Floor 4 Mini-Boss Roulette: ${biome.miniBossName}`
-          : `🎰 Floor 10 End Boss Roulette: ${biome.endBossName}`
-      )
-    );
+          : `🎰 Floor 10 End Boss Roulette: ${biome.endBossName}`,
+      description: `${biome.mechanicName}: ${biome.mechanicDescription}`,
+      badgeText: floor === 4 ? 'MINI-BOSS' : 'END BOSS',
+      badgeTier: 'boss',
+    });
+    box.appendChild(bannerHost);
     const windowEl = this.el('div', 'roulette-window', 'Spinning Boss Mutation...');
-    const descEl = this.el('div', 'muted', `${biome.mechanicName}: ${biome.mechanicDescription}`);
+    const descEl = this.el('div', 'muted', 'Rolling active spire mutations...');
     descEl.style.textAlign = 'center';
 
-    const goBtn = this.el('button', 'btn btn-primary', '⚔️ FIGHT BOSS!');
-    goBtn.disabled = true;
-    goBtn.addEventListener('click', () => {
-      this.clearModal();
-      this.bridge?.resumeAfterRoulette(rolled);
-    });
+    const goHost = this.el('div', 'camp-footer');
+    const renderGoAction = (ready: boolean): void => {
+      mountAstryxActionRow(goHost, [
+        {
+          label: '⚔️ FIGHT BOSS!',
+          variant: 'primary',
+          size: 'md',
+          isDisabled: !ready,
+          onClick: () => {
+            this.clearModal();
+            this.bridge?.resumeAfterRoulette(rolled);
+          },
+        },
+      ]);
+    };
+    renderGoAction(false);
 
     box.appendChild(windowEl);
     box.appendChild(descEl);
-    box.appendChild(goBtn);
+    box.appendChild(goHost);
     backdrop.appendChild(box);
     this.root.appendChild(backdrop);
     this.activeModal = backdrop;
@@ -1492,7 +1580,7 @@ export class OverlayManager {
         const defs = rolled.map((id) => getMutationById(id));
         windowEl.textContent = defs.map((d) => `${d.icon} ${d.name}`).join(' + ');
         descEl.textContent = defs.map((d) => `${d.name}: ${d.effectText}`).join(' | ');
-        goBtn.disabled = false;
+        renderGoAction(true);
       }
     }, 105);
   }
@@ -1501,43 +1589,37 @@ export class OverlayManager {
     this.clearModal();
     const backdrop = this.el('div', 'modal-backdrop');
     const box = this.el('div', 'modal-box');
-    box.appendChild(
-      this.el('div', 'modal-title', `🚁 Floor ${floor} Extraction Checkpoint`)
-    );
-    box.appendChild(
-      this.el(
-        'div',
-        'muted',
-        `Current Unbanked Loot: 🪙 ${gold} Gold • 💎 ${shards} Shards • 🔮 ${cores} Boss Cores`
-      )
-    );
-    box.appendChild(
-      this.el(
-        'div',
-        'muted',
-        'Extract safely now to bank 100% of your loot, or push deeper toward Floor 10 (dying forfeits 50% of unbanked loot!).'
-      )
-    );
+    const bannerHost = this.el('div', 'astryx-block-slot');
+    mountAstryxModalBanner(bannerHost, {
+      status: 'success',
+      title: `🚁 Floor ${floor} Safe Haven Extraction Checkpoint`,
+      description: `Unbanked Loot: 🪙 ${gold} Gold • 💎 ${shards} Shards • 🔮 ${cores} Boss Cores — Extract safely to bank 100%, or push deeper (dying forfeits 50%!).`,
+      badgeText: `FLOOR ${floor}`,
+      badgeTier: 'prismatic',
+    });
+    box.appendChild(bannerHost);
 
     const row = this.el('div', 'camp-footer');
-    const extractBtn = this.el('button', 'btn btn-secondary', '🚁 EXTRACT SAFELY (100% Loot)');
-    extractBtn.addEventListener('click', () => {
-      this.clearModal();
-      this.bridge?.resumeAfterExtraction(true);
-    });
-
-    const pushBtn = this.el(
-      'button',
-      'btn btn-primary',
-      floor === 4 ? '🔥 PUSH TO FLOOR 5 -> 7' : '🔥 PUSH TO FLOOR 10 END BOSS!'
-    );
-    pushBtn.addEventListener('click', () => {
-      this.clearModal();
-      this.bridge?.resumeAfterExtraction(false);
-    });
-
-    row.appendChild(extractBtn);
-    row.appendChild(pushBtn);
+    mountAstryxActionRow(row, [
+      {
+        label: '🚁 EXTRACT SAFELY (100% Loot)',
+        variant: 'secondary',
+        size: 'md',
+        onClick: () => {
+          this.clearModal();
+          this.bridge?.resumeAfterExtraction(true);
+        },
+      },
+      {
+        label: floor === 4 ? '🔥 PUSH TO FLOOR 5 -> 7' : '🔥 PUSH TO FLOOR 10 END BOSS!',
+        variant: 'primary',
+        size: 'md',
+        onClick: () => {
+          this.clearModal();
+          this.bridge?.resumeAfterExtraction(false);
+        },
+      },
+    ]);
     box.appendChild(row);
     backdrop.appendChild(box);
     this.root.appendChild(backdrop);
@@ -1556,37 +1638,49 @@ export class OverlayManager {
     this.clearModal();
     const backdrop = this.el('div', 'modal-backdrop');
     const box = this.el('div', 'modal-box');
-    box.appendChild(this.el('div', 'modal-title', '🏛️ Altar of Fate — Floor 10 Greed Gamble'));
-    box.appendChild(
-      this.el(
-        'div',
-        'muted',
-        `You conquered Floor 10! You are guaranteed a Unique Named Legendary for your ${getClassDefinition(payload.classId).name}. Use your 1 Free Purification Roll: Success grants a Pristine Legendary; Failure still keeps the Legendary with a Tuned Cursed Penalty (cleansable later at The Sanctum)!`
-      )
-    );
+    const bannerHost = this.el('div', 'astryx-block-slot');
+    mountAstryxModalBanner(bannerHost, {
+      status: 'warning',
+      title: '🏛️ Altar of Fate — Floor 10 Greed Gamble',
+      description: `You conquered Floor 10! Guaranteed Unique Legendary for ${getClassDefinition(payload.classId).name}. Roll Free Purification (50/50) for Pristine, or gain a Tuned Cursed Legendary.`,
+      badgeText: '50 / 50',
+      badgeTier: 'gold',
+    });
+    box.appendChild(bannerHost);
 
     const statusEl = this.el('div', 'roulette-window', '✨ Ready to Roll Purification ✨');
-    const rollBtn = this.el('button', 'btn btn-primary', '🎲 ROLL FREE PURIFICATION (50/50)');
-    rollBtn.addEventListener('click', () => {
-      rollBtn.disabled = true;
-      const purified = this.rouletteRng() < 0.5;
-      if (purified) {
-        soundFX.playVictory();
-        statusEl.textContent = '✨ PURIFIED! PRISTINE LEGENDARY ✨';
-      } else {
-        soundFX.playBossRoar();
-        statusEl.textContent = '😈 CURSED! (Retains full Signature Power + Tuned Penalty)';
-      }
-      window.setTimeout(() => {
-        void this.submitAndShowSummary({
-          ...payload,
-          greedGamblePurified: purified,
-        });
-      }, 950);
-    });
+    const rollHost = this.el('div', 'camp-footer');
+    const renderRollBtn = (disabled: boolean): void => {
+      mountAstryxActionRow(rollHost, [
+        {
+          label: '🎲 ROLL FREE PURIFICATION (50/50)',
+          variant: 'primary',
+          size: 'md',
+          isDisabled: disabled,
+          onClick: () => {
+            renderRollBtn(true);
+            const purified = this.rouletteRng() < 0.5;
+            if (purified) {
+              soundFX.playVictory();
+              statusEl.textContent = '✨ PURIFIED! PRISTINE LEGENDARY ✨';
+            } else {
+              soundFX.playBossRoar();
+              statusEl.textContent = '😈 CURSED! (Retains full Signature Power + Tuned Penalty)';
+            }
+            window.setTimeout(() => {
+              void this.submitAndShowSummary({
+                ...payload,
+                greedGamblePurified: purified,
+              });
+            }, 950);
+          },
+        },
+      ]);
+    };
+    renderRollBtn(false);
 
     box.appendChild(statusEl);
-    box.appendChild(rollBtn);
+    box.appendChild(rollHost);
     backdrop.appendChild(box);
     this.root.appendChild(backdrop);
     this.activeModal = backdrop;
@@ -1749,13 +1843,23 @@ export class OverlayManager {
         : payload.outcome === 'extracted'
           ? `🚁 EXTRACTED AT FLOOR ${payload.floorReached}!`
           : `💀 DEFEATED ON FLOOR ${payload.floorReached}`;
-    box.appendChild(this.el('div', 'modal-title', titleStr));
 
-    if (summary.lootForfeited) {
-      box.appendChild(
-        this.el('div', 'muted', '⚠️ Defeat Penalty: 50% of unbanked loot was lost.')
-      );
-    }
+    const bannerHost = this.el('div', 'astryx-block-slot');
+    mountAstryxModalBanner(bannerHost, {
+      status:
+        payload.outcome === 'cleared'
+          ? 'success'
+          : payload.outcome === 'extracted'
+            ? 'info'
+            : 'error',
+      title: titleStr,
+      description: summary.lootForfeited
+        ? '⚠️ Defeat Penalty: 50% of unbanked loot was forfeited.'
+        : 'All banked loot, Shards, Cores, and EXP have been secured in Camp.',
+      badgeText: summary.playerRank ? `Rank #${summary.playerRank}` : `F${payload.floorReached}`,
+      badgeTier: payload.outcome === 'cleared' ? 'gold' : payload.outcome === 'extracted' ? 'prismatic' : 'boss',
+    });
+    box.appendChild(bannerHost);
 
     box.appendChild(
       this.el(
@@ -1771,13 +1875,17 @@ export class OverlayManager {
         'div',
         `gear-item tier-legendary ${summary.legendaryDrop.isCursed ? 'cursed-tag' : ''}`
       );
-      lBox.appendChild(
-        this.el(
-          'strong',
-          '',
-          `Altar of Fate Legendary: ${summary.legendaryDrop.name} (${summary.legendaryDrop.isCursed ? 'CURSED' : 'PRISTINE ✨'})`
-        )
+      const lTop = this.el('div', 'row-between');
+      lTop.appendChild(
+        this.el('strong', '', `Altar of Fate Legendary: ${summary.legendaryDrop.name}`)
       );
+      const lBadgeHost = this.el('span', 'astryx-inline-slot');
+      mountAstryxStatusBadge(lBadgeHost, {
+        label: summary.legendaryDrop.isCursed ? 'CURSED' : 'PRISTINE ✨',
+        tier: summary.legendaryDrop.isCursed ? 'cursed' : 'pristine',
+      });
+      lTop.appendChild(lBadgeHost);
+      lBox.appendChild(lTop);
       lBox.appendChild(this.el('div', 'muted', summary.legendaryDrop.affixText));
       if (summary.legendaryDrop.isCursed && leg) {
         lBox.appendChild(
@@ -1798,19 +1906,43 @@ export class OverlayManager {
     }
 
     const actions = this.el('div', 'camp-footer');
-    const shareBtn = this.el('button', 'btn btn-secondary', '💬 Share Build to Reddit Comments');
-    shareBtn.addEventListener('click', () => {
-      void this.shareRunToComments(payload, summary, shareBtn);
-    });
-
-    const campBtn = this.el('button', 'btn btn-primary', '🏕️ Return to Camp');
-    campBtn.addEventListener('click', () => {
-      this.clearModal();
-      this.renderCamp();
-    });
-
-    actions.appendChild(shareBtn);
-    actions.appendChild(campBtn);
+    let shareState: 'idle' | 'posting' | 'posted' | 'copied' = 'idle';
+    const renderActions = (): void => {
+      const shareLabel =
+        shareState === 'posted'
+          ? '✓ Posted to Comments!'
+          : shareState === 'copied'
+            ? '📋 Copied Summary!'
+            : shareState === 'posting'
+              ? '⏳ Sharing Build...'
+              : '💬 Share Build to Reddit Comments';
+      mountAstryxActionRow(actions, [
+        {
+          label: shareLabel,
+          variant: 'secondary',
+          size: 'md',
+          isDisabled: shareState !== 'idle',
+          onClick: () => {
+            shareState = 'posting';
+            renderActions();
+            void this.shareRunToComments(payload, summary, (nextState) => {
+              shareState = nextState;
+              renderActions();
+            });
+          },
+        },
+        {
+          label: '🏕️ Return to Camp',
+          variant: 'primary',
+          size: 'md',
+          onClick: () => {
+            this.clearModal();
+            this.renderCamp();
+          },
+        },
+      ]);
+    };
+    renderActions();
     box.appendChild(actions);
 
     backdrop.appendChild(box);
@@ -1821,9 +1953,8 @@ export class OverlayManager {
   private async shareRunToComments(
     payload: RunEndPayload,
     summary: RunRewardSummary,
-    button: HTMLButtonElement
+    onStatus: (next: 'idle' | 'posted' | 'copied') => void
   ): Promise<void> {
-    button.disabled = true;
     try {
       const res = await fetch('/api/share-comment', {
         method: 'POST',
@@ -1847,12 +1978,12 @@ export class OverlayManager {
           await navigator.clipboard.writeText(raw.commentText);
         }
         this.showToastSafe(msg);
-        button.textContent = raw.posted === true ? '✓ Posted to Comments!' : '📋 Copied Summary!';
+        onStatus(raw.posted === true ? 'posted' : 'copied');
         return;
       }
     } catch {
       this.showToastSafe('Unable to share comment right now.');
     }
-    button.disabled = false;
+    onStatus('idle');
   }
 }

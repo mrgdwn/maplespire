@@ -1,7 +1,20 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@import '@astryxdesign/core/reset.css';
+@import '@astryxdesign/core/astryx.css';
+@import '@astryxdesign/theme-neutral/fonts.css';
+@import '@astryxdesign/theme-neutral/theme.css';
+@import '@astryxdesign/theme-gothic/fonts.css';
+@import '@astryxdesign/theme-gothic/theme.css';
+
+@layer reset {
+  h1,
+  h2,
+  h3,
+  h4,
+  p,
+  ul,
+  ol {
+    margin: 0;
+  }
 }
 
 html,
@@ -9,9 +22,9 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background-color: #0b101b;
-  color: #f8fafc;
-  font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas, monospace;
+  background-color: var(--color-background-body, #101314);
+  color: var(--color-text-primary, #dfe2e5);
+  font-family: var(--font-family-body, ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas, monospace);
 }
 
 #app {
@@ -584,4 +597,195 @@ body {
 .table th {
   color: #94a3b8;
   font-size: 11px;
+}
+
+/* ================= META ASTRYX UI TOKEN LAYER ================= */
+:where(html:not([data-theme])) {
+  color-scheme: dark;
+}
+
+.camp-backdrop {
+  background: color-mix(in srgb, var(--color-background-body) 88%, transparent);
+  backdrop-filter: blur(8px);
+  padding: var(--spacing-2-5, 10px) var(--spacing-3, 12px);
+  gap: var(--spacing-2, 8px);
+}
+
+.camp-header,
+.camp-footer,
+.daily-strip {
+  background: var(--color-background-surface);
+  border-color: var(--color-border-emphasized);
+  border-radius: var(--radius-container);
+  box-shadow: var(--shadow-low);
+}
+
+.camp-logo {
+  font-family: var(--font-family-heading);
+  letter-spacing: 0.04em;
+  color: var(--color-text-primary);
+}
+
+.camp-tabs {
+  gap: var(--spacing-1-5, 6px);
+}
+
+.tab-btn {
+  background: var(--color-background-card);
+  border-color: var(--color-border-emphasized);
+  border-radius: var(--radius-element);
+  color: var(--color-text-secondary);
+}
+
+.tab-btn.active {
+  background: color-mix(in srgb, var(--color-accent-muted) 65%, var(--color-background-card));
+  border-color: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+.card {
+  background: var(--color-background-card);
+  border-color: var(--color-border-emphasized);
+  border-radius: var(--radius-container);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-low);
+}
+
+.card.selected {
+  border-color: var(--color-border-yellow);
+  background: color-mix(in srgb, var(--color-background-yellow) 16%, var(--color-background-card));
+}
+
+.class-selector:hover:not(.selected) {
+  border-color: var(--color-border-emphasized);
+  background: var(--color-overlay-hover);
+}
+
+.paperdoll-mini,
+.paperdoll-stage,
+.roulette-window {
+  background: var(--color-background-muted);
+  border-color: var(--color-border-emphasized);
+  border-radius: var(--radius-element);
+}
+
+.muted {
+  color: var(--color-text-secondary);
+}
+
+.bar-track {
+  background: var(--color-background-muted);
+  border-color: var(--color-track);
+  border-radius: var(--radius-full);
+}
+
+.bar-fill {
+  background: var(--color-success);
+}
+
+.pill {
+  background: var(--color-background-muted);
+  border-color: var(--color-border-emphasized);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-full);
+}
+
+.pill-gold,
+.gear-item.tier-legendary,
+.draft-card.tier-gold {
+  border-color: var(--color-border-yellow);
+  background: color-mix(in srgb, var(--color-background-yellow) 15%, var(--color-background-card));
+}
+
+.pill-gold {
+  color: var(--color-text-yellow);
+}
+
+.pill-shard,
+.gear-item.tier-rare,
+.draft-card.tier-silver,
+.draft-card.tier-prismatic {
+  border-color: var(--color-border-blue);
+  background: color-mix(in srgb, var(--color-background-blue) 15%, var(--color-background-card));
+}
+
+.pill-shard {
+  color: var(--color-text-blue);
+}
+
+.pill-core,
+.gear-item.cursed-tag,
+.draft-card.tier-cursed {
+  border-color: var(--color-border-purple);
+  background: color-mix(in srgb, var(--color-background-purple) 16%, var(--color-background-card));
+}
+
+.pill-core {
+  color: var(--color-text-purple);
+}
+
+.pill-bounty {
+  border-color: var(--color-border-green);
+  background: color-mix(in srgb, var(--color-background-green) 18%, var(--color-background-card));
+  color: var(--color-text-green);
+}
+
+.gear-item {
+  background: var(--color-background-card);
+  border-color: var(--color-border);
+  border-radius: var(--radius-element);
+}
+
+.draft-card {
+  background: var(--color-background-card);
+  border-radius: var(--radius-container);
+}
+
+.draft-card.tier-bronze {
+  border-color: var(--color-border-orange);
+  background: color-mix(in srgb, var(--color-background-orange) 14%, var(--color-background-card));
+}
+
+.hud-top,
+.hud-bottom {
+  background: color-mix(in srgb, var(--color-background-surface) 92%, transparent);
+  border-color: var(--color-border-emphasized);
+  box-shadow: var(--shadow-med);
+}
+
+.modal-backdrop {
+  background: var(--color-overlay);
+  backdrop-filter: blur(6px);
+}
+
+.modal-box {
+  background: var(--color-background-popover);
+  border-color: var(--color-border-emphasized);
+  border-radius: var(--radius-container);
+  box-shadow: var(--shadow-high);
+}
+
+.modal-title {
+  font-family: var(--font-family-heading);
+  color: var(--color-text-primary);
+}
+
+.table th {
+  color: var(--color-text-secondary);
+}
+
+.table th,
+.table td {
+  border-bottom-color: var(--color-border);
+}
+
+.astryx-inline-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1-5, 6px);
+}
+
+.astryx-block-slot {
+  display: block;
+  width: 100%;
 }
