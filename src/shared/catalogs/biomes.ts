@@ -386,9 +386,13 @@ export const getBiomeForFloor = (
     0,
     BIOME_CATALOG.findIndex((b) => b.id === baseBiomeId)
   );
-  const realmShift = Math.floor(Math.max(0, floor - 1) / 3);
-  const seedOffset = realmShift === 0 ? 0 : Math.abs(seed) % BIOME_CATALOG.length;
-  const idx = (baseIdx + realmShift + seedOffset) % BIOME_CATALOG.length;
+  const bracket = Math.floor(Math.max(0, floor - 1) / 10);
+  let idx = baseIdx;
+  for (let b = 1; b <= bracket; b++) {
+    const h = Math.abs(Math.imul(seed ^ (b * 0x9e3779b9), 0x85ebca6b)) >>> 0;
+    const step = 1 + (h % Math.max(1, BIOME_CATALOG.length - 1));
+    idx = (idx + step) % BIOME_CATALOG.length;
+  }
   return BIOME_CATALOG[idx] ?? getBiomeById(baseBiomeId);
 };
 
@@ -422,7 +426,9 @@ export const getMiniBossForFloor = (
   );
   const salt = Math.abs((seed * 31 + floor * 17) | 0);
   const variantOffset = ((floor + Math.abs(seed)) % 3) * BIOME_CATALOG.length;
-  const idx = (biomeStartIdx + variantOffset + (salt % 5 === 0 ? 1 : 0)) % interleavedPool.length;
+  const idx =
+    (biomeStartIdx + variantOffset + ((floor * 3 + salt) % BIOME_CATALOG.length)) %
+    interleavedPool.length;
   const picked = interleavedPool[idx];
   if (picked) return picked;
   const fallback = floorBiome.miniBossRoster[0];

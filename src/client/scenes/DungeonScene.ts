@@ -46,9 +46,499 @@ import type {
   RunStartPayload,
 } from '../ui/bridge.ts';
 
+type RgbTuple = readonly [number, number, number];
+
+type AmbientMote = {
+  arc: Phaser.GameObjects.Arc;
+  speedY: number;
+  speedX: number;
+  baseAlpha: number;
+  phase: number;
+  isForeground: boolean;
+};
+
+const hexIntToRgb = (hex: number): RgbTuple => [
+  (hex >> 16) & 255,
+  (hex >> 8) & 255,
+  hex & 255,
+];
+
+const parseAccentRgb = (hexStr: string): RgbTuple => {
+  const clean = hexStr.startsWith('#') ? hexStr.slice(1) : hexStr;
+  if (!/^[0-9a-fA-F]{6}$/.test(clean)) return [251, 191, 36];
+  return hexIntToRgb(Number.parseInt(clean, 16));
+};
+
+const mixRgb = (a: RgbTuple, b: RgbTuple, t: number): RgbTuple => {
+  const k = Math.max(0, Math.min(1, t));
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * k),
+    Math.round(a[1] + (b[1] - a[1]) * k),
+    Math.round(a[2] + (b[2] - a[2]) * k),
+  ];
+};
+
+const scaleRgb = (c: RgbTuple, factor: number): RgbTuple => [
+  Math.max(0, Math.min(255, Math.round(c[0] * factor))),
+  Math.max(0, Math.min(255, Math.round(c[1] * factor))),
+  Math.max(0, Math.min(255, Math.round(c[2] * factor))),
+];
+
+const rgbaCss = (c: RgbTuple, alpha: number): string =>
+  `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})`;
+
+const rgbToHexInt = (c: RgbTuple): number =>
+  ((c[0] & 255) << 16) | ((c[1] & 255) << 8) | (c[2] & 255);
+
+const hashTextSeed = (text: string): number => {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+const drawGlowingPaperLantern = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  topY: number,
+  dropLen: number,
+  accentRgb: RgbTuple
+): void => {
+  const cy = topY + dropLen;
+  const glow = ctx.createRadialGradient(x, cy, 2, x, cy, 34);
+  glow.addColorStop(0, 'rgba(255, 232, 160, 0.56)');
+  glow.addColorStop(0.38, 'rgba(249, 136, 42, 0.26)');
+  glow.addColorStop(0.72, rgbaCss(accentRgb, 0.1));
+  glow.addColorStop(1, 'rgba(255, 160, 60, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(x, cy, 34, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Silk cord
+  ctx.strokeStyle = 'rgba(28, 22, 24, 0.9)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, topY);
+  ctx.lineTo(x, cy - 10);
+  ctx.stroke();
+
+  // Lantern casing
+  const bodyGrad = ctx.createRadialGradient(x - 1, cy - 1, 1, x, cy, 11);
+  bodyGrad.addColorStop(0, '#fff7cc');
+  bodyGrad.addColorStop(0.45, '#fb923c');
+  bodyGrad.addColorStop(1, '#b91c1c');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.ellipse(x, cy, 7.5, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bamboo ribs & brass fittings
+  ctx.strokeStyle = 'rgba(90, 20, 12, 0.55)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - 7, cy - 3);
+  ctx.lineTo(x + 7, cy - 3);
+  ctx.moveTo(x - 7, cy + 3);
+  ctx.lineTo(x + 7, cy + 3);
+  ctx.stroke();
+
+  ctx.fillStyle = '#451a03';
+  ctx.fillRect(x - 4, cy - 11, 8, 2.5);
+  ctx.fillRect(x - 4, cy + 8.5, 8, 2.5);
+
+  // Crimson tassel
+  ctx.strokeStyle = '#dc2626';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, cy + 11);
+  ctx.lineTo(x, cy + 18);
+  ctx.stroke();
+};
+
+const drawDistantPagoda = (
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  baseY: number,
+  silRgb: RgbTuple,
+  winRgb: RgbTuple
+): void => {
+  ctx.fillStyle = rgbaCss(silRgb, 0.96);
+  // 3 stepped pagoda tiers
+  const tiers = [
+    { w: 30, h: 12, y: baseY - 12 },
+    { w: 23, h: 11, y: baseY - 25 },
+    { w: 16, h: 10, y: baseY - 37 },
+  ];
+  for (const tier of tiers) {
+    ctx.fillRect(cx - tier.w * 0.34, tier.y, tier.w * 0.68, tier.h);
+    // Upturned eaves roof
+    ctx.beginPath();
+    ctx.moveTo(cx - tier.w * 0.68, tier.y + 1);
+    ctx.quadraticCurveTo(cx, tier.y - 6, cx + tier.w * 0.68, tier.y + 1);
+    ctx.lineTo(cx + tier.w * 0.45, tier.y + 4);
+    ctx.lineTo(cx - tier.w * 0.45, tier.y + 4);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Spire finial
+  ctx.fillRect(cx - 1, baseY - 48, 2, 10);
+
+  // Warm paper-lit alcove windows
+  ctx.fillStyle = rgbaCss(winRgb, 0.85);
+  ctx.fillRect(cx - 2, baseY - 9, 4, 4);
+  ctx.fillRect(cx - 1.5, baseY - 21, 3, 3.5);
+  ctx.fillRect(cx - 1, baseY - 33, 2, 3);
+};
+
+const paintHd2dSkyCanvas = (
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  biome: BiomeDefinition
+): void => {
+  const skyTop = hexIntToRgb(biome.skyTopHex);
+  const skyBot = hexIntToRgb(biome.skyBottomHex);
+  const accent = parseAccentRgb(biome.accentHex);
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
+  skyGrad.addColorStop(0, rgbaCss(scaleRgb(skyTop, 0.68), 1));
+  skyGrad.addColorStop(0.45, rgbaCss(skyTop, 1));
+  skyGrad.addColorStop(0.8, rgbaCss(skyBot, 1));
+  skyGrad.addColorStop(1, rgbaCss(mixRgb(skyBot, accent, 0.36), 1));
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Deterministic stars
+  const rng = mulberry32(hashTextSeed(biome.id));
+  for (let i = 0; i < 48; i += 1) {
+    const sx = Math.round(rng() * w);
+    const sy = Math.round(rng() * h * 0.56);
+    const alpha = 0.25 + rng() * 0.65;
+    ctx.fillStyle = i % 7 === 0 ? rgbaCss(accent, alpha) : `rgba(248, 250, 252, ${alpha})`;
+    const sz = i % 9 === 0 ? 2 : 1;
+    ctx.fillRect(sx, sy, sz, sz);
+    if (i % 15 === 0) {
+      ctx.fillStyle = `rgba(255, 251, 235, ${alpha * 0.55})`;
+      ctx.fillRect(sx - 2, sy, 5, 1);
+      ctx.fillRect(sx, sy - 2, 1, 5);
+    }
+  }
+
+  // Celestial moon / sun disc with Octopath double corona bloom
+  const moonX = Math.round(w * 0.74);
+  const moonY = Math.round(h * 0.25);
+  const outerBloom = ctx.createRadialGradient(moonX, moonY, 8, moonX, moonY, 118);
+  outerBloom.addColorStop(0, 'rgba(255, 250, 230, 0.38)');
+  outerBloom.addColorStop(0.35, rgbaCss(accent, 0.22));
+  outerBloom.addColorStop(1, rgbaCss(accent, 0));
+  ctx.fillStyle = outerBloom;
+  ctx.beginPath();
+  ctx.arc(moonX, moonY, 118, 0, Math.PI * 2);
+  ctx.fill();
+
+  const moonDiscGrad = ctx.createRadialGradient(moonX - 7, moonY - 7, 3, moonX, moonY, 26);
+  moonDiscGrad.addColorStop(0, '#fffdf5');
+  moonDiscGrad.addColorStop(0.68, rgbaCss(mixRgb([254, 243, 199], accent, 0.25), 0.96));
+  moonDiscGrad.addColorStop(1, rgbaCss(mixRgb(skyBot, accent, 0.55), 0.9));
+  ctx.fillStyle = moonDiscGrad;
+  ctx.beginPath();
+  ctx.arc(moonX, moonY, 26, 0, Math.PI * 2);
+  ctx.fill();
+
+  // High-altitude drifting ink cloud wisps
+  for (let c = 0; c < 4; c += 1) {
+    const cx = 65 + c * 118 + (rng() - 0.5) * 32;
+    const cy = 62 + (c % 2) * 38 + rng() * 24;
+    const cloudCol = mixRgb(skyBot, accent, 0.32);
+    ctx.fillStyle = rgbaCss(cloudCol, 0.22);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 58, 11, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + 28, cy + 4, 42, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Diagonal volumetric god-rays streaming from celestial disc
+  for (let r = 0; r < 4; r += 1) {
+    const spread = (r - 1.5) * 44;
+    const beamStartX = moonX + spread * 0.28;
+    const beamEndX = moonX - 240 + spread * 1.45;
+    const rayGrad = ctx.createLinearGradient(beamStartX, moonY, beamEndX, h);
+    rayGrad.addColorStop(0, 'rgba(255, 248, 225, 0.14)');
+    rayGrad.addColorStop(0.55, rgbaCss(accent, 0.08));
+    rayGrad.addColorStop(1, rgbaCss(accent, 0));
+    ctx.fillStyle = rayGrad;
+    ctx.beginPath();
+    ctx.moveTo(beamStartX - 10, moonY);
+    ctx.lineTo(beamStartX + 18, moonY);
+    ctx.lineTo(beamEndX + 52, h);
+    ctx.lineTo(beamEndX - 28, h);
+    ctx.closePath();
+    ctx.fill();
+  }
+};
+
+const paintHd2dFarMountainsCanvas = (
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  biome: BiomeDefinition
+): void => {
+  const hillRgb = hexIntToRgb(biome.hillColorHex);
+  const pillarRgb = hexIntToRgb(biome.pillarColorHex);
+  const skyBot = hexIntToRgb(biome.skyBottomHex);
+  const accent = parseAccentRgb(biome.accentHex);
+  const rng = mulberry32(hashTextSeed(`${biome.id}_far`));
+  const phaseA = rng() * Math.PI * 2;
+  const phaseB = rng() * Math.PI * 2;
+  const phaseC = rng() * Math.PI * 2;
+
+  // Back ridge range using periodic Fourier waves so X=0 seamlessly meets X=w
+  const farFill = mixRgb(hillRgb, skyBot, 0.45);
+  ctx.fillStyle = rgbaCss(farFill, 0.88);
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  for (let x = 0; x <= w; x += 4) {
+    const theta = (x / w) * Math.PI * 2;
+    const wave =
+      Math.sin(theta * 2 + phaseA) * 28 +
+      Math.sin(theta * 5 + phaseB) * 18 +
+      Math.cos(theta * 9 + phaseC) * 7;
+    const y = Math.round(h * 0.44 + wave);
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h);
+  ctx.closePath();
+  ctx.fill();
+
+  // Sharp Wuxia karst spires (closer ridge) with sunlit ridge rim
+  const nearPeakFill = scaleRgb(mixRgb(hillRgb, pillarRgb, 0.35), 0.78);
+  const rimCol = mixRgb([255, 244, 214], accent, 0.42);
+  ctx.fillStyle = rgbaCss(nearPeakFill, 0.96);
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  const ridgeYs: number[] = [];
+  for (let x = 0; x <= w; x += 4) {
+    const theta = (x / w) * Math.PI * 2;
+    const spire = Math.abs(Math.sin(theta * 3 + phaseB)) * 38;
+    const crag = Math.sin(theta * 7 + phaseA) * 14 + Math.cos(theta * 13 + phaseC) * 6;
+    const y = Math.round(h * 0.66 - spire + crag);
+    ridgeYs.push(y);
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = rgbaCss(rimCol, 0.32);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < ridgeYs.length; i += 1) {
+    const x = i * 4;
+    const y = ridgeYs[i] ?? h * 0.6;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Two cliffside silhouette pagodas perched along peaks
+  const idxA = Math.floor((136 / w) * (ridgeYs.length - 1));
+  const idxB = Math.floor((392 / w) * (ridgeYs.length - 1));
+  const winGlow = mixRgb([254, 240, 138], accent, 0.2);
+  drawDistantPagoda(ctx, 136, (ridgeYs[idxA] ?? h * 0.55) + 4, nearPeakFill, winGlow);
+  drawDistantPagoda(ctx, 392, (ridgeYs[idxB] ?? h * 0.52) + 4, nearPeakFill, winGlow);
+
+  // Horizon ink-wash valley mist
+  const mistGrad = ctx.createLinearGradient(0, h * 0.58, 0, h);
+  mistGrad.addColorStop(0, rgbaCss(skyBot, 0));
+  mistGrad.addColorStop(0.65, rgbaCss(mixRgb(skyBot, accent, 0.22), 0.38));
+  mistGrad.addColorStop(1, rgbaCss(mixRgb(skyBot, [245, 245, 255], 0.25), 0.64));
+  ctx.fillStyle = mistGrad;
+  ctx.fillRect(0, Math.round(h * 0.58), w, Math.round(h * 0.42));
+};
+
+const paintHd2dMidPavilionCanvas = (
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  biome: BiomeDefinition
+): void => {
+  const pillarRgb = hexIntToRgb(biome.pillarColorHex);
+  const floorTopRgb = hexIntToRgb(biome.floorTopHex);
+  const accent = parseAccentRgb(biome.accentHex);
+
+  const timberDark = scaleRgb(pillarRgb, 0.36);
+  const timberLit = mixRgb(pillarRgb, [255, 228, 180], 0.28);
+  const roofBody = scaleRgb(pillarRgb, 0.54);
+  const roofTrim = mixRgb(accent, [251, 191, 36], 0.45);
+  const terraceWall = scaleRgb(floorTopRgb, 0.5);
+  const terraceRim = mixRgb(floorTopRgb, [255, 245, 220], 0.25);
+
+  // Stone balustrade terrace base
+  const wallY = h - 28;
+  ctx.fillStyle = rgbaCss(terraceWall, 0.96);
+  ctx.fillRect(0, wallY, w, 28);
+  ctx.fillStyle = rgbaCss(terraceRim, 0.55);
+  ctx.fillRect(0, wallY, w, 2);
+  ctx.fillStyle = 'rgba(6, 8, 16, 0.45)';
+  for (let bx = 0; bx < w; bx += 64) {
+    ctx.fillRect(bx + 12, wallY + 7, 40, 11);
+    ctx.fillRect(bx, wallY, 2, 28);
+  }
+
+  // Timber columns & stone plinths across 4 evenly wrapping 128px pavilion bays
+  const bayWidth = 128;
+  for (let bay = 0; bay < 4; bay += 1) {
+    const px = bay * bayWidth + 16;
+    // Bamboo & foliage vignette in alternating bays
+    if (bay % 2 === 0) {
+      const bx = px + 68;
+      ctx.strokeStyle = rgbaCss(scaleRgb(mixRgb(accent, pillarRgb, 0.5), 0.55), 0.72);
+      ctx.lineWidth = 2.5;
+      for (let stalk = 0; stalk < 3; stalk += 1) {
+        const sx = bx + (stalk - 1) * 11;
+        const topX = sx + (stalk - 1) * 6;
+        ctx.beginPath();
+        ctx.moveTo(sx, wallY);
+        ctx.lineTo(topX, 42 + stalk * 10);
+        ctx.stroke();
+        ctx.fillStyle = rgbaCss(mixRgb(accent, [74, 222, 128], 0.3), 0.45);
+        ctx.beginPath();
+        ctx.ellipse(topX + 5, 58 + stalk * 9, 8, 2.5, -0.35, 0, Math.PI * 2);
+        ctx.ellipse(topX - 6, 72 + stalk * 8, 7, 2.5, 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Plinth & lacquered pillar
+    ctx.fillStyle = rgbaCss(terraceRim, 0.65);
+    ctx.fillRect(px - 3, wallY - 6, 16, 6);
+    ctx.fillStyle = rgbaCss(timberDark, 0.96);
+    ctx.fillRect(px, 34, 10, wallY - 40);
+    // Warm left-side HD-2D rim highlight
+    ctx.fillStyle = rgbaCss(timberLit, 0.5);
+    ctx.fillRect(px, 34, 2, wallY - 40);
+
+    // Bracket capital (dougong)
+    ctx.fillStyle = rgbaCss(roofBody, 0.98);
+    ctx.fillRect(px - 7, 30, 24, 6);
+  }
+
+  // Sweeping upturned Chinese eaves lintel & ceramic tiled roof band
+  ctx.fillStyle = rgbaCss(timberDark, 0.96);
+  ctx.fillRect(0, 26, w, 7);
+  ctx.fillStyle = rgbaCss(roofBody, 0.98);
+  ctx.fillRect(0, 12, w, 15);
+  for (let tx = 0; tx < w; tx += 16) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.fillRect(tx, 12, 2, 15);
+    ctx.fillStyle = rgbaCss(roofTrim, 0.45);
+    ctx.fillRect(tx + 2, 10, 12, 2);
+  }
+  ctx.fillStyle = rgbaCss(roofTrim, 0.72);
+  ctx.fillRect(0, 25, w, 2);
+
+  // Sweeping roof corner flares at pavilion bays
+  for (let bay = 0; bay < 4; bay += 1) {
+    const eaveX = bay * bayWidth + 21;
+    ctx.fillStyle = rgbaCss(roofBody, 0.98);
+    ctx.beginPath();
+    ctx.moveTo(eaveX - 24, 26);
+    ctx.quadraticCurveTo(eaveX, 18, eaveX + 24, 26);
+    ctx.lineTo(eaveX + 18, 30);
+    ctx.lineTo(eaveX - 18, 30);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Warm glowing hanging paper lanterns in all 4 bays
+  for (let bay = 0; bay < 4; bay += 1) {
+    const lx = bay * bayWidth + 68;
+    const drop = 16 + (bay % 2) * 6;
+    drawGlowingPaperLantern(ctx, lx, 32, drop, accent);
+  }
+};
+
+const paintHd2dFloorCanvas = (
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  biome: BiomeDefinition
+): void => {
+  const floorTop = hexIntToRgb(biome.floorTopHex);
+  const floorBody = hexIntToRgb(biome.floorBodyHex);
+  const accent = parseAccentRgb(biome.accentHex);
+
+  // Carved stone balustrade curb lip at Y=0..14
+  const curbHighlight = mixRgb(floorTop, [255, 248, 228], 0.34);
+  ctx.fillStyle = rgbaCss(floorTop, 1);
+  ctx.fillRect(0, 0, w, 12);
+  ctx.fillStyle = rgbaCss(curbHighlight, 0.9);
+  ctx.fillRect(0, 0, w, 2.5);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  for (let cx = 0; cx < w; cx += 32) {
+    ctx.fillRect(cx, 0, 2, 12);
+  }
+
+  // Deep promenade gradient receding toward bottom edge
+  const walkGrad = ctx.createLinearGradient(0, 12, 0, h);
+  walkGrad.addColorStop(0, rgbaCss(mixRgb(floorBody, floorTop, 0.22), 1));
+  walkGrad.addColorStop(0.45, rgbaCss(floorBody, 1));
+  walkGrad.addColorStop(1, rgbaCss(scaleRgb(floorBody, 0.48), 1));
+  ctx.fillStyle = walkGrad;
+  ctx.fillRect(0, 12, w, h - 12);
+
+  // Cast shadow right underneath curb lip for 3D diorama separation
+  const lipShadow = ctx.createLinearGradient(0, 12, 0, 26);
+  lipShadow.addColorStop(0, 'rgba(3, 5, 14, 0.62)');
+  lipShadow.addColorStop(1, 'rgba(3, 5, 14, 0)');
+  ctx.fillStyle = lipShadow;
+  ctx.fillRect(0, 12, w, 14);
+
+  // Perspective-foreshortened stone courses
+  const rows = [14, 24, 38, 56, 79, 108, 144, 184, h];
+  const stoneWarmEdge = mixRgb(floorTop, [255, 245, 220], 0.22);
+  for (let r = 0; r < rows.length - 1; r += 1) {
+    const y0 = rows[r] ?? 14;
+    const y1 = rows[r + 1] ?? h;
+    const rowH = y1 - y0;
+    const rowMidFade = 1 - (r / (rows.length - 1)) * 0.45;
+
+    // Horizontal mortar crease & warm top specular highlight
+    ctx.fillStyle = 'rgba(4, 6, 14, 0.45)';
+    ctx.fillRect(0, y0, w, 1.5);
+    ctx.fillStyle = rgbaCss(stoneWarmEdge, 0.2 * rowMidFade);
+    ctx.fillRect(0, y0 + 2, w, 1);
+
+    // Alternating staggered vertical joints cleanly wrapping modulo 256
+    const offset = r % 2 === 0 ? 0 : 32;
+    const segW = 64;
+    for (let sx = offset; sx < w; sx += segW) {
+      ctx.fillStyle = 'rgba(4, 6, 14, 0.36)';
+      ctx.fillRect(sx, y0, 2, rowH);
+      ctx.fillStyle = rgbaCss(stoneWarmEdge, 0.1 * rowMidFade);
+      ctx.fillRect((sx + 2) % w, y0 + 2, 1, Math.max(2, rowH - 3));
+    }
+  }
+
+  // Reflected warm lantern light pools on wet/ancient stone terrace
+  for (const poolX of [64, 192]) {
+    const pool = ctx.createRadialGradient(poolX, 46, 4, poolX, 46, 56);
+    pool.addColorStop(0, 'rgba(255, 212, 128, 0.16)');
+    pool.addColorStop(0.5, rgbaCss(accent, 0.08));
+    pool.addColorStop(1, 'rgba(255, 200, 110, 0)');
+    ctx.fillStyle = pool;
+    ctx.beginPath();
+    ctx.ellipse(poolX, 46, 56, 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+};
+
 type EnemyEntity = {
   id: number;
   sprite: Phaser.GameObjects.Image;
+  shadow: Phaser.GameObjects.Image;
   hpBg: Phaser.GameObjects.Rectangle;
   hpFill: Phaser.GameObjects.Rectangle;
   nameText: Phaser.GameObjects.Text;
@@ -138,11 +628,15 @@ export type DungeonSceneCallbacks = {
 export class DungeonScene extends Scene {
   private callbacks: DungeonSceneCallbacks | null = null;
 
-  private skyRect: Phaser.GameObjects.Rectangle | null = null;
-  private hillsGraphics: Phaser.GameObjects.TileSprite | null = null;
+  private skyImage: Phaser.GameObjects.Image | null = null;
+  private farMountainsTile: Phaser.GameObjects.TileSprite | null = null;
+  private midPagodaTile: Phaser.GameObjects.TileSprite | null = null;
   private floorTile: Phaser.GameObjects.TileSprite | null = null;
-  private floorTrim: Phaser.GameObjects.Rectangle | null = null;
+  private horizonGlow: Phaser.GameObjects.Image | null = null;
+  private vignetteImage: Phaser.GameObjects.Image | null = null;
+  private ambientMotes: AmbientMote[] = [];
 
+  private heroShadow: Phaser.GameObjects.Image | null = null;
   private heroSprite: Phaser.GameObjects.Image | null = null;
   private heroCapeSprite: Phaser.GameObjects.Image | null = null;
   private heroTopSprite: Phaser.GameObjects.Image | null = null;
@@ -298,64 +792,159 @@ export class DungeonScene extends Scene {
     }
   }
 
+  private ensureCanvasTexture(
+    key: string,
+    width: number,
+    height: number,
+    painter: (ctx: CanvasRenderingContext2D, w: number, h: number) => void
+  ): void {
+    if (this.textures.exists(key)) return;
+    const tex = this.textures.createCanvas(key, width, height);
+    if (!tex) return;
+    painter(tex.getContext(), width, height);
+    tex.refresh();
+  }
+
+  private ensureHd2dSharedTextures(): void {
+    this.ensureCanvasTexture('hd2d_shadow', 64, 24, (ctx, w, h) => {
+      const grad = ctx.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w * 0.48);
+      grad.addColorStop(0, 'rgba(3, 5, 14, 0.72)');
+      grad.addColorStop(0.55, 'rgba(5, 8, 20, 0.36)');
+      grad.addColorStop(1, 'rgba(5, 8, 20, 0)');
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.scale(1, 0.38);
+      ctx.translate(-w / 2, -h / 2);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2, w * 0.48, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+
+    this.ensureCanvasTexture('hd2d_horizon', 128, 96, (ctx, w, h) => {
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      grad.addColorStop(0.45, 'rgba(255, 250, 235, 0.95)');
+      grad.addColorStop(0.6, 'rgba(255, 255, 255, 0.7)');
+      grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    });
+
+    this.ensureCanvasTexture('hd2d_vignette', 512, 512, (ctx, w, h) => {
+      // Top & bottom tilt-shift DoF soft darkening bands
+      const topBlur = ctx.createLinearGradient(0, 0, 0, h * 0.16);
+      topBlur.addColorStop(0, 'rgba(4, 6, 16, 0.52)');
+      topBlur.addColorStop(1, 'rgba(4, 6, 16, 0)');
+      ctx.fillStyle = topBlur;
+      ctx.fillRect(0, 0, w, h * 0.16);
+
+      const botBlur = ctx.createLinearGradient(0, h * 0.85, 0, h);
+      botBlur.addColorStop(0, 'rgba(3, 5, 12, 0)');
+      botBlur.addColorStop(1, 'rgba(3, 5, 12, 0.58)');
+      ctx.fillStyle = botBlur;
+      ctx.fillRect(0, h * 0.85, w, h * 0.15);
+
+      // Optical lens corner vignette
+      const cornerGrad = ctx.createRadialGradient(
+        w * 0.5,
+        h * 0.5,
+        w * 0.32,
+        w * 0.5,
+        h * 0.5,
+        w * 0.72
+      );
+      cornerGrad.addColorStop(0, 'rgba(4, 6, 14, 0)');
+      cornerGrad.addColorStop(0.68, 'rgba(4, 6, 14, 0.16)');
+      cornerGrad.addColorStop(1, 'rgba(2, 4, 12, 0.54)');
+      ctx.fillStyle = cornerGrad;
+      ctx.fillRect(0, 0, w, h);
+    });
+  }
+
+  private ensureHd2dBiomeTextures(biome: BiomeDefinition): void {
+    this.ensureCanvasTexture(`hd2d_sky_${biome.id}`, 512, 360, (ctx, w, h) =>
+      paintHd2dSkyCanvas(ctx, w, h, biome)
+    );
+    this.ensureCanvasTexture(`hd2d_far_${biome.id}`, 512, 210, (ctx, w, h) =>
+      paintHd2dFarMountainsCanvas(ctx, w, h, biome)
+    );
+    this.ensureCanvasTexture(`hd2d_mid_${biome.id}`, 512, 190, (ctx, w, h) =>
+      paintHd2dMidPavilionCanvas(ctx, w, h, biome)
+    );
+    this.ensureCanvasTexture(`hd2d_floor_${biome.id}`, 256, 220, (ctx, w, h) =>
+      paintHd2dFloorCanvas(ctx, w, h, biome)
+    );
+  }
+
   private createWorldLayers(): void {
     const w = this.scale.width || 1024;
     const h = this.scale.height || 768;
+    const groundY = this.groundY || Math.round(h * 0.68);
+    const floorH = Math.max(140, h - groundY);
 
-    this.skyRect = this.add.rectangle(w / 2, h / 2, w, h, this.activeBiome.skyTopHex).setDepth(0);
+    this.ensureHd2dSharedTextures();
+    this.ensureHd2dBiomeTextures(this.activeBiome);
 
-    // Procedural parallax silhouette tile
-    if (!this.textures.exists('parallax_hills')) {
-      const tex = this.textures.createCanvas('parallax_hills', 256, 140);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.fillStyle = 'rgba(255,255,255,0.14)';
-        ctx.beginPath();
-        ctx.moveTo(0, 140);
-        ctx.lineTo(42, 48);
-        ctx.lineTo(98, 92);
-        ctx.lineTo(156, 26);
-        ctx.lineTo(214, 84);
-        ctx.lineTo(256, 52);
-        ctx.lineTo(256, 140);
-        ctx.closePath();
-        ctx.fill();
-        tex.refresh();
-      }
-    }
+    const accentHex = rgbToHexInt(parseAccentRgb(this.activeBiome.accentHex));
 
-    if (!this.textures.exists('ground_bricks')) {
-      const tex = this.textures.createCanvas('ground_bricks', 64, 64);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(0, 0, 64, 64);
-        ctx.fillStyle = 'rgba(0,0,0,0.22)';
-        ctx.fillRect(0, 0, 64, 4);
-        ctx.fillRect(0, 30, 64, 3);
-        ctx.fillRect(30, 0, 3, 30);
-        ctx.fillRect(10, 32, 3, 32);
-        tex.refresh();
-      }
-    }
+    this.skyImage = this.add
+      .image(w / 2, h / 2, `hd2d_sky_${this.activeBiome.id}`)
+      .setDisplaySize(w, h)
+      .setDepth(0);
 
-    this.hillsGraphics = this.add
-      .tileSprite(w / 2, h * 0.62, w, 140, 'parallax_hills')
-      .setTint(this.activeBiome.pillarColorHex)
-      .setAlpha(0.65)
+    this.farMountainsTile = this.add
+      .tileSprite(w / 2, groundY - 97, w, 210, `hd2d_far_${this.activeBiome.id}`)
       .setDepth(1);
 
-    this.floorTile = this.add
-      .tileSprite(w / 2, h * 0.85, w, 240, 'ground_bricks')
-      .setTint(this.activeBiome.floorBodyHex)
+    this.midPagodaTile = this.add
+      .tileSprite(w / 2, groundY - 85, w, 190, `hd2d_mid_${this.activeBiome.id}`)
       .setDepth(2);
 
-    this.floorTrim = this.add
-      .rectangle(w / 2, h * 0.72, w, 14, this.activeBiome.floorTopHex)
+    this.floorTile = this.add
+      .tileSprite(w / 2, groundY + floorH / 2, w, floorH, `hd2d_floor_${this.activeBiome.id}`)
+      .setTileScale(1, floorH / 220)
       .setDepth(3);
+
+    this.horizonGlow = this.add
+      .image(w / 2, groundY - 4, 'hd2d_horizon')
+      .setDisplaySize(w, 108)
+      .setTint(accentHex)
+      .setAlpha(0.22)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(3.2);
+
+    for (const mote of this.ambientMotes) mote.arc.destroy();
+    this.ambientMotes = [];
+    const moteRng = mulberry32(hashTextSeed(`${this.activeBiome.id}_motes`));
+    const moteTint = rgbToHexInt(mixRgb(parseAccentRgb(this.activeBiome.accentHex), [254, 243, 199], 0.42));
+    for (let i = 0; i < 28; i += 1) {
+      const isForeground = i < 8;
+      const radius = isForeground ? 2.6 + moteRng() * 1.8 : 1.2 + moteRng() * 1.3;
+      const baseAlpha = isForeground ? 0.22 + moteRng() * 0.16 : 0.28 + moteRng() * 0.24;
+      const arc = this.add
+        .circle(moteRng() * w, moteRng() * h, radius, moteTint, baseAlpha)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(isForeground ? 13.5 : 3.5);
+      this.ambientMotes.push({
+        arc,
+        speedY: -(isForeground ? 16 + moteRng() * 18 : 8 + moteRng() * 12),
+        speedX: (moteRng() - 0.5) * 14,
+        baseAlpha,
+        phase: moteRng() * Math.PI * 2,
+        isForeground,
+      });
+    }
+
+    this.vignetteImage = this.add
+      .image(w / 2, h / 2, 'hd2d_vignette')
+      .setDisplaySize(w, h)
+      .setDepth(14.5);
   }
 
   private createHeroDisplay(classId: ClassId, level: number): void {
+    this.heroShadow?.destroy();
     this.heroAura?.destroy();
     this.heroGlow?.destroy();
     this.heroCapeSprite?.destroy();
@@ -384,14 +973,20 @@ export class DungeonScene extends Scene {
       .circle(this.heroX, this.groundY - 28, 36, clsColor, level >= 60 ? 0.28 : level >= 35 ? 0.16 : 0.08)
       .setDepth(4);
 
+    this.heroShadow = this.add
+      .image(this.heroX, this.groundY - 4, 'hd2d_shadow')
+      .setScale(0.95, 0.85)
+      .setDepth(4.1);
+
     this.heroGlow = this.add
       .circle(
         this.heroX + 16,
         this.groundY - 26,
-        15,
+        17,
         gearStyle.weaponGlowTint ?? 0xfef08a,
-        gearStyle.weaponGlowTint ? 0.34 : level >= 15 ? 0.22 : 0
+        gearStyle.weaponGlowTint ? 0.42 : level >= 15 ? 0.28 : 0.12
       )
+      .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(4.5);
 
     this.heroCapeSprite = this.add
@@ -468,19 +1063,31 @@ export class DungeonScene extends Scene {
     this.cameras.resize(width, height);
     this.groundY = Math.round(height * 0.68);
     this.heroX = Math.max(90, Math.round(width * 0.18));
+    const floorH = Math.max(140, height - this.groundY);
 
-    if (this.skyRect) {
-      this.skyRect.setPosition(width / 2, height / 2).setSize(width, height);
+    if (this.skyImage) {
+      this.skyImage.setPosition(width / 2, height / 2).setDisplaySize(width, height);
     }
-    if (this.hillsGraphics) {
-      this.hillsGraphics.setPosition(width / 2, this.groundY - 70).setSize(width, 140);
+    if (this.farMountainsTile) {
+      this.farMountainsTile.setPosition(width / 2, this.groundY - 97).setSize(width, 210);
     }
-    if (this.floorTrim) {
-      this.floorTrim.setPosition(width / 2, this.groundY + 4).setSize(width, 14);
+    if (this.midPagodaTile) {
+      this.midPagodaTile.setPosition(width / 2, this.groundY - 85).setSize(width, 190);
     }
     if (this.floorTile) {
-      const floorH = Math.max(120, height - this.groundY);
-      this.floorTile.setPosition(width / 2, this.groundY + floorH / 2).setSize(width, floorH);
+      this.floorTile
+        .setPosition(width / 2, this.groundY + floorH / 2)
+        .setSize(width, floorH)
+        .setTileScale(1, floorH / 220);
+    }
+    if (this.horizonGlow) {
+      this.horizonGlow.setPosition(width / 2, this.groundY - 4).setDisplaySize(width, 108);
+    }
+    if (this.vignetteImage) {
+      this.vignetteImage.setPosition(width / 2, height / 2).setDisplaySize(width, height);
+    }
+    if (this.heroShadow) {
+      this.heroShadow.setPosition(this.heroX, this.groundY - 4);
     }
     if (this.heroSprite) {
       this.heroSprite.setPosition(this.heroX, this.groundY - 28);
@@ -490,19 +1097,45 @@ export class DungeonScene extends Scene {
       const ey = this.groundY - (e.isBoss && !e.isMiniBoss ? 44 : e.isBoss ? 34 : 24);
       e.sprite.y = ey;
       e.sprite.x = Math.max(this.heroX + 74, Math.min(width - 55, e.sprite.x));
+      e.shadow.setPosition(e.sprite.x, this.groundY - 4);
     }
   }
 
   private applyBiomeVisuals(biome: BiomeDefinition): void {
     this.activeBiome = biome;
-    this.skyRect?.setFillStyle(biome.skyTopHex);
-    this.hillsGraphics?.setTint(biome.pillarColorHex);
-    this.floorTile?.setTint(biome.floorBodyHex);
-    this.floorTrim?.setFillStyle(biome.floorTopHex);
+    this.ensureHd2dBiomeTextures(biome);
+    this.skyImage?.setTexture(`hd2d_sky_${biome.id}`);
+    this.farMountainsTile?.setTexture(`hd2d_far_${biome.id}`);
+    this.midPagodaTile?.setTexture(`hd2d_mid_${biome.id}`);
+    this.floorTile?.setTexture(`hd2d_floor_${biome.id}`);
+    const accentHex = rgbToHexInt(parseAccentRgb(biome.accentHex));
+    this.horizonGlow?.setTint(accentHex);
+    const moteTint = rgbToHexInt(mixRgb(parseAccentRgb(biome.accentHex), [254, 243, 199], 0.42));
+    for (const mote of this.ambientMotes) {
+      mote.arc.setFillStyle(moteTint, mote.baseAlpha);
+    }
+  }
+
+  private updateAmbientMotes(dt: number): void {
+    if (this.ambientMotes.length === 0) return;
+    const w = this.scale.width || 1024;
+    const h = this.scale.height || 768;
+    const tSec = this.elapsedRunMs * 0.0024;
+    const scrollBias = this.phase === 'walking' ? 28 : 0;
+    for (const mote of this.ambientMotes) {
+      let nx = mote.arc.x + (mote.speedX - scrollBias) * dt + Math.sin(tSec + mote.phase) * 6 * dt;
+      let ny = mote.arc.y + mote.speedY * dt;
+      if (ny < -8) ny = h + 8;
+      if (nx < -8) nx = w + 8;
+      if (nx > w + 8) nx = -8;
+      const pulse = 0.72 + Math.sin(tSec * 1.4 + mote.phase) * 0.28;
+      mote.arc.setPosition(nx, ny).setAlpha(mote.baseAlpha * pulse);
+    }
   }
 
   private clearCombatEntities(): void {
     for (const e of this.enemies) {
+      e.shadow.destroy();
       e.sprite.destroy();
       e.hpBg.destroy();
       e.hpFill.destroy();
@@ -668,9 +1301,20 @@ export class DungeonScene extends Scene {
     this.potionCharges = 1;
     this.currentBossMutations = [];
     if (this.runConfig) {
+      const prevBiomeId = this.activeBiome.id;
       this.applyBiomeVisuals(
         getBiomeForFloor(this.runConfig.biomeId, floorNum, this.runConfig.seed)
       );
+      if (floorNum > 1 && floorNum % 10 === 1 && prevBiomeId !== this.activeBiome.id) {
+        this.cameras.main.flash(320, 255, 245, 200);
+        this.spawnFloatingText(
+          this.scale.width / 2,
+          this.groundY - 185,
+          `🏯 NEW REALM: ${this.activeBiome.name.toUpperCase()}!`,
+          this.activeBiome.accentHex,
+          20
+        );
+      }
     }
     this.applyFloorStartShieldsAndPassives();
 
@@ -867,6 +1511,10 @@ export class DungeonScene extends Scene {
       );
       const y = this.groundY - 24;
 
+      const shadow = this.add
+        .image(x, this.groundY - 4, 'hd2d_shadow')
+        .setScale(isElite ? 1.02 : 0.78, isElite ? 0.9 : 0.72)
+        .setDepth(4.1);
       const sprite = this.add.image(x, y, textureKey).setTint(tint).setDepth(6);
       if (isElite) sprite.setScale(1.3);
 
@@ -886,6 +1534,7 @@ export class DungeonScene extends Scene {
       this.enemies.push({
         id: this.nextEnemyId++,
         sprite,
+        shadow,
         hpBg,
         hpFill,
         nameText,
@@ -963,6 +1612,10 @@ export class DungeonScene extends Scene {
         ? 0xc084fc
         : baseColor;
 
+    const shadow = this.add
+      .image(x, this.groundY - 4, 'hd2d_shadow')
+      .setScale(isEndBoss ? 1.65 : 1.35, isEndBoss ? 1.2 : 1.05)
+      .setDepth(4.1);
     const sprite = this.add.image(x, y, key).setTint(tint).setScale(scale).setDepth(6);
     const hpBg = this.add.rectangle(x, y - barOffset, 96, 8, 0x0f172a).setDepth(8);
     const hpFill = this.add.rectangle(x, y - barOffset, 96, 8, 0xf97316).setDepth(9);
@@ -980,6 +1633,7 @@ export class DungeonScene extends Scene {
     this.enemies.push({
       id: this.nextEnemyId++,
       sprite,
+      shadow,
       hpBg,
       hpFill,
       nameText,
@@ -1025,11 +1679,13 @@ export class DungeonScene extends Scene {
 
     const dt = Math.min(0.05, (deltaMs / 1000) * this.speedMult);
     this.elapsedRunMs += deltaMs * this.speedMult;
+    this.updateAmbientMotes(dt);
 
     if (this.phase === 'walking') {
       this.walkTimer -= dt;
-      if (this.hillsGraphics) this.hillsGraphics.tilePositionX += 36 * dt;
-      if (this.floorTile) this.floorTile.tilePositionX += 110 * dt;
+      if (this.farMountainsTile) this.farMountainsTile.tilePositionX += 14 * dt;
+      if (this.midPagodaTile) this.midPagodaTile.tilePositionX += 46 * dt;
+      if (this.floorTile) this.floorTile.tilePositionX += 116 * dt;
       if (this.heroSprite) {
         const targetY = this.groundY - 28 + Math.sin(this.elapsedRunMs * 0.014) * 3.2;
         const targetRot = Math.sin(this.elapsedRunMs * 0.014) * 0.04;
@@ -1080,6 +1736,14 @@ export class DungeonScene extends Scene {
       const hx = this.heroSprite.x;
       const hy = this.heroSprite.y;
       const hRot = this.heroSprite.rotation;
+      if (this.heroShadow) {
+        const lift = Math.max(0, this.groundY - 28 - hy);
+        const shScale = Math.max(0.55, 1 - lift * 0.008);
+        this.heroShadow
+          .setPosition(hx, this.groundY - 4)
+          .setScale(0.95 * shScale, 0.85 * shScale)
+          .setAlpha(Math.max(0.35, 1 - lift * 0.01));
+      }
       if (this.heroAura) this.heroAura.setPosition(hx, hy);
       if (this.heroGlow) {
         this.heroGlow.setPosition(
@@ -1364,8 +2028,9 @@ export class DungeonScene extends Scene {
     const inRange = frontEnemy ? frontEnemy.sprite.x - this.heroX <= attackRange : false;
 
     if (!inRange && this.enemies.length > 0) {
-      if (this.floorTile) this.floorTile.tilePositionX += 70 * dt;
-      if (this.hillsGraphics) this.hillsGraphics.tilePositionX += 20 * dt;
+      if (this.farMountainsTile) this.farMountainsTile.tilePositionX += 9 * dt;
+      if (this.midPagodaTile) this.midPagodaTile.tilePositionX += 28 * dt;
+      if (this.floorTile) this.floorTile.tilePositionX += 74 * dt;
     }
 
     for (const e of [...this.enemies]) {
@@ -2431,6 +3096,7 @@ export class DungeonScene extends Scene {
       onComplete: () => popRing.destroy(),
     });
 
+    enemy.shadow.destroy();
     enemy.sprite.destroy();
     enemy.hpBg.destroy();
     enemy.hpFill.destroy();
@@ -2596,6 +3262,7 @@ export class DungeonScene extends Scene {
     }
     const barOffset = e.isBoss && !e.isMiniBoss ? 68 : e.isBoss ? 56 : 42;
     const barY = e.sprite.y - barOffset;
+    e.shadow.setPosition(e.sprite.x, this.groundY - 4);
     e.hpBg.setPosition(e.sprite.x, barY);
     e.hpFill.setPosition(e.sprite.x, barY);
     const ratio = Math.max(0, Math.min(1, e.hp / e.maxHp));

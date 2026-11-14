@@ -1,5 +1,6 @@
 import { showToast } from '@devvit/web/client';
 import {
+  BIOME_CATALOG,
   BOSS_MUTATIONS,
   getBiomeById,
   getBiomeForFloor,
@@ -40,6 +41,7 @@ import {
   getLegendaryById,
 } from '../../shared/catalogs/legendaries.ts';
 import type {
+  BiomeId,
   CampActionRequest,
   ClassId,
   CompleteRunRequest,
@@ -153,6 +155,8 @@ export class OverlayManager {
   private rouletteRng: () => number = mulberry32(2);
   private lastHud: RunHudSnapshot | null = null;
   private currentRunMode: RunMode = 'practice';
+  private currentRunSeed: number = 1;
+  private currentRunBiomeId: BiomeId = 'slime_bog';
   private lastHudHeaderKey: string = '';
   private lastHudBuffsKey: string = '';
   private activeModal: HTMLElement | null = null;
@@ -1263,6 +1267,11 @@ export class OverlayManager {
 
     this.mode = 'dungeon';
     this.currentRunMode = actualMode;
+    this.currentRunSeed = seed;
+    this.currentRunBiomeId =
+      actualMode === 'daily'
+        ? this.state.daily.biomeId
+        : (BIOME_CATALOG[Math.abs(seed) % BIOME_CATALOG.length]?.id ?? this.state.daily.biomeId);
     this.lastHudHeaderKey = '';
     this.renderDungeonHudShell();
 
@@ -1270,7 +1279,7 @@ export class OverlayManager {
       runId,
       mode: actualMode,
       seed,
-      biomeId: this.state.daily.biomeId,
+      biomeId: this.currentRunBiomeId,
       classId: this.state.profile.selectedClass,
       profile: this.state.profile,
       daily: this.state.daily,
@@ -1444,7 +1453,7 @@ export class OverlayManager {
       this.lastHudHeaderKey = headerKey;
       const astryxMetaHost = document.getElementById('hud-astryx-meta');
       if (astryxMetaHost) {
-        const floorBiome = getBiomeForFloor(this.state.daily.biomeId, hud.floor, this.state.daily.seed);
+        const floorBiome = getBiomeForFloor(this.currentRunBiomeId, hud.floor, this.currentRunSeed);
         mountAstryxRunHudHeader(astryxMetaHost, {
           biomeName: floorBiome.name,
           runModeLabel: this.currentRunMode === 'daily' ? 'DAILY RANKED' : 'PRACTICE',
@@ -1683,10 +1692,10 @@ export class OverlayManager {
   public openRouletteModal(floor: number, count: number, exclude: MutationId[]): void {
     this.clearModal();
     const rolled = rollBossMutations(this.rouletteRng, count, exclude);
-    const biome = getBiomeForFloor(this.state.daily.biomeId, floor, this.state.daily.seed);
+    const biome = getBiomeForFloor(this.currentRunBiomeId, floor, this.currentRunSeed);
     const isLeader = isCultLeaderFloor(floor);
-    const miniBossSpec = getMiniBossForFloor(this.state.daily.biomeId, floor, this.state.daily.seed);
-    const endBossName = getEndBossNameForFloor(this.state.daily.biomeId, floor, this.state.daily.seed);
+    const miniBossSpec = getMiniBossForFloor(this.currentRunBiomeId, floor, this.currentRunSeed);
+    const endBossName = getEndBossNameForFloor(this.currentRunBiomeId, floor, this.currentRunSeed);
     const mechSource = BOSS_MUTATIONS.length > 0 ? biome : biome;
     void mechSource;
 

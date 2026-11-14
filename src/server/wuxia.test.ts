@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { getBiomeForFloor } from '../shared/catalogs/biomes.ts';
 import { computeHeroCombatStats } from '../shared/catalogs/classes.ts';
 import {
   ALL_WUXIA_MANUALS,
@@ -227,5 +228,18 @@ void describe('Wuxia Spire Martial Arts, Inner Qi & Secret Synergies', () => {
     const f30Score = calculateLeaderboardScore(30, 'extracted', 180_000, 2000);
     assert.ok(f20Score > f10Score);
     assert.ok(f30Score > f20Score);
+
+    // Biomes stay fixed for 10 floors, then randomly switch to a different sect at F11, F21, F31...
+    for (const seed of seeds) {
+      const b1 = getBiomeForFloor('slime_bog', 1, seed).id;
+      const b10 = getBiomeForFloor('slime_bog', 10, seed).id;
+      const b11 = getBiomeForFloor('slime_bog', 11, seed).id;
+      const b20 = getBiomeForFloor('slime_bog', 20, seed).id;
+      const b21 = getBiomeForFloor('slime_bog', 21, seed).id;
+      assert.equal(b1, b10);
+      assert.equal(b11, b20);
+      assert.notEqual(b10, b11);
+      assert.notEqual(b20, b21);
+    }
   });
 });

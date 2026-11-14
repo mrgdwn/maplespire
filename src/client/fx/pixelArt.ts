@@ -113,18 +113,66 @@ const drawGridToContext = (
   pixelSize: number,
   offsetX = 0,
   offsetY = 0,
-  tintCss: string | null = null
+  tintCss: string | null = null,
+  hd2dStyle = true
 ): void => {
-  for (let r = 0; r < grid.length; r++) {
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  const isFilled = (r: number, c: number): boolean => {
+    if (r < 0 || c < 0 || r >= rows || c >= cols) return false;
+    const ch = grid[r]?.[c];
+    return Boolean(ch && ch !== '.' && palette[ch]);
+  };
+
+  // HD-2D silhouette outer border pass
+  if (hd2dStyle && pixelSize >= 3) {
+    ctx.fillStyle = '#070a12';
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!isFilled(r, c)) continue;
+        const x = offsetX + c * pixelSize;
+        const y = offsetY + r * pixelSize;
+        if (!isFilled(r - 1, c) || !isFilled(r + 1, c) || !isFilled(r, c - 1) || !isFilled(r, c + 1)) {
+          ctx.fillRect(x - 1, y - 1, pixelSize + 2, pixelSize + 2);
+        }
+      }
+    }
+  }
+
+  // Base crisp pixel pass
+  for (let r = 0; r < rows; r++) {
     const row = grid[r];
     if (!row) continue;
-    for (let c = 0; c < row.length; c++) {
+    for (let c = 0; c < cols; c++) {
       const ch = row[c];
       if (!ch || ch === '.') continue;
       const color = palette[ch];
       if (!color) continue;
       ctx.fillStyle = tintCss ? multiplyHex(color, tintCss) : color;
       ctx.fillRect(offsetX + c * pixelSize, offsetY + r * pixelSize, pixelSize, pixelSize);
+    }
+  }
+
+  // HD-2D top-left sunlit rim light & bottom contact bevel shading
+  if (hd2dStyle && pixelSize >= 3) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (!isFilled(r, c)) continue;
+        const x = offsetX + c * pixelSize;
+        const y = offsetY + r * pixelSize;
+        if (!isFilled(r - 1, c)) {
+          ctx.fillStyle = 'rgba(255, 250, 215, 0.34)';
+          ctx.fillRect(x, y, pixelSize, 1);
+        }
+        if (!isFilled(r, c - 1)) {
+          ctx.fillStyle = 'rgba(255, 250, 215, 0.22)';
+          ctx.fillRect(x, y, 1, pixelSize);
+        }
+        if (!isFilled(r + 1, c)) {
+          ctx.fillStyle = 'rgba(6, 10, 22, 0.34)';
+          ctx.fillRect(x, y + pixelSize - 1, pixelSize, 1);
+        }
+      }
     }
   }
 };
@@ -727,7 +775,15 @@ export const renderHeroPaperdollCanvas = (
   const heroOffsetX = Math.round((w - 14 * pixelSize) / 2) - Math.round(pixelSize * 1.2);
   const heroOffsetY = Math.round((h - 14 * pixelSize) / 2);
 
-  // Subtle weapon elemental aura behind character
+  // Subtle HD-2D ground contact shadow + atmospheric backlight
+  const shadowCx = heroOffsetX + 7 * pixelSize;
+  const shadowCy = heroOffsetY + 13 * pixelSize;
+  const shGrad = ctx.createRadialGradient(shadowCx, shadowCy, 2, shadowCx, shadowCy, pixelSize * 5.2);
+  shGrad.addColorStop(0, 'rgba(3, 6, 14, 0.65)');
+  shGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = shGrad;
+  ctx.fillRect(0, 0, w, h);
+
   if (style.weaponGlowCss) {
     const cx = heroOffsetX + 12 * pixelSize;
     const cy = heroOffsetY + 7 * pixelSize;
