@@ -372,6 +372,12 @@ body {
   gap: 4px;
 }
 
+.relic-drop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
 .gear-item.tier-normal {
   border-color: #94a3b8;
 }
@@ -692,6 +698,12 @@ body {
   background: var(--color-background-card);
   border: 1px dashed var(--color-border-emphasized, #475569);
   border-radius: var(--radius-element);
+}
+
+.relic-drop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
 }
 
 .gear-item.tier-normal {

@@ -610,7 +610,7 @@ const MOB_HORNED_GRID: PixelGrid = [
   '...KKK.KKK..',
 ];
 
-// Cult Hall Master Mini-Boss & Supreme Cult Leader Boss (humanoid, facing left)
+// Cult Hall Master Mini-Boss variants (humanoid, facing left)
 const MINIBOSS_GRID: PixelGrid = [
   '..Y........Y..',
   '..YY.YYYY.YY..',
@@ -626,6 +626,42 @@ const MINIBOSS_GRID: PixelGrid = [
   '....KK..KK...M',
   '...KKK..KKK...',
   '...KKK..KKK...',
+];
+
+// Variant 1: Twin-Claw / Soul-Hook Masked Elder
+const MINIBOSS_CLAW_GRID: PixelGrid = [
+  '.....KKKK.....',
+  '....KYYYYK....',
+  '...KKKKKKKK...',
+  '...KKEKKEKK...',
+  '..MMMMMMMMMM..',
+  'WWWWMMDDDDMMWW',
+  'K..MMMMMMMM..K',
+  '...MMMMMMMM...',
+  '...MMWWWWMM...',
+  '..MMMDDDDMMM..',
+  '..MM..WW..MM..',
+  '.....KK.KK....',
+  '....KK...KK...',
+  '...KKK...KKK..',
+];
+
+// Variant 2: Golden-Wheel / Whip Sect Grandmaster
+const MINIBOSS_WHEEL_GRID: PixelGrid = [
+  '....YYYYYY....',
+  '...YYKKKKYY...',
+  '..YYKKKKKKYY..',
+  '..Y.KEKKEK.Y..',
+  '..MMMMMMMMMM..',
+  '.MMDDDDDDDDMM.',
+  'WMMMMMMMMMMMMW',
+  'WW..MMWWMM..WW',
+  '....MMMMMM....',
+  '...MMMMMMMM...',
+  '...MMYYYYMM...',
+  '....KK..KK....',
+  '...KKK..KKK...',
+  '..KKKK..KKKK..',
 ];
 
 const ENDBOSS_GRID: PixelGrid = [
@@ -820,14 +856,19 @@ export const registerPixelTextures = (scene: Phaser.Scene): void => {
     4
   );
 
-  // Sect Hall Master Mini-Boss & Supreme Cult Leader
-  drawPixelGrid(
-    scene,
-    'miniboss',
-    MINIBOSS_GRID,
-    { K: '#0f172a', Y: '#facc15', M: '#ffffff', W: '#f1f5f9', D: '#94a3b8', E: '#ef4444' },
-    6
-  );
+  // Sect Hall Master Mini-Boss variants & Supreme Cult Leader
+  const miniPalette = {
+    K: '#0f172a',
+    Y: '#facc15',
+    M: '#ffffff',
+    W: '#f1f5f9',
+    D: '#94a3b8',
+    E: '#ef4444',
+  };
+  drawPixelGrid(scene, 'miniboss', MINIBOSS_GRID, miniPalette, 6);
+  drawPixelGrid(scene, 'miniboss_0', MINIBOSS_GRID, miniPalette, 6);
+  drawPixelGrid(scene, 'miniboss_1', MINIBOSS_CLAW_GRID, miniPalette, 6);
+  drawPixelGrid(scene, 'miniboss_2', MINIBOSS_WHEEL_GRID, miniPalette, 6);
   drawPixelGrid(
     scene,
     'endboss',
@@ -1128,6 +1169,338 @@ export const registerPixelTextures = (scene: Phaser.Scene): void => {
       '.........CC...',
     ],
     { C: '#818cf8', W: '#e0e7ff', T: '#ffffff' },
+    3
+  );
+
+  // ==================== EVOLVED ULTIMATE & GRANDMASTER MARTIAL ARTS TEXTURES ====================
+
+  // 18 Dragon Palms — Grandmaster / Sovereign Form (24x14 Imperial Coiled Golden Dragon)
+  drawPixelGrid(
+    scene,
+    'fx_dragon_sovereign',
+    [
+      '.......RRR....OOO.......',
+      '.....RRRRYY..OOOOYYO....',
+      '...OOYYYYYYYYYYYYWWYYO..',
+      '.CCYYYYWWWYYYYWWWRWWYYTT',
+      'CCCGGGYYYYWWWWWWWWTTT...',
+      '..OOOOGGGYYYYWWWWWT.....',
+      'YYYYGGGGYYYYYYWWWWWW....',
+      '..OOOOGGGYYYYWWWWWT.....',
+      'CCCGGGYYYYWWWWWWWWTTT...',
+      '.CCYYYYWWWYYYYWWWWWWYYTT',
+      '...OOYYYYYYYYYYYYWWYYO..',
+      '.....OOYYYYYYYYYYYOO....',
+      '.......OOOOYYYYOO.......',
+      '...........OOOO.........',
+    ],
+    {
+      R: '#dc2626',
+      O: '#ea580c',
+      G: '#f59e0b',
+      Y: '#facc15',
+      W: '#fef9c3',
+      T: '#ffffff',
+      C: '#38bdf8',
+    },
+    3
+  );
+
+  // Jade Maiden Swordplay — Ultimate: Crossed Twin Jade-Moon Lotus Blades
+  drawPixelGrid(
+    scene,
+    'fx_jade_twin_lotus',
+    [
+      '....PPP.....B.....',
+      '.RR..PPGGGGGBBBT..',
+      '..RKK.GGWWWWWWBBTT',
+      '...PPGGGWWWWWWWWTT',
+      '..RRRGGGGGGGWWWWTT',
+      '...PPGGGWWWWWWWWTT',
+      '..RKK.GGWWWWWWBBTT',
+      '.RR..PPGGGGGBBBT..',
+      '....PPP.....B.....',
+    ],
+    {
+      R: '#e11d48',
+      P: '#f472b6',
+      K: '#334155',
+      G: '#fbbf24',
+      B: '#38bdf8',
+      W: '#e0f2fe',
+      T: '#ffffff',
+    },
+    3
+  );
+
+  // Jade Maiden Swordplay — Grandmaster: Celestial Condor-Wing Sword Array (5 fanned divine blades)
+  drawPixelGrid(
+    scene,
+    'fx_jade_condor_array',
+    [
+      '...PPPP.......BBBBT...',
+      '..RR.GGG..BBBBWWWWTT..',
+      '.....GGGGBBBBWWWWWWTT.',
+      '.PP..GGGGYYWWTTTTTTTTT',
+      'RRRGGYYYYWWWWWWWWWWTTT',
+      '.PP..GGGGYYWWTTTTTTTTT',
+      '.....GGGGBBBBWWWWWWTT.',
+      '..RR.GGG..BBBBWWWWTT..',
+      '...PPPP.......BBBBT...',
+    ],
+    {
+      R: '#f43f5e',
+      P: '#fbcfe8',
+      G: '#f59e0b',
+      Y: '#fde047',
+      B: '#06b6d4',
+      W: '#e0f2fe',
+      T: '#ffffff',
+    },
+    3
+  );
+
+  // Dog-Beating Staff — Ultimate: Dragon-Coiled Cyclone Vortex
+  drawPixelGrid(
+    scene,
+    'fx_staff_dragon_vortex',
+    [
+      '....YYYYYYYY....',
+      '..YYCCCCCCCCYY..',
+      '.YCWWWWWWWWWWCY.',
+      'YCWW..GGGG..WWCY',
+      'YCW..GYYYYG..WCY',
+      'GGGGGGGGGGGGGGGG',
+      'YEEYYWWWWWWYYEEY',
+      'GGGGGGGGGGGGGGGG',
+      'YCW..GYYYYG..WCY',
+      'YCWW..GGGG..WWCY',
+      '.YCWWWWWWWWWWCY.',
+      '..YYCCCCCCCCYY..',
+      '....YYYYYYYY....',
+    ],
+    { G: '#10b981', E: '#047857', C: '#6ee7b7', Y: '#facc15', W: '#fef9c3' },
+    3
+  );
+
+  // Dog-Beating Staff — Grandmaster: Eight-Trigram Bagua Emerald Array
+  drawPixelGrid(
+    scene,
+    'fx_staff_bagua_domain',
+    [
+      '.....YYYYYYYY.....',
+      '...YYGGGGGGGGYY...',
+      '..YGGCCCCCCCCGGY..',
+      '.YGCCCWWWWWWCCCGY.',
+      '.YGCWWYYYYYYWWCGY.',
+      'GGGGGGGGTTGGGGGGGG',
+      'YEEYYWWTTTTWWYYEEY',
+      'GGGGGGGGTTGGGGGGGG',
+      '.YGCWWYYYYYYWWCGY.',
+      '.YGCCCWWWWWWCCCGY.',
+      '..YGGCCCCCCCCGGY..',
+      '...YYGGGGGGGGYY...',
+      '.....YYYYYYYY.....',
+    ],
+    { G: '#10b981', E: '#065f46', C: '#34d399', Y: '#fde047', W: '#fef9c3', T: '#ffffff' },
+    3
+  );
+
+  // Xuantie Heavy Iron — Ultimate: Colossus Tectonic Greatsword
+  drawPixelGrid(
+    scene,
+    'fx_iron_colossus_blade',
+    [
+      '....GG................',
+      '....GGPPPPPPPPPPBB....',
+      '.GG.GGWWWWWWWWWWPPBB..',
+      'GKKGGGPPPRRRRPPPWWBBTT',
+      'GKKGGGTTTTTTTTTTWWWWTT',
+      'GKKGGGPPPRRRRPPPWWBBTT',
+      '.GG.GGWWWWWWWWWWPPBB..',
+      '....GGPPPPPPPPPPBB....',
+      '....GG................',
+    ],
+    {
+      G: '#f59e0b',
+      K: '#1e293b',
+      B: '#3b0764',
+      P: '#9333ea',
+      R: '#f43f5e',
+      W: '#f5d0fe',
+      T: '#ffffff',
+    },
+    3
+  );
+
+  // Xuantie Heavy Iron — Grandmaster: Sword-Tomb Cataclysm Monolith
+  drawPixelGrid(
+    scene,
+    'fx_iron_sword_tomb',
+    [
+      '.....RRR..............',
+      '...GGGGPPPPPPPPBBBB...',
+      '..GKKGGWWWWWWWWPPBBT..',
+      '.GKKGGGPRRRRRRPWWBBTT.',
+      'YGKKGGGTTTTTTTTTTTTTTT',
+      '.GKKGGGPRRRRRRPWWBBTT.',
+      '..GKKGGWWWWWWWWPPBBT..',
+      '...GGGGPPPPPPPPBBBB...',
+      '.....RRR..............',
+    ],
+    {
+      Y: '#fde047',
+      G: '#fbbf24',
+      K: '#0f172a',
+      B: '#581c87',
+      P: '#c084fc',
+      R: '#ef4444',
+      W: '#fae8ff',
+      T: '#ffffff',
+    },
+    3
+  );
+
+  // Peach Blossom Flute — Ultimate: Soaring Phoenix Sonic Crest
+  drawPixelGrid(
+    scene,
+    'fx_flute_phoenix_chord',
+    [
+      '.....PPPPP......',
+      '.......YYCCC....',
+      '..PPP....YYWCCT.',
+      '.PPPPP....YWCTWT',
+      'PPYYY......WWTTT',
+      '.PPPPP....YWCTWT',
+      '..PPP....YYWCCT.',
+      '.......YYCCC....',
+      '.....PPPPP......',
+    ],
+    { P: '#ec4899', Y: '#facc15', C: '#2dd4bf', W: '#ccfbf1', T: '#ffffff' },
+    3
+  );
+
+  // Peach Blossom Flute — Grandmaster: Azure-Sea Tidal Dragon Soundwave
+  drawPixelGrid(
+    scene,
+    'fx_flute_tidal_dragon',
+    [
+      '....PPPP..CCCCCC....',
+      '..PPYYYYCCCCWWWWCT..',
+      '.PPYY..CCCWWWWWWTTT.',
+      'PPYY....CCWWTTTTWWTT',
+      'PPYYY...CCWWTTTTTTTT',
+      'PPYY....CCWWTTTTWWTT',
+      '.PPYY..CCCWWWWWWTTT.',
+      '..PPYYYYCCCCWWWWCT..',
+      '....PPPP..CCCCCC....',
+    ],
+    { P: '#f472b6', Y: '#fde047', C: '#14b8a6', W: '#99f6e4', T: '#ffffff' },
+    3
+  );
+
+  // Soul-Chilling Ice Needles — Ultimate: Barbed Frost-Venom Crystal Javelin
+  drawPixelGrid(
+    scene,
+    'fx_ice_crystal_spear',
+    [
+      '.....PP....CCCC...',
+      '..PPP..CCCCWWWWCT.',
+      'PPPCCCCCCCCWWWWTTT',
+      'TTTTTTTTTTTTTTTTTT',
+      'PPPCCCCCCCCWWWWTTT',
+      '..PPP..CCCCWWWWCT.',
+      '.....PP....CCCC...',
+    ],
+    { P: '#c084fc', C: '#38bdf8', W: '#bae6fd', T: '#ffffff' },
+    3
+  );
+
+  // Soul-Chilling Ice Needles — Grandmaster: 8-Point Blooming Frost-Venom Lotus
+  drawPixelGrid(
+    scene,
+    'fx_ice_blizzard_lotus',
+    [
+      '.....CC....CC.....',
+      '..P..CCWWWWCC..P..',
+      '.PPCCCWWTTWWCCCPP.',
+      'CCWWTTTTTTTTTTWWCC',
+      '.PPCCCWWTTWWCCCPP.',
+      '..P..CCWWWWCC..P..',
+      '.....CC....CC.....',
+    ],
+    { P: '#a855f7', C: '#38bdf8', W: '#e0f2fe', T: '#ffffff' },
+    3
+  );
+
+  // Six-Pulse Divine Sword — Ultimate: Royal Golden-Cyan Meridian Lance
+  drawPixelGrid(
+    scene,
+    'fx_six_pulse_lance',
+    [
+      '....YYCCCCCCC.....',
+      '..YYCCWWWWWWWCC...',
+      'GGYYWWTTTTTTTTTTTT',
+      'YYYYTTTTTTTTTTTTTT',
+      'GGYYWWTTTTTTTTTTTT',
+      '..YYCCWWWWWWWCC...',
+      '....YYCCCCCCC.....',
+    ],
+    { G: '#f59e0b', Y: '#fde047', C: '#06b6d4', W: '#cffafe', T: '#ffffff' },
+    3
+  );
+
+  // Six-Pulse Divine Sword — Grandmaster: Heaven-Piercing Sovereign Meridian Beam
+  drawPixelGrid(
+    scene,
+    'fx_six_pulse_sovereign',
+    [
+      '..YYYYCCCCCCCCC.......',
+      'GGYYYYWWWWWWWWWCCCC...',
+      'YYYYWWWWTTTTTTTTTTTTTT',
+      'TTTTTTTTTTTTTTTTTTTTTT',
+      'YYYYWWWWTTTTTTTTTTTTTT',
+      'GGYYYYWWWWWWWWWCCCC...',
+      '..YYYYCCCCCCCCC.......',
+    ],
+    { G: '#f59e0b', Y: '#facc15', C: '#22d3ee', W: '#ecfeff', T: '#ffffff' },
+    3
+  );
+
+  // Flicking Finger Divine Thrum — Ultimate: Blazing Solar Meteor Orb
+  drawPixelGrid(
+    scene,
+    'fx_finger_solar_orb',
+    [
+      '...RRRRRR...',
+      '.RROOOOOORR.',
+      'ROYYYYYYYYOR',
+      'ROYYWWWWYYOR',
+      'ROYWTTTTWYOR',
+      'ROYYWWWWYYOR',
+      'ROYYYYYYYYOR',
+      '.RROOOOOORR.',
+      '...RRRRRR...',
+    ],
+    { R: '#ef4444', O: '#f97316', Y: '#facc15', W: '#fef9c3', T: '#ffffff' },
+    3
+  );
+
+  // Flicking Finger Divine Thrum — Grandmaster: Ten-Dragon Starburst Supernova
+  drawPixelGrid(
+    scene,
+    'fx_finger_supernova',
+    [
+      '....TT....TT....',
+      '..RROOYYYYOORR..',
+      '.ROYYWWWWWWYYOR.',
+      'TROWTTTTTTTTWORT',
+      'TROWTTTTTTTTWORT',
+      '.ROYYWWWWWWYYOR.',
+      '..RROOYYYYOORR..',
+      '....TT....TT....',
+    ],
+    { R: '#dc2626', O: '#fb923c', Y: '#fde047', W: '#fef9c3', T: '#ffffff' },
     3
   );
 

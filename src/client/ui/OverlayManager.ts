@@ -2,6 +2,9 @@ import { showToast } from '@devvit/web/client';
 import {
   BOSS_MUTATIONS,
   getBiomeById,
+  getBiomeForFloor,
+  getEndBossNameForFloor,
+  getMiniBossForFloor,
   getMutationById,
   rollBossMutations,
 } from '../../shared/catalogs/biomes.ts';
@@ -154,6 +157,7 @@ export class OverlayManager {
   private lastHud: RunHudSnapshot | null = null;
   private currentRunMode: RunMode = 'practice';
   private lastHudHeaderKey: string = '';
+  private lastHudBuffsKey: string = '';
   private activeModal: HTMLElement | null = null;
 
   constructor(root: HTMLElement) {
@@ -1325,6 +1329,8 @@ export class OverlayManager {
 
     const astryxMetaHost = this.el('div', 'astryx-inline-slot');
     astryxMetaHost.id = 'hud-astryx-meta';
+    this.lastHudHeaderKey = '';
+    this.lastHudBuffsKey = '';
     const dailyBiome = getBiomeById(this.state.daily.biomeId);
     mountAstryxRunHudHeader(astryxMetaHost, {
       biomeName: dailyBiome.name,
@@ -1462,14 +1468,14 @@ export class OverlayManager {
     if (lootEl) lootEl.textContent = `🪙 ${hud.gold}g • 💎 ${hud.shards} • 🔮 ${hud.cores}`;
 
     const isBossActive = hud.activeBossName !== null;
-    const headerKey = `${hud.draftedBuffIds.length}:${isBossActive ? '1' : '0'}`;
+    const headerKey = `${hud.floor}:${hud.draftedBuffIds.length}:${isBossActive ? '1' : '0'}`;
     if (headerKey !== this.lastHudHeaderKey) {
       this.lastHudHeaderKey = headerKey;
       const astryxMetaHost = document.getElementById('hud-astryx-meta');
       if (astryxMetaHost) {
-        const dailyBiome = getBiomeById(this.state.daily.biomeId);
+        const floorBiome = getBiomeForFloor(this.state.daily.biomeId, hud.floor, this.state.daily.seed);
         mountAstryxRunHudHeader(astryxMetaHost, {
-          biomeName: dailyBiome.name,
+          biomeName: floorBiome.name,
           runModeLabel: this.currentRunMode === 'daily' ? 'DAILY RANKED' : 'PRACTICE',
           buffCount: hud.draftedBuffIds.length,
           isBossActive,
@@ -1502,7 +1508,9 @@ export class OverlayManager {
     }
 
     const buffStrip = document.getElementById('hud-buffs');
-    if (buffStrip) {
+    const buffsKey = `${hud.floor}:${hud.draftedBuffIds.join(',')}`;
+    if (buffStrip && buffsKey !== this.lastHudBuffsKey) {
+      this.lastHudBuffsKey = buffsKey;
       buffStrip.innerHTML = '';
       const loadout = computeWuxiaLoadout(hud.draftedBuffIds, hud.floor);
 
@@ -1704,8 +1712,12 @@ export class OverlayManager {
   public openRouletteModal(floor: number, count: number, exclude: MutationId[]): void {
     this.clearModal();
     const rolled = rollBossMutations(this.rouletteRng, count, exclude);
-    const biome = getBiomeById(this.state.daily.biomeId);
+    const biome = getBiomeForFloor(this.state.daily.biomeId, floor, this.state.daily.seed);
     const isLeader = isCultLeaderFloor(floor);
+    const miniBossSpec = getMiniBossForFloor(this.state.daily.biomeId, floor, this.state.daily.seed);
+    const endBossName = getEndBossNameForFloor(this.state.daily.biomeId, floor, this.state.daily.seed);
+    const mechSource = BOSS_MUTATIONS.length > 0 ? biome : biome;
+    void mechSource;
 
     const backdrop = this.el('div', 'modal-backdrop');
     const box = this.el('div', 'modal-box');
@@ -1713,9 +1725,11 @@ export class OverlayManager {
     mountAstryxModalBanner(bannerHost, {
       status: 'warning',
       title: isLeader
-        ? `🎰 Floor ${floor} Cult Leader: ${biome.endBossName}`
-        : `🎰 Floor ${floor} Hall Master Ambush: ${biome.miniBossName}`,
-      description: `${biome.mechanicName}: ${biome.mechanicDescription}`,
+        ? `🎰 Floor ${floor} Cult Leader: ${endBossName}`
+        : `🎰 Floor ${floor} Hall Master Ambush: ${miniBossSpec.name}`,
+      description: isLeader
+        ? `${biome.mechanicName}: ${biome.mechanicDescription}`
+        : `${miniBossSpec.title} • ${biome.name} (${biome.mechanicName})`,
       badgeText: isLeader ? 'CULT LEADER' : 'HALL MASTER',
       badgeTier: 'boss',
     });
@@ -2069,38 +2083,150 @@ export class OverlayManager {
       )
     );
 
-    if (summary.legendaryDrop) {
-      const leg = getLegendaryById(summary.legendaryDrop.legendaryId);
-      const lBox = this.el(
-        'div',
-        `gear-item tier-legendary ${summary.legendaryDrop.isCursed ? 'cursed-tag' : ''}`
+    const nonLegDrops = summary.drops.filter((d) => d.id !== summary.legendaryDrop?.id);
+    const totalNewDrops = (summary.legendaryDrop ? 1 : 0) + nonLegDrops.length;
+
+    if (totalNewDrops > 0) {
+      const slotLabels: Record<GearSlot, string> = {
+        weapon: '🗡️ Weapon',
+        headgear: '👑 Headpiece',
+        top: '🥋 Inner Robe',
+        cape: '🧣 Mantle',
+      };
+      const tierPriority: Record<GearItem['tier'], number> = {
+        legendary: 0,
+        rare: 1,
+        normal: 2,
+      };
+      const showcaseItems: GearItem[] = [
+        ...(summary.legendaryDrop ? [summary.legendaryDrop] : []),
+        ...[...nonLegDrops].sort((a, b) => tierPriority[a.tier] - tierPriority[b.tier]),
+      ];
+
+      const dropsSection = this.el('div', 'card');
+      const dropsHeader = this.el('div', 'row-between');
+      dropsHeader.appendChild(
+        this.el('strong', '', `🎁 NEW SECT RELICS ACQUIRED (${totalNewDrops})`)
       );
-      const lTop = this.el('div', 'row-between');
-      lTop.appendChild(
-        this.el('strong', '', `Altar of Fate Legendary: ${summary.legendaryDrop.name}`)
-      );
-      const lBadgeHost = this.el('span', 'astryx-inline-slot');
-      mountAstryxStatusBadge(lBadgeHost, {
-        label: summary.legendaryDrop.isCursed ? 'CURSED' : 'PRISTINE ✨',
-        tier: summary.legendaryDrop.isCursed ? 'cursed' : 'pristine',
-      });
-      lTop.appendChild(lBadgeHost);
-      lBox.appendChild(lTop);
-      lBox.appendChild(this.el('div', 'muted', summary.legendaryDrop.affixText));
-      if (summary.legendaryDrop.isCursed && leg) {
-        lBox.appendChild(
-          this.el('div', 'muted', `Penalty (${leg.cursedName}): ${leg.cursedText} — Cleanse at The Sanctum!`)
+      if (summary.autoDismantledCount > 0) {
+        dropsHeader.appendChild(
+          this.el(
+            'span',
+            'muted',
+            `+${summary.autoDismantledCount} Normal auto-dismantled (+${summary.autoDismantledShards} Shards)`
+          )
         );
       }
-      box.appendChild(lBox);
-    }
+      dropsSection.appendChild(dropsHeader);
 
-    if (summary.drops.length > 0) {
+      const dropGrid = this.el('div', 'relic-drop-grid');
+      for (const item of showcaseItems.slice(0, 6)) {
+        const tierCls =
+          item.tier === 'legendary'
+            ? 'tier-legendary'
+            : item.tier === 'rare'
+              ? 'tier-rare'
+              : 'tier-normal';
+        const card = this.el(
+          'div',
+          `gear-item ${tierCls} ${item.isCursed ? 'cursed-tag' : ''}`
+        );
+        const topRow = this.el('div', 'row-between');
+        topRow.appendChild(this.el('strong', '', item.name));
+        const badgeHost = this.el('span', 'astryx-inline-slot');
+        const astryxTier =
+          item.tier === 'legendary'
+            ? item.isCursed
+              ? 'cursed'
+              : 'pristine'
+            : item.tier === 'rare'
+              ? 'silver'
+              : 'bronze';
+        mountAstryxStatusBadge(badgeHost, {
+          label: item.tier === 'legendary'
+            ? item.isCursed
+              ? 'LEGENDARY CURSED'
+              : 'LEGENDARY ★'
+            : item.tier.toUpperCase(),
+          tier: astryxTier,
+        });
+        topRow.appendChild(badgeHost);
+        card.appendChild(topRow);
+
+        const currentEquipped = this.state.profile.classes[payload.classId].equipped[item.slot];
+        const delta = currentEquipped
+          ? item.baseStatBonus - currentEquipped.baseStatBonus
+          : item.baseStatBonus;
+        const deltaTxt =
+          delta > 0 ? ` • ▲ +${delta} Upgrade!` : delta < 0 ? ` • ${delta} vs equipped` : '';
+        card.appendChild(
+          this.el(
+            'div',
+            'muted',
+            `${slotLabels[item.slot]} • +${item.baseStatBonus} Power${deltaTxt}`
+          )
+        );
+        card.appendChild(this.el('div', 'muted', item.affixText));
+
+        if (item.isCursed && item.legendaryId) {
+          const leg = getLegendaryById(item.legendaryId);
+          if (leg) {
+            card.appendChild(
+              this.el(
+                'div',
+                'muted',
+                `⚠️ ${leg.cursedName}: ${leg.cursedText} — Cleanse at The Sanctum!`
+              )
+            );
+          }
+        }
+
+        const isAlreadyEquipped =
+          this.state.profile.classes[payload.classId].equipped[item.slot]?.id === item.id;
+        const equipBtn = this.el(
+          'button',
+          `btn btn-sm ${isAlreadyEquipped ? '' : delta > 0 ? 'btn-green' : 'btn-primary'}`,
+          isAlreadyEquipped ? '✓ Equipped' : '⚔️ Equip Now'
+        );
+        if (equipBtn instanceof HTMLButtonElement) {
+          equipBtn.disabled = isAlreadyEquipped;
+          equipBtn.style.alignSelf = 'flex-start';
+          equipBtn.addEventListener('click', () => {
+            const msg = this.applyCampActionLocally({
+              action: 'equip_item',
+              itemId: item.id,
+            });
+            void this.sendCampAction({
+              action: 'equip_item',
+              itemId: item.id,
+            });
+            equipBtn.disabled = true;
+            equipBtn.textContent = '✓ Equipped!';
+            soundFX.playDraft();
+            this.showToastSafe(msg ?? `Equipped ${item.name}!`);
+          });
+        }
+        card.appendChild(equipBtn);
+        dropGrid.appendChild(card);
+      }
+
+      dropsSection.appendChild(dropGrid);
+      if (showcaseItems.length > 6) {
+        dropsSection.appendChild(
+          this.el(
+            'div',
+            'muted',
+            `+${showcaseItems.length - 6} additional relics stored in Camp Armory bag.`
+          )
+        );
+      }
+      box.appendChild(dropsSection);
+    } else if (summary.autoDismantledCount > 0) {
       box.appendChild(
         this.el(
           'div',
-          'muted',
-          `Gear Drops Added to Bag: ${summary.drops.map((d) => `${d.name} (${d.tier})`).join(', ')}`
+          'card',
+          `♻️ Auto-Dismantled ${summary.autoDismantledCount} Normal Drops into +${summary.autoDismantledShards} Jade Shards`
         )
       );
     }

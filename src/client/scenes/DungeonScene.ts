@@ -1,6 +1,12 @@
 import { Scene } from 'phaser';
 import * as Phaser from 'phaser';
-import { getBiomeById, getMutationById } from '../../shared/catalogs/biomes.ts';
+import {
+  getBiomeById,
+  getBiomeForFloor,
+  getEndBossNameForFloor,
+  getMiniBossForFloor,
+  getMutationById,
+} from '../../shared/catalogs/biomes.ts';
 import { getClassDefinition } from '../../shared/catalogs/classes.ts';
 import { computeHeroCombatStats } from '../../shared/catalogs/classes.ts';
 import {
@@ -94,6 +100,10 @@ type ProjectileEntity = {
   dropFalconLoot: boolean;
   labelTag: string | null;
   life: number;
+  trailHex: number | null;
+  explosionRadius: number;
+  explosionColor: number;
+  isSpinning: boolean;
 };
 
 type LootDropEntity = {
@@ -632,6 +642,11 @@ export class DungeonScene extends Scene {
     this.waveIndex = 1;
     this.potionCharges = 1;
     this.currentBossMutations = [];
+    if (this.runConfig) {
+      this.applyBiomeVisuals(
+        getBiomeForFloor(this.runConfig.biomeId, floorNum, this.runConfig.seed)
+      );
+    }
     this.applyFloorStartShieldsAndPassives();
 
     if (
@@ -651,7 +666,7 @@ export class DungeonScene extends Scene {
 
     this.totalWavesOnFloor = floorNum <= 1 ? 1 : 2;
     this.phase = 'walking';
-    this.walkTimer = 1.1;
+    this.walkTimer = 0.9;
     this.spawnFloatingText(this.scale.width / 2, this.groundY - 140, `FLOOR ${floorNum}`, '#fde047', 26);
     this.emitHud();
   }
@@ -660,11 +675,13 @@ export class DungeonScene extends Scene {
     this.currentBossMutations = [...mutations];
     this.lastBossMutations = [...mutations];
     this.phase = 'walking';
-    this.walkTimer = 0.9;
+    this.walkTimer = 0.75;
+    const baseBiomeId = this.runConfig?.biomeId ?? this.activeBiome.id;
+    const runSeed = this.runConfig?.seed ?? 1;
     const isCultLeader = isCultLeaderFloor(this.floor);
     const label = isCultLeader
-      ? `CULT LEADER (F${this.floor}): ${this.activeBiome.endBossName}`
-      : `HALL MASTER AMBUSH: ${this.activeBiome.miniBossName}`;
+      ? `CULT LEADER (F${this.floor}): ${getEndBossNameForFloor(baseBiomeId, this.floor, runSeed)}`
+      : `HALL MASTER AMBUSH: ${getMiniBossForFloor(baseBiomeId, this.floor, runSeed).name}`;
     this.spawnFloatingText(this.scale.width / 2, this.groundY - 150, label, '#f97316', 22);
     soundFX.playBossRoar();
     this.emitHud();
@@ -717,20 +734,41 @@ export class DungeonScene extends Scene {
       const baseAtk = isEndBoss
         ? cultLeaderAtk
         : Math.round((14 + this.floor * 3.2) * realmAtkMult * 1.65);
-      const name = isEndBoss ? `${this.activeBiome.endBossName} (F${this.floor})` : this.activeBiome.miniBossName;
+      const baseBiomeId = this.runConfig?.biomeId ?? this.activeBiome.id;
+      const miniBossSpec = getMiniBossForFloor(baseBiomeId, this.floor, runSeed);
+      const name = isEndBoss
+        ? `${getEndBossNameForFloor(baseBiomeId, this.floor, runSeed)} (F${this.floor})`
+        : miniBossSpec.name;
 
       if (this.currentBossMutations.includes('twin_soul')) {
-        this.spawnBossEntity(name, w - 160, Math.round(baseHp * 0.65 * hpMult), baseAtk, isEndBoss, false);
+        this.spawnBossEntity(
+          name,
+          w - 160,
+          Math.round(baseHp * 0.65 * hpMult),
+          baseAtk,
+          isEndBoss,
+          false,
+          isEndBoss ? undefined : miniBossSpec
+        );
         this.spawnBossEntity(
           `${name} (Shade)`,
           w - 95,
           Math.round(baseHp * 0.35 * hpMult),
           Math.round(baseAtk * 0.75),
           isEndBoss,
-          true
+          true,
+          isEndBoss ? undefined : miniBossSpec
         );
       } else {
-        this.spawnBossEntity(name, w - 150, Math.round(baseHp * hpMult), baseAtk, isEndBoss, false);
+        this.spawnBossEntity(
+          name,
+          w - 150,
+          Math.round(baseHp * hpMult),
+          baseAtk,
+          isEndBoss,
+          false,
+          isEndBoss ? undefined : miniBossSpec
+        );
       }
       return;
     }
@@ -744,9 +782,10 @@ export class DungeonScene extends Scene {
     const eliteChance =
       this.floor < 3 ? 0 : Math.min(0.65, 0.18 + bracket * 0.14 + (this.floor % 10) * 0.015);
     const spacing = Math.min(
-      95,
-      Math.max(38, Math.floor((w - this.heroX - 180) / Math.max(1, mobCount - 1)))
+      84,
+      Math.max(38, Math.floor((w - this.heroX - 200) / Math.max(1, mobCount - 1)))
     );
+    const frontAnchorX = this.waveIndex > 1 ? Math.max(this.heroX + 210, w - 260) : w - 75;
     for (let i = 0; i < mobCount; i++) {
       const kindIdx = Math.floor(this.rng() * 3);
       const textureKey = `mob_${kindIdx}`;
@@ -762,7 +801,10 @@ export class DungeonScene extends Scene {
           hpMult
       );
       const atk = Math.round((7 + this.floor * 2.2) * realmAtkMult * (isElite ? 1.45 : 1));
-      const x = Math.max(this.heroX + 130, w - 75 - i * spacing);
+      const x = Math.max(
+        this.heroX + 130,
+        this.waveIndex > 1 ? frontAnchorX + i * spacing * 0.65 : w - 75 - i * spacing
+      );
       const y = this.groundY - 24;
 
       const sprite = this.add.image(x, y, textureKey).setTint(tint).setDepth(6);
@@ -827,7 +869,8 @@ export class DungeonScene extends Scene {
     baseHp: number,
     baseAtk: number,
     isEndBoss: boolean,
-    isSplitClone: boolean
+    isSplitClone: boolean,
+    miniBossSpec?: ReturnType<typeof getMiniBossForFloor>
   ): void {
     const mutations = this.currentBossMutations;
     let maxHp = baseHp;
@@ -846,8 +889,10 @@ export class DungeonScene extends Scene {
 
     const y = this.groundY - (isEndBoss ? 52 : 40);
     const barOffset = isEndBoss ? 68 : 56;
-    const key = isEndBoss ? 'endboss' : 'miniboss';
-    const baseColor = this.activeBiome.mobColors[0] ?? 0xef4444;
+    const key = isEndBoss ? 'endboss' : (miniBossSpec?.spriteKey ?? 'miniboss_0');
+    const baseColor = isEndBoss
+      ? (this.activeBiome.mobColors[0] ?? 0xef4444)
+      : (miniBossSpec?.tintHex ?? this.activeBiome.mobColors[0] ?? 0xef4444);
     const tint = mutations.includes('golden_gilded')
       ? 0xffd700
       : isSplitClone
@@ -903,7 +948,7 @@ export class DungeonScene extends Scene {
       mitosisDone: isSplitClone,
       lastGoldenThreshold: 100,
       mutations: [...mutations],
-      mechanic: this.activeBiome.mechanicId,
+      mechanic: isEndBoss ? this.activeBiome.mechanicId : (miniBossSpec?.mechanicId ?? this.activeBiome.mechanicId),
     });
   }
 
@@ -918,11 +963,19 @@ export class DungeonScene extends Scene {
       if (this.hillsGraphics) this.hillsGraphics.tilePositionX += 36 * dt;
       if (this.floorTile) this.floorTile.tilePositionX += 110 * dt;
       if (this.heroSprite) {
-        this.heroSprite.y = this.groundY - 28 + Math.sin(this.elapsedRunMs * 0.015) * 4;
-        this.heroSprite.rotation = Math.sin(this.elapsedRunMs * 0.015) * 0.05;
+        const targetY = this.groundY - 28 + Math.sin(this.elapsedRunMs * 0.014) * 3.2;
+        const targetRot = Math.sin(this.elapsedRunMs * 0.014) * 0.04;
+        this.heroSprite.y = Phaser.Math.Linear(this.heroSprite.y, targetY, Math.min(1, dt * 14));
+        this.heroSprite.rotation = Phaser.Math.Linear(
+          this.heroSprite.rotation,
+          targetRot,
+          Math.min(1, dt * 14)
+        );
       }
+      this.updateProjectiles(dt);
+      this.updateHazards(dt);
+      this.updateLootDrops(dt);
       if (this.walkTimer <= 0) {
-        if (this.heroSprite) this.heroSprite.rotation = 0;
         this.phase = 'combat';
         this.spawnWave();
       }
@@ -932,8 +985,13 @@ export class DungeonScene extends Scene {
 
     if (this.phase === 'combat') {
       if (this.heroSprite && !this.tweens.isTweening(this.heroSprite)) {
-        this.heroSprite.y = this.groundY - 28 + Math.sin(this.elapsedRunMs * 0.005) * 1.8;
-        this.heroSprite.rotation = 0;
+        const combatY = this.groundY - 28 + Math.sin(this.elapsedRunMs * 0.005) * 1.8;
+        this.heroSprite.y = Phaser.Math.Linear(this.heroSprite.y, combatY, Math.min(1, dt * 12));
+        this.heroSprite.rotation = Phaser.Math.Linear(
+          this.heroSprite.rotation,
+          0,
+          Math.min(1, dt * 12)
+        );
       }
       this.updateCombat(dt);
       this.updateProjectiles(dt);
@@ -1288,42 +1346,46 @@ export class DungeonScene extends Scene {
     x: number,
     y: number,
     radius: number,
-    tintHex: number
+    tintHex: number,
+    textureKey: string = 'fx_staff_wheel',
+    targetScaleBoost: number = 1
   ): void {
     const wheel = this.add
-      .image(x, y, 'fx_staff_wheel')
+      .image(x, y, textureKey)
       .setTint(tintHex)
-      .setScale(0.65)
+      .setScale(0.65 * targetScaleBoost)
       .setAlpha(0.95)
       .setDepth(11);
     this.tweens.add({
       targets: wheel,
-      scale: Math.max(1.4, radius / 48),
+      scale: Math.max(1.4, radius / 48) * targetScaleBoost,
       rotation: Math.PI * 3.5,
       alpha: 0.05,
-      duration: 320,
+      duration: 340,
       ease: 'Cubic.easeOut',
       onComplete: () => wheel.destroy(),
     });
-    this.spawnQiShockwaveRing(x, y, tintHex, Math.min(280, radius * 0.72), 280);
+    this.spawnQiShockwaveRing(x, y, tintHex, Math.min(310, radius * 0.78), 300);
   }
 
   private spawnFallingGreatswordVfx(
     targetX: number,
     targetY: number,
     tintHex: number,
-    isSynergy: boolean
+    isSynergy: boolean,
+    textureKey: string = 'fx_iron_cleave',
+    scaleBoost: number = 1
   ): void {
     const sword = this.add
-      .image(targetX, targetY - 175, 'fx_iron_cleave')
+      .image(targetX, targetY - 175, textureKey)
       .setRotation(Math.PI / 2)
       .setTint(tintHex)
-      .setScale(isSynergy ? 1.55 : 1.2)
+      .setScale((isSynergy ? 1.55 : 1.2) * scaleBoost)
       .setDepth(12);
     this.tweens.add({
       targets: sword,
       y: targetY - 8,
-      scaleY: isSynergy ? 1.65 : 1.3,
+      scaleY: (isSynergy ? 1.65 : 1.3) * scaleBoost,
       duration: 110,
       ease: 'Cubic.easeIn',
       onComplete: () => {
@@ -1331,11 +1393,11 @@ export class DungeonScene extends Scene {
           targetX,
           targetY,
           tintHex,
-          isSynergy ? 185 : 125,
+          (isSynergy ? 185 : 125) * scaleBoost,
           280
         );
         const fissure = this.add
-          .rectangle(targetX, targetY + 18, isSynergy ? 195 : 130, 8, tintHex, 0.9)
+          .rectangle(targetX, targetY + 18, (isSynergy ? 195 : 130) * scaleBoost, 8, tintHex, 0.9)
           .setDepth(9);
         this.tweens.add({
           targets: fissure,
@@ -1627,24 +1689,73 @@ export class DungeonScene extends Scene {
 
     let projTexture = 'proj_palm_qi';
     let projTint: number | null = null;
+    const primaryLevel = primarySlot ? primarySlot.level : 1;
+    const primaryHasSyn = primaryArt ? loadout.awakenedSynergies.includes(primaryArt.synergyId) : false;
+    const basicEvolveScale = primaryHasSyn || primaryLevel >= 4 ? 1.35 : primaryLevel >= 3 ? 1.2 : 1;
     if (stanceStyle === 'jade_swords') {
-      projTexture = 'fx_jade_sword';
+      projTexture =
+        primaryHasSyn || primaryLevel >= 4
+          ? 'fx_jade_condor_array'
+          : primaryLevel >= 3
+            ? 'fx_jade_twin_lotus'
+            : 'fx_jade_sword';
       soundFX.playArrow();
     } else if (stanceStyle === 'iron_cleave' || (stanceStyle === null && hasRelicWep)) {
-      projTexture = 'proj_wave';
+      projTexture =
+        primaryHasSyn || primaryLevel >= 4
+          ? 'fx_iron_sword_tomb'
+          : primaryLevel >= 3
+            ? 'fx_iron_colossus_blade'
+            : 'proj_wave';
       soundFX.playSwing();
     } else if (stanceStyle === 'flute_sonic') {
-      projTexture = 'fx_flute_wave';
+      projTexture =
+        primaryHasSyn || primaryLevel >= 4
+          ? 'fx_flute_tidal_dragon'
+          : primaryLevel >= 3
+            ? 'fx_flute_phoenix_chord'
+            : 'fx_flute_wave';
       soundFX.playSpell();
     } else if (stanceStyle === 'venom_needles') {
-      projTexture = 'fx_ice_needle';
+      projTexture =
+        primaryHasSyn || primaryLevel >= 4
+          ? 'fx_ice_blizzard_lotus'
+          : primaryLevel >= 3
+            ? 'fx_ice_crystal_spear'
+            : 'fx_ice_needle';
       soundFX.playArrow();
     } else if (stanceStyle === 'staff_spin') {
-      projTexture = 'proj_palm_qi';
-      projTint = 0x34d399;
+      projTexture =
+        primaryHasSyn || primaryLevel >= 4
+          ? 'fx_staff_bagua_domain'
+          : primaryLevel >= 3
+            ? 'fx_staff_dragon_vortex'
+            : 'proj_palm_qi';
+      projTint = primaryLevel >= 3 ? null : 0x34d399;
       soundFX.playSwing();
+    } else if (stanceStyle === 'six_pulse') {
+      projTexture =
+        primaryHasSyn || primaryLevel >= 4
+          ? 'fx_six_pulse_sovereign'
+          : primaryLevel >= 3
+            ? 'fx_six_pulse_lance'
+            : 'proj_bolt';
+      soundFX.playCrit();
+    } else if (stanceStyle === 'flicking_finger') {
+      projTexture =
+        primaryHasSyn || primaryLevel >= 4
+          ? 'fx_finger_supernova'
+          : primaryLevel >= 3
+            ? 'fx_finger_solar_orb'
+            : 'proj_arrow';
+      soundFX.playSpell();
     } else {
-      projTexture = 'proj_palm_qi';
+      projTexture =
+        primaryHasSyn || primaryLevel >= 4
+          ? 'fx_dragon_sovereign'
+          : primaryLevel >= 3
+            ? 'fx_dragon_palm'
+            : 'proj_palm_qi';
       soundFX.playSwing();
     }
 
@@ -1692,7 +1803,8 @@ export class DungeonScene extends Scene {
         i === 0 && triggerStatic,
         false,
         null,
-        tex === 'proj_lightning' ? null : projTint
+        tex === 'proj_lightning' ? null : projTint,
+        basicEvolveScale
       );
     }
 
@@ -1793,25 +1905,37 @@ export class DungeonScene extends Scene {
     isChainProc: boolean = false,
     dropFalconLoot: boolean = false,
     labelTag: string | null = null,
-    tintHex: number | null = null
+    tintHex: number | null = null,
+    scaleOverride: number = 1,
+    trailHex: number | null = null,
+    explosionRadius: number = 0,
+    explosionColor: number = 0xfef08a
   ): void {
     const sprite = this.add.image(x, y, textureKey).setDepth(7);
     if (tintHex !== null) {
       sprite.setTint(tintHex);
     }
-    if (
-      textureKey !== 'proj_star' &&
-      textureKey !== 'fx_staff_wheel' &&
-      textureKey !== 'fx_taiji_seal' &&
-      textureKey !== 'proj_orb_hp'
-    ) {
+    const spinningKeys = new Set([
+      'proj_star',
+      'fx_staff_wheel',
+      'fx_staff_dragon_vortex',
+      'fx_staff_bagua_domain',
+      'fx_ice_blizzard_lotus',
+      'fx_finger_supernova',
+      'fx_taiji_seal',
+    ]);
+    const isSpinning = spinningKeys.has(textureKey);
+    if (!isSpinning && textureKey !== 'proj_orb_hp') {
       sprite.setRotation(Math.atan2(vy, vx));
     }
+    let defaultScale = 1;
     if (textureKey === 'fx_dragon_palm') {
-      sprite.setScale(1.25);
+      defaultScale = 1.25;
     } else if (textureKey === 'fx_jade_sword' || textureKey === 'fx_iron_cleave') {
-      sprite.setScale(1.15);
+      defaultScale = 1.15;
     }
+    sprite.setScale(defaultScale * scaleOverride);
+
     this.projectiles.push({
       sprite,
       targetId,
@@ -1828,6 +1952,10 @@ export class DungeonScene extends Scene {
       dropFalconLoot,
       labelTag,
       life: 2.2,
+      trailHex,
+      explosionRadius,
+      explosionColor,
+      isSpinning,
     });
   }
 
@@ -1840,16 +1968,18 @@ export class DungeonScene extends Scene {
       p.sprite.y += p.vy * dt;
 
       const key = p.sprite.texture.key;
-      if (key === 'proj_star' || key === 'fx_staff_wheel' || key === 'fx_taiji_seal') {
-        p.sprite.rotation += 14 * dt;
+      if (p.isSpinning) {
+        p.sprite.rotation += 16 * dt;
       } else if (key !== 'proj_orb_hp') {
         p.sprite.rotation = Math.atan2(p.vy, p.vx);
       }
 
       if (key.startsWith('fx_') || key.startsWith('proj_')) {
-        if (this.rng() < 0.2) {
+        const isEvolved = p.trailHex !== null;
+        if (this.rng() < (isEvolved ? 0.65 : 0.2)) {
           const sparkColor =
-            key === 'fx_dragon_palm' || key === 'proj_palm_qi' || key === 'proj_wave'
+            p.trailHex ??
+            (key === 'fx_dragon_palm' || key === 'proj_palm_qi' || key === 'proj_wave'
               ? 0xfef08a
               : key === 'fx_jade_sword'
                 ? 0x38bdf8
@@ -1859,15 +1989,23 @@ export class DungeonScene extends Scene {
                     ? 0x5eead4
                     : key === 'fx_ice_needle'
                       ? 0xc4b5fd
-                      : 0xe2e8f0;
+                      : 0xe2e8f0);
+          const sz = isEvolved ? 6 : 4;
           const spark = this.add
-            .rectangle(p.sprite.x - 6, p.sprite.y + (this.rng() - 0.5) * 6, 4, 4, sparkColor, 0.85)
+            .rectangle(
+              p.sprite.x - 10,
+              p.sprite.y + (this.rng() - 0.5) * (isEvolved ? 14 : 6),
+              sz,
+              sz,
+              sparkColor,
+              isEvolved ? 0.92 : 0.85
+            )
             .setDepth(6.8);
           this.tweens.add({
             targets: spark,
             alpha: 0,
-            scale: 0.4,
-            duration: 110,
+            scale: 0.35,
+            duration: isEvolved ? 170 : 110,
             onComplete: () => spark.destroy(),
           });
         }
@@ -1875,15 +2013,36 @@ export class DungeonScene extends Scene {
 
       let destroyed = p.life <= 0 || p.sprite.x > (this.scale.width || 1024) + 60;
       if (!destroyed) {
-        const hitX = p.isWave || key.startsWith('fx_') ? 68 : 42;
-        const hitY = p.isWave || key.startsWith('fx_') ? 88 : 76;
+        const scaleBoost = Math.max(1, p.sprite.scaleX);
+        const hitX = (p.isWave || key.startsWith('fx_') ? 68 : 42) * Math.min(1.75, scaleBoost);
+        const hitY = (p.isWave || key.startsWith('fx_') ? 88 : 76) * Math.min(1.65, scaleBoost);
         for (const e of [...this.enemies]) {
           if (e.hp <= 0 || p.hitIds.has(e.id)) continue;
           const dx = Math.abs(p.sprite.x - e.sprite.x);
           const dy = Math.abs(p.sprite.y - e.sprite.y);
           if (dx <= hitX && dy <= hitY) {
             p.hitIds.add(e.id);
-            this.spawnHitSpark(e.sprite.x, e.sprite.y, p.isCrit);
+            this.spawnHitSpark(e.sprite.x, e.sprite.y, p.isCrit, p.trailHex ?? 0xfef08a);
+            if (p.explosionRadius > 0) {
+              this.spawnQiShockwaveRing(
+                e.sprite.x,
+                e.sprite.y,
+                p.explosionColor,
+                p.explosionRadius,
+                220
+              );
+              for (const near of [...this.enemies]) {
+                if (
+                  near.id !== e.id &&
+                  near.hp > 0 &&
+                  !p.hitIds.has(near.id) &&
+                  Math.abs(near.sprite.x - e.sprite.x) <= p.explosionRadius * 0.85
+                ) {
+                  p.hitIds.add(near.id);
+                  this.damageEnemy(near, Math.round(p.damage * 0.45), false, p.labelTag);
+                }
+              }
+            }
             this.damageEnemy(e, p.damage, p.isCrit, p.labelTag);
             if (p.isChainProc) {
               p.isChainProc = false;
@@ -2271,7 +2430,8 @@ export class DungeonScene extends Scene {
     const meleeDist = this.heroX + 74;
     if (e.stunTimer <= 0 && e.rootTimer <= 0 && e.sprite.x > meleeDist) {
       const slow = e.chillTimer > 0 ? 0.75 : 1;
-      e.sprite.x = Math.max(meleeDist, e.sprite.x - e.speed * slow * dt);
+      const approachBoost = e.sprite.x > this.heroX + 215 ? 1.55 : 1;
+      e.sprite.x = Math.max(meleeDist, e.sprite.x - e.speed * approachBoost * slow * dt);
       e.sprite.y = baseY - Math.abs(Math.sin(this.elapsedRunMs * 0.01 + e.id)) * 3.5;
       e.sprite.setAngle(Math.sin(this.elapsedRunMs * 0.009 + e.id) * 3.2);
     } else if (!this.tweens.isTweening(e.sprite)) {
@@ -2417,13 +2577,21 @@ export class DungeonScene extends Scene {
     const syn = loadout.awakenedSynergies.includes(art.synergyId)
       ? getWuxiaSynergyById(art.synergyId)
       : null;
+    const tier: 'base' | 'ultimate' | 'grandmaster' =
+      syn !== null || level >= 4 ? 'grandmaster' : level >= 3 ? 'ultimate' : 'base';
 
     const powerMult =
       (syn ? syn.powerMult : (art.powerMults[level - 1] ?? 1.2)) *
       (isBurst ? 1.3 : 1) *
       this.stats.allDamageMult *
       (1 + this.stats.skillPowerPct / 100);
-    const count = syn ? syn.projectileCount : (art.projectileCounts[level - 1] ?? 1);
+    const rawCount = syn ? syn.projectileCount : (art.projectileCounts[level - 1] ?? 1);
+    const count =
+      tier === 'grandmaster'
+        ? Math.max(1, Math.min(3, rawCount))
+        : tier === 'ultimate'
+          ? Math.max(1, Math.min(2, rawCount))
+          : rawCount;
     const hitCrit = syn !== null || isBurst || this.rng() < this.stats.critRate;
     const dmg = Math.max(
       1,
@@ -2435,247 +2603,434 @@ export class DungeonScene extends Scene {
     this.syncHeroWuxiaWeapon(art.style);
 
     if (art.style === 'palm_wave') {
-      if (syn || level >= 3) {
+      if (tier !== 'base') {
         soundFX.playBossRoar();
-        this.cameras.main.shake(110, syn ? 0.008 : 0.004);
+        this.cameras.main.shake(125, tier === 'grandmaster' ? 0.009 : 0.005);
       } else {
         soundFX.playSwing();
       }
-      this.playHeroAttackAnimation('warrior', syn ? 1.45 : 1.15);
-      this.spawnHeroAfterimage(syn ? 0xfef08a : 0xf59e0b);
-      this.spawnQiShockwaveRing(this.heroX + 30, this.groundY - 30, syn ? 0xfef08a : 0xf59e0b, syn ? 165 : 105, 250);
+      this.playHeroAttackAnimation('warrior', tier === 'grandmaster' ? 1.55 : tier === 'ultimate' ? 1.3 : 1.1);
+      this.spawnHeroAfterimage(tier === 'grandmaster' ? 0xfef08a : 0xf59e0b);
+      this.spawnQiShockwaveRing(
+        this.heroX + 30,
+        this.groundY - 30,
+        tier === 'grandmaster' ? 0xfef08a : 0xf59e0b,
+        tier === 'grandmaster' ? 210 : tier === 'ultimate' ? 145 : 95,
+        280
+      );
+      if (tier === 'grandmaster') {
+        this.spawnQiShockwaveRing(this.heroX + 42, this.groundY - 30, 0xef4444, 155, 220);
+      }
       this.spawnFloatingText(
         this.heroX + 36,
-        this.groundY - 102,
-        syn ? 'SOVEREIGN DRAGON!' : level >= 3 ? '18 DRAGON PALMS!' : 'DRAGON PALM!',
-        '#fbbf24',
-        syn ? 16 : 14
+        this.groundY - 104,
+        syn
+          ? 'SOVEREIGN DRAGON!'
+          : tier === 'grandmaster'
+            ? 'GRANDMASTER 18 DRAGONS!'
+            : tier === 'ultimate'
+              ? 'ULTIMATE DRAGON PALMS!'
+              : 'DRAGON PALM!',
+        tier === 'grandmaster' ? '#fef08a' : '#fbbf24',
+        tier === 'grandmaster' ? 17 : tier === 'ultimate' ? 15 : 13
       );
+      const tex =
+        tier === 'grandmaster'
+          ? 'fx_dragon_sovereign'
+          : tier === 'ultimate'
+            ? 'fx_dragon_palm'
+            : 'proj_palm_qi';
+      const scale = tier === 'grandmaster' ? 2.05 : tier === 'ultimate' ? 1.55 : 1.15;
       for (let i = 0; i < count; i++) {
         const offset = i - (count - 1) / 2;
         this.spawnProjectile(
-          'fx_dragon_palm',
+          tex,
           this.heroX + 26,
-          this.groundY - 34 + offset * 16,
-          syn ? 580 : 480,
-          offset * 28,
+          this.groundY - 34 + offset * 18,
+          tier === 'grandmaster' ? 600 : tier === 'ultimate' ? 530 : 470,
+          offset * 24,
           dmg,
           hitCrit,
-          syn ? 99 : level >= 3 ? 6 : 3,
+          tier === 'grandmaster' ? 99 : tier === 'ultimate' ? 7 : 3,
           false,
           false,
           true,
           null,
           false,
           false,
-          syn ? 'DRAGON' : 'PALM'
+          tier === 'grandmaster' ? 'SOVEREIGN' : tier === 'ultimate' ? 'DRAGON' : 'PALM',
+          null,
+          scale,
+          tier === 'base' ? null : tier === 'grandmaster' ? 0xfef08a : 0xf59e0b,
+          tier === 'grandmaster' ? 140 : tier === 'ultimate' ? 90 : 0,
+          0xfbbf24
         );
       }
       for (const e of [...this.enemies]) {
-        if (Math.abs(e.sprite.x - this.heroX) <= 180 && !e.mutations.includes('juggernaut') && e.hp > 0) {
+        if (Math.abs(e.sprite.x - this.heroX) <= 185 && !e.mutations.includes('juggernaut') && e.hp > 0) {
           e.sprite.x = Math.min((this.scale.width || 1024) - 55, e.sprite.x + 28);
         }
       }
     } else if (art.style === 'jade_swords') {
       soundFX.playCrit();
-      this.playHeroAttackAnimation('thief', syn ? 1.35 : 1.1);
-      this.spawnHeroAfterimage(syn ? 0xf472b6 : 0x38bdf8);
-      this.spawnSlashVfx(this.heroX + 38, this.groundY - 32, syn ? 0xf472b6 : 0x38bdf8, syn ? 1.55 : 1.15);
-      if (syn) {
-        this.spawnQiShockwaveRing(this.heroX + 20, this.groundY - 30, 0x7dd3fc, 130, 240);
-        this.spawnFloatingText(this.heroX + 36, this.groundY - 98, 'PARTING SWORD!', '#7dd3fc', 15);
+      this.playHeroAttackAnimation('thief', tier === 'grandmaster' ? 1.45 : tier === 'ultimate' ? 1.25 : 1.05);
+      this.spawnHeroAfterimage(tier === 'grandmaster' ? 0x38bdf8 : 0xf472b6);
+      this.spawnSlashVfx(
+        this.heroX + 38,
+        this.groundY - 32,
+        tier === 'grandmaster' ? 0x38bdf8 : 0xf472b6,
+        tier === 'grandmaster' ? 1.75 : tier === 'ultimate' ? 1.4 : 1.1
+      );
+      if (tier !== 'base') {
+        this.spawnQiShockwaveRing(
+          this.heroX + 22,
+          this.groundY - 30,
+          tier === 'grandmaster' ? 0x38bdf8 : 0xf472b6,
+          tier === 'grandmaster' ? 165 : 115,
+          240
+        );
+        this.spawnFloatingText(
+          this.heroX + 36,
+          this.groundY - 98,
+          syn ? 'CONDOR SWORD ARRAY!' : tier === 'grandmaster' ? 'GRANDMASTER CONDOR ARRAY!' : 'TWIN JADE LOTUS!',
+          '#7dd3fc',
+          tier === 'grandmaster' ? 16 : 14
+        );
       }
-      const vx = 640;
+      const tex =
+        tier === 'grandmaster'
+          ? 'fx_jade_condor_array'
+          : tier === 'ultimate'
+            ? 'fx_jade_twin_lotus'
+            : 'fx_jade_sword';
+      const scale = tier === 'grandmaster' ? 1.9 : tier === 'ultimate' ? 1.5 : 1.15;
+      const vx = tier === 'grandmaster' ? 700 : 640;
       for (let i = 0; i < count; i++) {
         const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
-        const spreadY = (i - (count - 1) / 2) * 12;
+        const spreadY = (i - (count - 1) / 2) * 14;
         const vy =
           (aimEnemy.sprite.y - (this.groundY - 30) + spreadY) /
           Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 20)) / vx);
         this.spawnProjectile(
-          'fx_jade_sword',
+          tex,
           this.heroX + 22,
-          this.groundY - 30 + spreadY * 0.5,
+          this.groundY - 30 + spreadY * 0.45,
           vx,
           vy,
           dmg,
           hitCrit,
-          syn ? 3 : 1,
+          tier === 'grandmaster' ? 5 : tier === 'ultimate' ? 3 : 1,
           false,
           false,
-          false,
+          tier !== 'base',
           aimEnemy.id,
           false,
           false,
-          syn ? 'CONDOR' : 'JADE'
+          tier === 'grandmaster' ? 'CONDOR' : tier === 'ultimate' ? 'LOTUS' : 'JADE',
+          null,
+          scale,
+          tier === 'base' ? null : tier === 'grandmaster' ? 0x38bdf8 : 0xf472b6,
+          tier === 'grandmaster' ? 120 : tier === 'ultimate' ? 75 : 0,
+          0x38bdf8
         );
       }
     } else if (art.style === 'staff_spin') {
       soundFX.playSwing();
-      this.playHeroAttackAnimation('warrior', syn ? 1.45 : 1.15);
-      const radius = syn ? 330 : 165 + level * 35;
-      this.spawnHeroAfterimage(syn ? 0x6ee7b7 : 0x10b981);
+      this.playHeroAttackAnimation('warrior', tier === 'grandmaster' ? 1.55 : tier === 'ultimate' ? 1.3 : 1.1);
+      const radius = tier === 'grandmaster' ? 345 : tier === 'ultimate' ? 265 : 165 + level * 25;
+      const staffTex =
+        tier === 'grandmaster'
+          ? 'fx_staff_bagua_domain'
+          : tier === 'ultimate'
+            ? 'fx_staff_dragon_vortex'
+            : 'fx_staff_wheel';
+      const staffColor = tier === 'grandmaster' ? 0xfde047 : tier === 'ultimate' ? 0x6ee7b7 : 0x10b981;
+      this.spawnHeroAfterimage(staffColor);
       this.spawnWhirlingStaffVfx(
         this.heroX + 20,
         this.groundY - 28,
         radius,
-        syn ? 0x6ee7b7 : 0x10b981
+        staffColor,
+        staffTex,
+        tier === 'grandmaster' ? 1.45 : tier === 'ultimate' ? 1.2 : 1
       );
       this.spawnSlashVfx(
         this.heroX + 24,
         this.groundY - 28,
-        syn ? 0x6ee7b7 : 0x10b981,
-        syn ? 1.7 : 1.1 + level * 0.16
+        staffColor,
+        tier === 'grandmaster' ? 1.9 : tier === 'ultimate' ? 1.45 : 1.15
       );
-      if (syn) {
-        this.cameras.main.shake(100, 0.006);
-        this.spawnFloatingText(this.heroX + 32, this.groundY - 98, 'HEAVEN UNDER STAFF!', '#6ee7b7', 15);
+      if (tier !== 'base') {
+        this.cameras.main.shake(105, tier === 'grandmaster' ? 0.007 : 0.004);
+        this.spawnFloatingText(
+          this.heroX + 32,
+          this.groundY - 98,
+          syn ? 'HEAVEN UNDER STAFF!' : tier === 'grandmaster' ? 'BAGUA STAFF DOMAIN!' : 'DRAGON CYCLONE!',
+          '#6ee7b7',
+          tier === 'grandmaster' ? 16 : 14
+        );
+        // Launch evolved whirling staff cyclones down the lane
+        this.spawnProjectile(
+          staffTex,
+          this.heroX + 30,
+          this.groundY - 30,
+          tier === 'grandmaster' ? 540 : 480,
+          0,
+          Math.round(dmg * 0.7),
+          hitCrit,
+          99,
+          false,
+          true,
+          true,
+          null,
+          false,
+          false,
+          tier === 'grandmaster' ? 'BAGUA' : 'VORTEX',
+          null,
+          tier === 'grandmaster' ? 1.65 : 1.35,
+          staffColor,
+          tier === 'grandmaster' ? 115 : 70,
+          staffColor
+        );
       }
       for (const e of [...this.enemies]) {
         if (e.hp <= 0) continue;
         if (Math.abs(e.sprite.x - this.heroX) <= radius) {
-          this.spawnHitSpark(e.sprite.x, e.sprite.y, hitCrit, 0x10b981);
-          this.damageEnemy(e, dmg, hitCrit, syn ? 'STAFF' : 'SWEEP');
+          this.spawnHitSpark(e.sprite.x, e.sprite.y, hitCrit, staffColor);
+          this.damageEnemy(e, dmg, hitCrit, tier === 'grandmaster' ? 'BAGUA' : 'STAFF');
           if (e.hp > 0) {
             e.chillTimer = Math.max(e.chillTimer, 1.5);
-            if (syn || level >= 2) e.stunTimer = Math.max(e.stunTimer, syn ? 0.75 : 0.35);
+            if (tier !== 'base' || level >= 2) e.stunTimer = Math.max(e.stunTimer, tier === 'grandmaster' ? 0.85 : 0.4);
           }
         }
       }
     } else if (art.style === 'iron_cleave') {
       soundFX.playBossRoar();
-      this.playHeroAttackAnimation('warrior', syn ? 1.5 : 1.25);
+      this.playHeroAttackAnimation('warrior', tier === 'grandmaster' ? 1.6 : tier === 'ultimate' ? 1.35 : 1.15);
       const strikeX = target.sprite.x;
+      const bladeTex =
+        tier === 'grandmaster'
+          ? 'fx_iron_sword_tomb'
+          : tier === 'ultimate'
+            ? 'fx_iron_colossus_blade'
+            : 'fx_iron_cleave';
+      const bladeTint = tier === 'grandmaster' ? 0xf43f5e : tier === 'ultimate' ? 0xe879f9 : 0xa855f7;
       this.spawnFallingGreatswordVfx(
         strikeX,
         target.sprite.y,
-        syn ? 0xe879f9 : 0xa855f7,
-        syn !== null
+        bladeTint,
+        tier === 'grandmaster',
+        bladeTex,
+        tier === 'grandmaster' ? 1.45 : tier === 'ultimate' ? 1.25 : 1
       );
+      if (tier === 'grandmaster') {
+        this.spawnFallingGreatswordVfx(
+          strikeX - 75,
+          target.sprite.y,
+          0xc084fc,
+          true,
+          'fx_iron_colossus_blade',
+          1.15
+        );
+        this.spawnFallingGreatswordVfx(
+          strikeX + 75,
+          target.sprite.y,
+          0xfde047,
+          true,
+          'fx_iron_colossus_blade',
+          1.15
+        );
+      }
       this.spawnSlashVfx(
         strikeX,
         target.sprite.y,
-        syn ? 0xe879f9 : 0xa855f7,
-        syn ? 1.9 : 1.25 + level * 0.16
+        bladeTint,
+        tier === 'grandmaster' ? 2.1 : tier === 'ultimate' ? 1.6 : 1.25
       );
-      if (syn) {
-        this.spawnFloatingText(strikeX, target.sprite.y - 54, 'SWORD TOMB!', '#e879f9', 16);
+      if (tier !== 'base') {
+        this.spawnFloatingText(
+          strikeX,
+          target.sprite.y - 58,
+          syn || tier === 'grandmaster' ? 'SWORD TOMB CATACLYSM!' : 'COLOSSUS CLEAVE!',
+          '#e879f9',
+          tier === 'grandmaster' ? 17 : 15
+        );
       }
       for (const e of [...this.enemies]) {
         if (e.hp <= 0) continue;
-        if (Math.abs(e.sprite.x - strikeX) <= (syn ? 195 : 135)) {
-          this.spawnHitSpark(e.sprite.x, e.sprite.y, hitCrit, 0xc084fc);
-          this.damageEnemy(e, dmg, hitCrit, syn ? 'TOMB' : 'IRON');
-          if (e.hp > 0) e.stunTimer = Math.max(e.stunTimer, syn ? 1.1 : 0.6);
+        if (Math.abs(e.sprite.x - strikeX) <= (tier === 'grandmaster' ? 210 : tier === 'ultimate' ? 165 : 130)) {
+          this.spawnHitSpark(e.sprite.x, e.sprite.y, hitCrit, bladeTint);
+          this.damageEnemy(e, dmg, hitCrit, tier === 'grandmaster' ? 'CATACLYSM' : 'IRON');
+          if (e.hp > 0) e.stunTimer = Math.max(e.stunTimer, tier === 'grandmaster' ? 1.15 : 0.7);
         }
       }
-      if (syn) {
-        for (let i = 0; i < count; i++) {
-          const offset = i - (count - 1) / 2;
-          this.spawnProjectile(
-            'fx_iron_cleave',
-            this.heroX + 24,
-            this.groundY - 40 + offset * 12,
-            530,
-            offset * 20,
-            Math.round(dmg * 0.45),
-            true,
-            5,
-            false,
-            false,
-            true,
-            null,
-            false,
-            false,
-            'SWORD'
-          );
-        }
+      if (tier !== 'base') {
+        this.spawnProjectile(
+          bladeTex,
+          this.heroX + 24,
+          this.groundY - 40,
+          tier === 'grandmaster' ? 580 : 510,
+          0,
+          Math.round(dmg * 0.55),
+          true,
+          99,
+          false,
+          false,
+          true,
+          null,
+          false,
+          false,
+          tier === 'grandmaster' ? 'TOMB' : 'CLEAVE',
+          null,
+          tier === 'grandmaster' ? 1.85 : 1.45,
+          bladeTint,
+          tier === 'grandmaster' ? 135 : 85,
+          bladeTint
+        );
       }
     } else if (art.style === 'flute_sonic') {
       soundFX.playSpell();
-      this.playHeroAttackAnimation('mage', syn ? 1.3 : 1.05);
+      this.playHeroAttackAnimation('mage', tier === 'grandmaster' ? 1.4 : 1.15);
+      const fluteColor = tier === 'grandmaster' ? 0x2dd4bf : tier === 'ultimate' ? 0xf472b6 : 0x2dd4bf;
       this.spawnQiShockwaveRing(
         this.heroX + 18,
         this.groundY - 30,
-        syn ? 0x5eead4 : 0x2dd4bf,
-        syn ? 160 : 105,
-        240
+        fluteColor,
+        tier === 'grandmaster' ? 185 : tier === 'ultimate' ? 135 : 95,
+        250
       );
-      if (syn) {
-        this.spawnFloatingText(this.heroX + 36, this.groundY - 96, 'AZURE SYMPHONY!', '#5eead4', 15);
+      if (tier !== 'base') {
+        this.spawnFloatingText(
+          this.heroX + 36,
+          this.groundY - 96,
+          syn ? 'AZURE SYMPHONY!' : tier === 'grandmaster' ? 'TIDAL DRAGON CHORD!' : 'PHOENIX FLUTE CREST!',
+          '#5eead4',
+          tier === 'grandmaster' ? 16 : 14
+        );
       }
-      const vx = 550;
+      const tex =
+        tier === 'grandmaster'
+          ? 'fx_flute_tidal_dragon'
+          : tier === 'ultimate'
+            ? 'fx_flute_phoenix_chord'
+            : 'fx_flute_wave';
+      const scale = tier === 'grandmaster' ? 1.95 : tier === 'ultimate' ? 1.5 : 1.15;
+      const vx = tier === 'grandmaster' ? 610 : 550;
       for (let i = 0; i < count; i++) {
         const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
         const vy =
           (aimEnemy.sprite.y - (this.groundY - 32)) /
           Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 22)) / vx);
         this.spawnProjectile(
-          'fx_flute_wave',
+          tex,
           this.heroX + 22,
-          this.groundY - 32 + ((i % 3) - 1) * 10,
+          this.groundY - 32 + ((i % 3) - 1) * 12,
           vx,
           vy,
           dmg,
           hitCrit,
-          syn ? 5 : 2 + level,
+          tier === 'grandmaster' ? 99 : tier === 'ultimate' ? 5 : 2 + level,
           false,
           false,
-          false,
+          true,
           aimEnemy.id,
           false,
           false,
-          syn ? 'SYMPHONY' : 'NOTE'
+          tier === 'grandmaster' ? 'SYMPHONY' : tier === 'ultimate' ? 'PHOENIX' : 'NOTE',
+          null,
+          scale,
+          tier === 'base' ? null : fluteColor,
+          tier === 'grandmaster' ? 130 : tier === 'ultimate' ? 85 : 0,
+          fluteColor
         );
       }
     } else if (art.style === 'six_pulse') {
       soundFX.playCrit();
-      this.playHeroAttackAnimation('bowman', syn ? 1.4 : 1.15);
-      this.spawnHeroAfterimage(syn ? 0x38bdf8 : 0x0ea5e9);
-      this.spawnQiShockwaveRing(this.heroX + 26, this.groundY - 30, 0x38bdf8, syn ? 160 : 95, 220);
-      if (syn) {
-        this.spawnFloatingText(this.heroX + 36, this.groundY - 98, 'HEAVEN-PIERCING SIX PULSE!', '#38bdf8', 15);
+      this.playHeroAttackAnimation('bowman', tier === 'grandmaster' ? 1.5 : 1.2);
+      const pulseColor = tier === 'grandmaster' ? 0xfde047 : 0x38bdf8;
+      this.spawnHeroAfterimage(pulseColor);
+      this.spawnQiShockwaveRing(
+        this.heroX + 26,
+        this.groundY - 30,
+        pulseColor,
+        tier === 'grandmaster' ? 185 : tier === 'ultimate' ? 130 : 90,
+        240
+      );
+      if (tier !== 'base') {
+        this.spawnFloatingText(
+          this.heroX + 36,
+          this.groundY - 98,
+          syn ? 'HEAVEN-PIERCING SIX PULSE!' : tier === 'grandmaster' ? 'SOVEREIGN MERIDIAN BEAM!' : 'SIX-PULSE DRAGON LANCE!',
+          '#38bdf8',
+          tier === 'grandmaster' ? 16 : 14
+        );
       }
-      const vx = 760;
+      const tex =
+        tier === 'grandmaster'
+          ? 'fx_six_pulse_sovereign'
+          : tier === 'ultimate'
+            ? 'fx_six_pulse_lance'
+            : 'proj_bolt';
+      const scale = tier === 'grandmaster' ? 2.1 : tier === 'ultimate' ? 1.6 : 1.25;
+      const vx = tier === 'grandmaster' ? 840 : 760;
       for (let i = 0; i < count; i++) {
         const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
-        const spreadY = (i - (count - 1) / 2) * 10;
+        const spreadY = (i - (count - 1) / 2) * 12;
         const vy =
           (aimEnemy.sprite.y - (this.groundY - 32) + spreadY) /
           Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 22)) / vx);
         this.spawnProjectile(
-          'fx_jade_sword',
+          tex,
           this.heroX + 24,
           this.groundY - 32 + spreadY * 0.45,
           vx,
           vy,
           dmg,
           hitCrit,
-          syn ? 99 : level + 1,
+          tier === 'grandmaster' ? 99 : tier === 'ultimate' ? 6 : level + 1,
           false,
           false,
           true,
           null,
+          tier === 'grandmaster' && i === 0,
           false,
-          false,
-          syn ? 'SIX-PULSE★' : 'SIX-PULSE'
+          tier === 'grandmaster' ? 'SOVEREIGN★' : tier === 'ultimate' ? 'LANCE★' : 'SIX-PULSE',
+          null,
+          scale,
+          tier === 'base' ? null : pulseColor,
+          tier === 'grandmaster' ? 140 : tier === 'ultimate' ? 85 : 0,
+          pulseColor
         );
       }
     } else if (art.style === 'flicking_finger') {
       soundFX.playSpell();
-      this.playHeroAttackAnimation('warrior', syn ? 1.45 : 1.15);
+      this.playHeroAttackAnimation('warrior', tier === 'grandmaster' ? 1.55 : 1.2);
+      const orbColor = tier === 'grandmaster' ? 0xef4444 : 0xfb923c;
       this.spawnQiShockwaveRing(
         this.heroX + 28,
         this.groundY - 30,
-        syn ? 0xfb923c : 0xfb7185,
-        syn ? 175 : 110,
-        240
+        orbColor,
+        tier === 'grandmaster' ? 195 : tier === 'ultimate' ? 140 : 105,
+        250
       );
-      if (syn) {
-        this.cameras.main.shake(105, 0.006);
-        this.spawnFloatingText(this.heroX + 36, this.groundY - 98, 'TEN-DRAGON FINGER CANNON!', '#fb923c', 15);
+      if (tier !== 'base') {
+        this.cameras.main.shake(115, tier === 'grandmaster' ? 0.008 : 0.005);
+        this.spawnFloatingText(
+          this.heroX + 36,
+          this.groundY - 98,
+          syn ? 'TEN-DRAGON SUPERNOVA!' : tier === 'grandmaster' ? 'GRANDMASTER METEOR STAR!' : 'SOLAR METEOR FINGER!',
+          '#fb923c',
+          tier === 'grandmaster' ? 16 : 14
+        );
       }
-      const vx = 680;
+      const tex =
+        tier === 'grandmaster'
+          ? 'fx_finger_supernova'
+          : tier === 'ultimate'
+            ? 'fx_finger_solar_orb'
+            : 'proj_arrow';
+      const scale = tier === 'grandmaster' ? 1.95 : tier === 'ultimate' ? 1.55 : 1.25;
+      const vx = tier === 'grandmaster' ? 730 : 680;
       for (let i = 0; i < count; i++) {
         const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
         const offset = (i - (count - 1) / 2) * 14;
@@ -2683,58 +3038,88 @@ export class DungeonScene extends Scene {
           (aimEnemy.sprite.y - (this.groundY - 32) + offset) /
           Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 22)) / vx);
         this.spawnProjectile(
-          'proj_palm_qi',
+          tex,
           this.heroX + 24,
           this.groundY - 32 + offset * 0.4,
           vx,
           vy,
           dmg,
           hitCrit,
-          syn ? 4 : 2,
+          tier === 'grandmaster' ? 6 : tier === 'ultimate' ? 3 : 2,
           false,
           false,
           true,
           aimEnemy.id,
           false,
           false,
-          syn ? 'CANNON' : 'THRUM'
+          tier === 'grandmaster' ? 'SUPERNOVA' : tier === 'ultimate' ? 'SOLAR' : 'THRUM',
+          null,
+          scale,
+          tier === 'base' ? null : orbColor,
+          tier === 'grandmaster' ? 150 : tier === 'ultimate' ? 95 : 0,
+          orbColor
         );
       }
       for (const e of [...this.enemies]) {
-        if (Math.abs(e.sprite.x - target.sprite.x) <= (syn ? 150 : 95) && e.hp > 0) {
+        if (Math.abs(e.sprite.x - target.sprite.x) <= (tier === 'grandmaster' ? 165 : 100) && e.hp > 0) {
           this.damageEnemy(e, Math.round(dmg * 0.35), false, 'SHOCK');
         }
       }
     } else {
       soundFX.playArrow();
-      this.playHeroAttackAnimation('bowman', syn ? 1.3 : 1.05);
-      if (syn) {
-        this.spawnQiShockwaveRing(this.heroX + 20, this.groundY - 34, 0xc4b5fd, 140, 240);
-        this.spawnFloatingText(this.heroX + 36, this.groundY - 96, 'FROST LOTUS!', '#c4b5fd', 15);
+      this.playHeroAttackAnimation('bowman', tier === 'grandmaster' ? 1.4 : 1.1);
+      const iceColor = tier === 'grandmaster' ? 0xc084fc : 0x38bdf8;
+      if (tier !== 'base') {
+        this.spawnQiShockwaveRing(
+          this.heroX + 20,
+          this.groundY - 34,
+          iceColor,
+          tier === 'grandmaster' ? 160 : 115,
+          240
+        );
+        this.spawnFloatingText(
+          this.heroX + 36,
+          this.groundY - 96,
+          syn || tier === 'grandmaster' ? 'BLIZZARD FROST LOTUS!' : 'CRYSTAL FROST SPEAR!',
+          '#c4b5fd',
+          tier === 'grandmaster' ? 16 : 14
+        );
       }
-      const vx = 650;
+      const tex =
+        tier === 'grandmaster'
+          ? 'fx_ice_blizzard_lotus'
+          : tier === 'ultimate'
+            ? 'fx_ice_crystal_spear'
+            : 'fx_ice_needle';
+      const scale = tier === 'grandmaster' ? 1.8 : tier === 'ultimate' ? 1.55 : 1.15;
+      const vx = 660;
       for (let i = 0; i < count; i++) {
         const aimEnemy = this.enemies[i % this.enemies.length] ?? target;
-        const spreadY = (i - (count - 1) / 2) * 10;
+        const spreadY = (i - (count - 1) / 2) * 12;
         const vy =
           (aimEnemy.sprite.y - (this.groundY - 36) + spreadY) /
           Math.max(0.08, (aimEnemy.sprite.x - (this.heroX + 18)) / vx);
         this.spawnProjectile(
-          'fx_ice_needle',
+          tex,
           this.heroX + 18,
           this.groundY - 36 + spreadY * 0.45,
           vx,
           vy,
           dmg,
           hitCrit,
-          syn ? 2 : 1,
-          syn !== null,
+          tier === 'grandmaster' ? 4 : tier === 'ultimate' ? 2 : 1,
+          tier === 'grandmaster',
           true,
-          false,
+          tier !== 'base',
           aimEnemy.id,
           false,
           false,
-          syn ? 'LOTUS' : 'NEEDLE'
+          tier === 'grandmaster' ? 'LOTUS' : tier === 'ultimate' ? 'SPEAR' : 'NEEDLE',
+          null,
+          scale,
+          tier === 'base' ? null : iceColor,
+          tier === 'grandmaster' ? 130 : tier === 'ultimate' ? 80 : 0,
+          iceColor
         );
       }
     }
@@ -2873,9 +3258,59 @@ export class DungeonScene extends Scene {
     }
   }
 
+  private spawnRelicAcquisitionBanner(title: string, subtitle: string, borderHex = 0xfde047): void {
+    const w = this.scale.width || 1024;
+    const container = this.add.container(w / 2, 74).setDepth(26).setScale(0.7).setAlpha(0);
+    const bg = this.add
+      .rectangle(0, 0, Math.min(430, w - 40), 52, 0x0f172a, 0.92)
+      .setStrokeStyle(2, borderHex, 1);
+    const titleTxt = this.add
+      .text(0, -10, title, {
+        fontFamily: 'monospace',
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: '#fde047',
+        stroke: '#000000',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5);
+    const subTxt = this.add
+      .text(0, 10, subtitle, {
+        fontFamily: 'sans-serif',
+        fontSize: '11px',
+        color: '#e2e8f0',
+      })
+      .setOrigin(0.5);
+    container.add([bg, titleTxt, subTxt]);
+
+    this.tweens.add({
+      targets: container,
+      scale: 1,
+      alpha: 1,
+      duration: 210,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.time.delayedCall(1900, () => {
+          if (!container.scene) return;
+          this.tweens.add({
+            targets: container,
+            y: container.y - 16,
+            alpha: 0,
+            duration: 260,
+            onComplete: () => container.destroy(),
+          });
+        });
+      },
+    });
+  }
+
   private spawnLootDrop(x: number, y: number, kind: 'coin' | 'orb' | 'chest', value: number): void {
     const key = kind === 'coin' ? 'loot_coin' : kind === 'chest' ? 'loot_chest' : 'proj_orb_hp';
     const sprite = this.add.image(x, y - 10, key).setDepth(7);
+    if (kind === 'chest') {
+      sprite.setScale(1.3);
+      this.spawnQiShockwaveRing(x, y - 10, 0xfde047, 72, 240);
+    }
     this.loots.push({
       sprite,
       kind,
@@ -2896,11 +3331,11 @@ export class DungeonScene extends Scene {
         l.sprite.x += l.vx * dt;
         l.sprite.y = Math.min(this.groundY - 8, l.sprite.y + l.vy * dt);
       } else {
-        l.sprite.x = Phaser.Math.Linear(l.sprite.x, this.heroX, Math.min(1, dt * 9));
-        l.sprite.y = Phaser.Math.Linear(l.sprite.y, this.groundY - 26, Math.min(1, dt * 9));
+        l.sprite.x = Phaser.Math.Linear(l.sprite.x, this.heroX, Math.min(1, dt * 10));
+        l.sprite.y = Phaser.Math.Linear(l.sprite.y, this.groundY - 26, Math.min(1, dt * 10));
       }
 
-      if (Phaser.Math.Distance.Between(l.sprite.x, l.sprite.y, this.heroX, this.groundY - 26) < 26) {
+      if (Phaser.Math.Distance.Between(l.sprite.x, l.sprite.y, this.heroX, this.groundY - 26) < 28) {
         if (l.kind === 'coin') {
           this.goldCollected += l.value;
           soundFX.playCoin();
@@ -2909,6 +3344,19 @@ export class DungeonScene extends Scene {
         } else if (l.kind === 'chest') {
           this.goldCollected += 35;
           this.shardsCollected += 4;
+          soundFX.playVictory();
+          this.spawnQiShockwaveRing(this.heroX, this.groundY - 28, 0xfde047, 130, 280);
+          this.spawnFloatingText(
+            this.heroX + 20,
+            this.groundY - 108,
+            '🎁 SECT RELIC CHEST! +35g • +4 SHARDS',
+            '#fde047',
+            15
+          );
+          this.spawnRelicAcquisitionBanner(
+            '🎁 SECT RELIC SPOILS UNSEALED!',
+            `Floor ${this.floor} ${isCultLeaderFloor(this.floor) ? 'Supreme Cult Relic' : 'Hall Master Rare Gear'} + +4 Shards banked`
+          );
         }
         l.sprite.destroy();
         this.loots.splice(i, 1);
@@ -2942,21 +3390,30 @@ export class DungeonScene extends Scene {
     if (this.waveIndex < this.totalWavesOnFloor) {
       this.waveIndex += 1;
       this.phase = 'walking';
-      this.walkTimer = 0.85;
+      this.walkTimer = 0.45;
       this.emitHud();
       return;
     }
 
     // Collect remaining loots instantaneously
+    let collectedChest = false;
     for (const l of this.loots) {
       if (l.kind === 'coin') this.goldCollected += l.value;
       if (l.kind === 'chest') {
         this.goldCollected += 35;
         this.shardsCollected += 4;
+        collectedChest = true;
       }
       l.sprite.destroy();
     }
     this.loots = [];
+    if (collectedChest) {
+      soundFX.playVictory();
+      this.spawnRelicAcquisitionBanner(
+        '🎁 SECT RELIC SPOILS UNSEALED!',
+        `Floor ${this.floor} ${isCultLeaderFloor(this.floor) ? 'Supreme Cult Relic' : 'Hall Master Rare Gear'} + +4 Shards banked`
+      );
+    }
 
     this.floorsCleared += 1;
     if (this.fastingFloorsLeft > 0) this.fastingFloorsLeft -= 1;

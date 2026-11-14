@@ -7,6 +7,16 @@ export type BiomeMechanicId =
   | 'smoke_bomb'
   | 'enrage_timer';
 
+export type MiniBossSpriteVariant = 'miniboss_0' | 'miniboss_1' | 'miniboss_2';
+
+export type MiniBossRosterEntry = {
+  readonly name: string;
+  readonly title: string;
+  readonly spriteKey: MiniBossSpriteVariant;
+  readonly tintHex: number;
+  readonly mechanicId: BiomeMechanicId;
+};
+
 export type BiomeDefinition = {
   id: BiomeId;
   name: string;
@@ -22,8 +32,10 @@ export type BiomeDefinition = {
   mobColors: readonly [number, number, number];
   miniBossName: string;
   miniBossTitle: string;
+  miniBossRoster: readonly MiniBossRosterEntry[];
   endBossName: string;
   endBossTitle: string;
+  endBossRoster: readonly string[];
   mechanicId: BiomeMechanicId;
   mechanicName: string;
   mechanicDescription: string;
@@ -57,8 +69,36 @@ export const BIOME_CATALOG: readonly BiomeDefinition[] = [
     mobColors: [0x6ede8a, 0xff9f1c, 0x9b5de5],
     miniBossName: 'White Camel Hall Master',
     miniBossTitle: 'Silver-Staff Serpent Elder',
+    miniBossRoster: [
+      {
+        name: 'White Camel Hall Master',
+        title: 'Silver-Staff Serpent Elder',
+        spriteKey: 'miniboss_0',
+        tintHex: 0x6ede8a,
+        mechanicId: 'mitosis',
+      },
+      {
+        name: 'Five-Venom Toad Elder',
+        title: 'Emerald Palm Poison Sovereign',
+        spriteKey: 'miniboss_2',
+        tintHex: 0x34d399,
+        mechanicId: 'smoke_bomb',
+      },
+      {
+        name: 'Centipede Iron-Claw Matriarch',
+        title: 'Miasma Marsh Executioner',
+        spriteKey: 'miniboss_1',
+        tintHex: 0xc084fc,
+        mechanicId: 'permafrost_armor',
+      },
+    ],
     endBossName: 'Venom Patriarch Ouyang',
     endBossTitle: 'Supreme Cult Leader',
+    endBossRoster: [
+      'Venom Patriarch Ouyang',
+      'Western Wastes Sovereign',
+      'Nine-Serpent Cult Ancestor',
+    ],
     mechanicId: 'mitosis',
     mechanicName: 'Split-Shadow Art',
     mechanicDescription: 'Splits into 2 venomous phantom clones at 50% HP.',
@@ -79,8 +119,36 @@ export const BIOME_CATALOG: readonly BiomeDefinition[] = [
     mobColors: [0xa8dadc, 0x4cc9f0, 0x90e0ef],
     miniBossName: 'Red-Silk Sect Elder',
     miniBossTitle: 'Chilled Whisk Enforcer',
+    miniBossRoster: [
+      {
+        name: 'Jade-Bee Swarm Matriarch',
+        title: 'Tomb Frost Enforcer',
+        spriteKey: 'miniboss_1',
+        tintHex: 0x67e8f9,
+        mechanicId: 'permafrost_armor',
+      },
+      {
+        name: 'Cold-Jade Twin-Saber Elder',
+        title: 'Glacial Meridian Guard',
+        spriteKey: 'miniboss_0',
+        tintHex: 0x93c5fd,
+        mechanicId: 'permafrost_armor',
+      },
+      {
+        name: 'Red-Silk Whip Hall Master',
+        title: 'Chilled Whisk Enforcer',
+        spriteKey: 'miniboss_2',
+        tintHex: 0xf472b6,
+        mechanicId: 'smoke_bomb',
+      },
+    ],
     endBossName: 'Frost Palm Matriarch',
     endBossTitle: 'Grand Cult Leader',
+    endBossRoster: [
+      'Frost Palm Matriarch',
+      'Jade Coffin Sovereign',
+      'Glacial Abyss Grandmaster',
+    ],
     mechanicId: 'permafrost_armor',
     mechanicName: 'Cold Jade Qi Veil',
     mechanicDescription: 'Forms an icy meridian hit-shield every 10s.',
@@ -101,8 +169,36 @@ export const BIOME_CATALOG: readonly BiomeDefinition[] = [
     mobColors: [0xf77f00, 0xd62828, 0xfcbf49],
     miniBossName: 'Golden Lion Envoy',
     miniBossTitle: 'Sacred Flame Commander',
+    miniBossRoster: [
+      {
+        name: 'Golden Lion Envoy',
+        title: 'Sacred Flame Commander',
+        spriteKey: 'miniboss_2',
+        tintHex: 0xfb923c,
+        mechanicId: 'overheat_aura',
+      },
+      {
+        name: 'Blood-Blade Hall Master',
+        title: 'Bright Peak Vanguard',
+        spriteKey: 'miniboss_0',
+        tintHex: 0xf87171,
+        mechanicId: 'enrage_timer',
+      },
+      {
+        name: 'Purple-Shirt Dragon King',
+        title: 'Abyssal Flame Elder',
+        spriteKey: 'miniboss_1',
+        tintHex: 0xf43f5e,
+        mechanicId: 'overheat_aura',
+      },
+    ],
     endBossName: 'Bright Peak Sovereign',
     endBossTitle: 'Holy Fire Cult Leader',
+    endBossRoster: [
+      'Bright Peak Sovereign',
+      'Pure-Yang Flame Patriarch',
+      'Holy Fire Grand Leader',
+    ],
     mechanicId: 'overheat_aura',
     mechanicName: 'Scorching Yang Aura',
     mechanicDescription: 'Radiates searing flame qi to nearby fighters.',
@@ -123,8 +219,36 @@ export const BIOME_CATALOG: readonly BiomeDefinition[] = [
     mobColors: [0x9d4edd, 0xf72585, 0x4cc9f0],
     miniBossName: 'Copper-Corpse Elder',
     miniBossTitle: 'Nine-Claw Hall Master',
+    miniBossRoster: [
+      {
+        name: 'Phantom-Step Night Envoy',
+        title: 'Black-Wind Shadow Elder',
+        spriteKey: 'miniboss_1',
+        tintHex: 0xa855f7,
+        mechanicId: 'smoke_bomb',
+      },
+      {
+        name: 'Copper-Corpse Nine-Claw',
+        title: 'Peach Blossom Renegade',
+        spriteKey: 'miniboss_0',
+        tintHex: 0xf72585,
+        mechanicId: 'enrage_timer',
+      },
+      {
+        name: 'Seven-Kill Dagger Master',
+        title: 'Crimson Veil Executioner',
+        spriteKey: 'miniboss_2',
+        tintHex: 0x38bdf8,
+        mechanicId: 'smoke_bomb',
+      },
+    ],
     endBossName: 'Demonic Saber Monarch',
     endBossTitle: 'Nightfall Cult Leader',
+    endBossRoster: [
+      'Demonic Saber Monarch',
+      'Nine-Claw Shade Sovereign',
+      'Blood-Moon Cult Ancestor',
+    ],
     mechanicId: 'smoke_bomb',
     mechanicName: 'Ghostly Footwork',
     mechanicDescription: 'Gains +50% Dodge in shadowy bursts.',
@@ -145,8 +269,36 @@ export const BIOME_CATALOG: readonly BiomeDefinition[] = [
     mobColors: [0xffd166, 0xa8dadc, 0xe0aaff],
     miniBossName: 'Golden-Wheel Master',
     miniBossTitle: 'Five-Wheel High Lama',
+    miniBossRoster: [
+      {
+        name: 'Golden-Wheel High Lama',
+        title: 'Five-Wheel Dharma Sovereign',
+        spriteKey: 'miniboss_2',
+        tintHex: 0xfde047,
+        mechanicId: 'enrage_timer',
+      },
+      {
+        name: 'Iron-Palm Qiu Envoy',
+        title: 'Summit Pagoda Enforcer',
+        spriteKey: 'miniboss_0',
+        tintHex: 0xf59e0b,
+        mechanicId: 'permafrost_armor',
+      },
+      {
+        name: 'Bronze-Bell Guardian Abbot',
+        title: 'Vajra Meridian Elder',
+        spriteKey: 'miniboss_1',
+        tintHex: 0x34d399,
+        mechanicId: 'mitosis',
+      },
+    ],
     endBossName: 'Spire Cult Patriarch',
     endBossTitle: 'Immortal Cult Leader',
+    endBossRoster: [
+      'Spire Cult Patriarch',
+      'Heavenly Dragon Sovereign',
+      'East-West Martial Overlord',
+    ],
     mechanicId: 'enrage_timer',
     mechanicName: 'Bloodline Surge',
     mechanicDescription: 'Gains +15% Strike Speed every 5s in combat.',
@@ -223,6 +375,78 @@ export const getBiomeById = (id: BiomeId): BiomeDefinition => {
   const first = BIOME_CATALOG[0];
   if (first) return first;
   throw new Error('BIOME_CATALOG is empty');
+};
+
+export const getBiomeForFloor = (
+  baseBiomeId: BiomeId,
+  floor: number,
+  seed: number
+): BiomeDefinition => {
+  const baseIdx = Math.max(
+    0,
+    BIOME_CATALOG.findIndex((b) => b.id === baseBiomeId)
+  );
+  const realmShift = Math.floor(Math.max(0, floor - 1) / 3);
+  const seedOffset = realmShift === 0 ? 0 : Math.abs(seed) % BIOME_CATALOG.length;
+  const idx = (baseIdx + realmShift + seedOffset) % BIOME_CATALOG.length;
+  return BIOME_CATALOG[idx] ?? getBiomeById(baseBiomeId);
+};
+
+export const getMiniBossForFloor = (
+  baseBiomeId: BiomeId,
+  floor: number,
+  seed: number
+): MiniBossRosterEntry => {
+  const floorBiome = getBiomeForFloor(baseBiomeId, floor, seed);
+  const interleavedPool: MiniBossRosterEntry[] = [];
+  for (let variant = 0; variant < 3; variant++) {
+    for (const biome of BIOME_CATALOG) {
+      const entry = biome.miniBossRoster[variant];
+      if (entry) interleavedPool.push(entry);
+    }
+  }
+  if (interleavedPool.length === 0) {
+    const fallback = floorBiome.miniBossRoster[0];
+    if (fallback) return fallback;
+    return {
+      name: floorBiome.miniBossName,
+      title: floorBiome.miniBossTitle,
+      spriteKey: 'miniboss_0',
+      tintHex: floorBiome.mobColors[0],
+      mechanicId: floorBiome.mechanicId,
+    };
+  }
+  const biomeStartIdx = Math.max(
+    0,
+    BIOME_CATALOG.findIndex((b) => b.id === floorBiome.id)
+  );
+  const salt = Math.abs((seed * 31 + floor * 17) | 0);
+  const variantOffset = ((floor + Math.abs(seed)) % 3) * BIOME_CATALOG.length;
+  const idx = (biomeStartIdx + variantOffset + (salt % 5 === 0 ? 1 : 0)) % interleavedPool.length;
+  const picked = interleavedPool[idx];
+  if (picked) return picked;
+  const fallback = floorBiome.miniBossRoster[0];
+  if (fallback) return fallback;
+  return {
+    name: floorBiome.miniBossName,
+    title: floorBiome.miniBossTitle,
+    spriteKey: 'miniboss_0',
+    tintHex: floorBiome.mobColors[0],
+    mechanicId: floorBiome.mechanicId,
+  };
+};
+
+export const getEndBossNameForFloor = (
+  baseBiomeId: BiomeId,
+  floor: number,
+  seed: number
+): string => {
+  const floorBiome = getBiomeForFloor(baseBiomeId, floor, seed);
+  const bracketIdx = Math.max(0, Math.floor(floor / 10) - 1);
+  const roster = floorBiome.endBossRoster;
+  if (roster.length === 0) return floorBiome.endBossName;
+  const idx = (bracketIdx + Math.abs(seed)) % roster.length;
+  return roster[idx] ?? floorBiome.endBossName;
 };
 
 export const getMutationById = (id: MutationId): BossMutationDefinition => {
