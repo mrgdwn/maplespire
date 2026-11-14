@@ -12,6 +12,11 @@
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "login": "devvit login",
     "prettier": "prettier --write .",
+    "sim": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/server/simCli.ts",
+    "sim:10": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/server/simCli.ts --runs 10",
+    "sim:20": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/server/simCli.ts --runs 20",
+    "sim:50": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/server/simCli.ts --runs 50",
+    "sim:overnight": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/server/simCli.ts --runs 50 --batches 4",
     "test:types": "tsc --build",
     "test:unit": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test \"src/**/*.test.ts\""
   },
