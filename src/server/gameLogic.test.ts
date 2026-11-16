@@ -27,7 +27,7 @@ import {
 void describe('Wuxia Spire Shared Catalogs & Game Logic', async () => {
   await it('contains exact catalog counts from GDD', () => {
     assert.equal(CLASS_CATALOG.length, 4);
-    assert.equal(LEGENDARY_CATALOG.length, 48);
+    assert.equal(LEGENDARY_CATALOG.length, 46);
     assert.equal(CORE_BUFFS.length, 32);
     assert.equal(PRISMATIC_CLASS_BUFFS.length, 12);
     assert.equal(ALL_BUFFS.length, 44);
@@ -156,11 +156,11 @@ void describe('Wuxia Spire Shared Catalogs & Game Logic', async () => {
     const migrated = parsePlayerProfile(legacySaved, 'fallback');
     assert.equal(
       migrated.classes.warrior.equipped.headgear?.name,
-      'Tang Sect Rainstorm Headband'
+      'Tang Clan Rainstorm Needle Hood (唐门暴雨梨花针冠)'
     );
     assert.equal(
       migrated.classes.warrior.equipped.headgear?.affixText,
-      'Hidden needles & Qi projectiles pierce through up to 3 cultists in a line.'
+      'Tang Clan’s most dreaded hidden-weapon engine: projectiles and needle waves pierce through up to 3 cultists in a line.'
     );
 
     const clearedScore = calculateLeaderboardScore(10, 'cleared', 95_000, 1200);

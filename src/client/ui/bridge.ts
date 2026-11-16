@@ -32,6 +32,10 @@ export type RunHudSnapshot = {
   skillCooldownPct: number;
   skillReady: boolean;
   skillName: string;
+  ultimateGauge: number;
+  ultimateStocks: number;
+  maxUltimateStocks: number;
+  ultimateName: string;
   dashCooldownPct: number;
   dashReady: boolean;
   potionCharges: number;
@@ -71,6 +75,7 @@ export type DungeonBridge = {
   startRun: (payload: RunStartPayload) => void;
   stopToIdle: () => void;
   triggerActiveSkill: () => void;
+  triggerUltimateSkill: () => void;
   triggerDash: () => void;
   triggerPotion: () => void;
   toggleSpeed: () => 1 | 2;

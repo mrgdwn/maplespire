@@ -114,7 +114,9 @@ const drawGridToContext = (
   offsetX = 0,
   offsetY = 0,
   tintCss: string | null = null,
-  hd2dStyle = true
+  hd2dStyle = true,
+  borderCss: string | null = null,
+  rimCss: string | null = null
 ): void => {
   const rows = grid.length;
   const cols = grid[0]?.length ?? 0;
@@ -126,7 +128,7 @@ const drawGridToContext = (
 
   // HD-2D silhouette outer border pass
   if (hd2dStyle && pixelSize >= 3) {
-    ctx.fillStyle = '#070a12';
+    ctx.fillStyle = borderCss ?? '#070a12';
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         if (!isFilled(r, c)) continue;
@@ -155,17 +157,19 @@ const drawGridToContext = (
 
   // HD-2D top-left sunlit rim light & bottom contact bevel shading
   if (hd2dStyle && pixelSize >= 3) {
+    const rimTop = rimCss ?? 'rgba(255, 250, 215, 0.34)';
+    const rimLeft = rimCss ?? 'rgba(255, 250, 215, 0.22)';
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         if (!isFilled(r, c)) continue;
         const x = offsetX + c * pixelSize;
         const y = offsetY + r * pixelSize;
         if (!isFilled(r - 1, c)) {
-          ctx.fillStyle = 'rgba(255, 250, 215, 0.34)';
+          ctx.fillStyle = rimTop;
           ctx.fillRect(x, y, pixelSize, 1);
         }
         if (!isFilled(r, c - 1)) {
-          ctx.fillStyle = 'rgba(255, 250, 215, 0.22)';
+          ctx.fillStyle = rimLeft;
           ctx.fillRect(x, y, 1, pixelSize);
         }
         if (!isFilled(r + 1, c)) {
@@ -182,7 +186,9 @@ const drawPixelGrid = (
   key: string,
   grid: PixelGrid,
   palette: Palette,
-  pixelSize: number
+  pixelSize: number,
+  borderCss: string | null = null,
+  rimCss: string | null = null
 ): void => {
   if (scene.textures.exists(key)) return;
   const rows = grid.length;
@@ -193,7 +199,7 @@ const drawPixelGrid = (
   if (!tex) return;
   const ctx = tex.getContext();
   ctx.clearRect(0, 0, cols * pixelSize, rows * pixelSize);
-  drawGridToContext(ctx, grid, palette, pixelSize);
+  drawGridToContext(ctx, grid, palette, pixelSize, 0, 0, null, true, borderCss, rimCss);
   tex.refresh();
 };
 
@@ -839,6 +845,194 @@ export const renderHeroPaperdollCanvas = (
   }
 };
 
+// ==================== SHARED WUXIA MARTIAL ARTS ARCHETYPE PIXEL GRIDS ====================
+
+// Shared Wuxia Palm Qi Strike Archetype Grid (16x11, palm wrist left, 5 finger ridges & forward thrust RIGHT +X)
+// Reused across Guo Jing (Dragon Palms), Yang Guo (Melancholic Palm), Tianshan (Six-Yang Plum Hand), and Ouyang Feng (Toad Leap)
+const ARCHETYPE_PALM_GRID: PixelGrid = [
+  '.....OOOO.......',
+  '...OOYYYYYYO....',
+  '..OYYYYYWWYYYO..',
+  'OOYYYYWWRRWWYYTT',
+  'GYYYYWWWWWWWT...',
+  'GGYYWWWWWWW.....',
+  'GYYYYWWWWWWWT...',
+  'OOYYYYWWWWWWWWTT',
+  '..OYYYYYYYYYOO..',
+  '....OOYYYYOO....',
+  '......OOOO......',
+];
+
+// Shared Wuxia Flying Sword Archetype Grid (16x7, tassel/hilt left, crossguard, blade & tip RIGHT +X)
+// Reused across Jade Maiden (Jade/Rose Lotus) and Wudang Taiji (Yin-Yang / Azure Meridian)
+const ARCHETYPE_FLYING_SWORD_GRID: PixelGrid = [
+  '.....G..........',
+  '....GGG.........',
+  'RR..GGBBBBBBBBT.',
+  'RKKGGWWWWWWWWWTT',
+  'RR..GGBBBBBBBBT.',
+  '....GGG.........',
+  '.....G..........',
+];
+
+// Shared Wuxia Heavy Blade / Saber Archetype Grid (16x9, pommel left, broad blade & tip RIGHT +X)
+// Reused across Xuantie Heavy Iron (Obsidian / Purple) and Dragon-Slaying Saber (Imperial Bronze / Gold)
+const ARCHETYPE_HEAVY_BLADE_GRID: PixelGrid = [
+  '...SS...........',
+  '...SS...........',
+  '...SSBBBBBBBBBB.',
+  'GKKSSPPPPPPPPBBT',
+  'GKKSSWWWWWWWWTTT',
+  'GKKSSPPPPPPPPBBT',
+  '...SSBBBBBBBBBB.',
+  '...SS...........',
+  '...SS...........',
+];
+
+// Shared Wuxia Whirling Vortex / Celestial Wheel Archetype Grid (14x14 spinning wheel)
+// Reused across Beggar Dog-Beating Staff, Ming Cult Qiankun Great Shift, and Murong Shifting Stars
+const ARCHETYPE_VORTEX_WHEEL_GRID: PixelGrid = [
+  '...CCCCCCCC...',
+  '..CC......CC..',
+  '.CC...WW....C.',
+  'CC..........WC',
+  '.C..........W.',
+  'GGGGGGGGGGGGGG',
+  'EWWEGGGGGGWWWE',
+  'GGGGGGGGGGGGGG',
+  '.W..........C.',
+  'CW..........CC',
+  '.C....WW...CC.',
+  '..CC......CC..',
+  '...CCCCCCCC...',
+  '..............',
+];
+
+// Shared Wuxia Meridian Qi Lance / Beam Archetype Grid (16x7, piercing RIGHT +X)
+// Reused across Dali Six-Pulse Divine Sword (Cyan Meridian) and Flicking Finger (Solar Meteor)
+const ARCHETYPE_MERIDIAN_LANCE_GRID: PixelGrid = [
+  '....YYCCCCCCC.....',
+  '..YYCCWWWWWWWCC...',
+  'GGYYWWTTTTTTTTTTTT',
+  'YYYYTTTTTTTTTTTTTT',
+  'GGYYWWTTTTTTTTTTTT',
+  '..YYCCWWWWWWWCC...',
+  '....YYCCCCCCC.....',
+];
+
+// Shared Wuxia Sonic Crescent Wave Grid (12x10, facing RIGHT +X)
+const ARCHETYPE_SONIC_WAVE_GRID: PixelGrid = [
+  '......CCCC..',
+  '........CCW.',
+  '..NNN....WCT',
+  '..N.N....WCT',
+  'NNN......WWT',
+  'NNN......WWT',
+  '..N......WCT',
+  '........CCW.',
+  '......CCCC..',
+  '............',
+];
+
+// ==================== ASCENDED SKILL AURA & CELESTIAL HALO GRIDS ====================
+
+// Radiant Flaming Dragon Solar Halo (18x18 open-center celestial aura ring with 4 corner flame prongs)
+const ASCENDED_HALO_DRAGON_GRID: PixelGrid = [
+  'TT....OOOOOO....TT',
+  '.TT.OOYYYYYYOO.TT.',
+  '..OOYY......YYOO..',
+  '..OYY........YYO..',
+  '.OYY..........YYO.',
+  '.OY............YO.',
+  'OY..............YO',
+  'OY..............YO',
+  'OY..............YO',
+  'OY..............YO',
+  'OY..............YO',
+  'OY..............YO',
+  '.OY............YO.',
+  '.OYY..........YYO.',
+  '..OYY........YYO..',
+  '..OOYY......YYOO..',
+  '.TT.OOYYYYYYOO.TT.',
+  'TT....OOOOOO....TT',
+];
+
+// Blooming Celestial Lotus Halo (18x18 open-center crystal lotus halo with 4 cardinal petal points)
+const ASCENDED_HALO_LOTUS_GRID: PixelGrid = [
+  '.......TTTT.......',
+  '.....PPWWWWPP.....',
+  '...PPWW....WWPP...',
+  '..PWW........WWP..',
+  '.PWW..........WWP.',
+  '.PW............WP.',
+  'TPW............WPT',
+  'TPW............WPT',
+  'TPW............WPT',
+  'TPW............WPT',
+  '.PW............WP.',
+  '.PWW..........WWP.',
+  '..PWW........WWP..',
+  '...PPWW....WWPP...',
+  '.....PPWWWWPP.....',
+  '.......TTTT.......',
+];
+
+// Octagonal Daoist Bagua Trigram Halo (16x16 open-center Daoist celestial seal ring)
+const ASCENDED_HALO_BAGUA_GRID: PixelGrid = [
+  '....YYYYYYYY....',
+  '..YYCC....CCYY..',
+  '.YCC........CCY.',
+  '.YC..........CY.',
+  'YC............CY',
+  'YC...Y....Y...CY',
+  'YC............CY',
+  'YC............CY',
+  'YC............CY',
+  'YC...Y....Y...CY',
+  'YC............CY',
+  '.YC..........CY.',
+  '.YCC........CCY.',
+  '..YYCC....CCYY..',
+  '....YYYYYYYY....',
+];
+
+// Western Toad / White Camel Venom Shockwave Halo (16x16 open-center toxic jade ring)
+const ASCENDED_HALO_VENOM_GRID: PixelGrid = [
+  '....GGGGGGGG....',
+  '..GGYYYYYYYYGG..',
+  '.GYY........YYG.',
+  '.GY..........YG.',
+  'GY............YG',
+  'GY............YG',
+  'GY............YG',
+  'GY............YG',
+  'GY............YG',
+  'GY............YG',
+  '.GY..........YG.',
+  '.GYY........YYG.',
+  '..GGYYYYYYYYGG..',
+  '....GGGGGGGG....',
+];
+
+// Cosmic Shifting Stars Celestial Astral Halo (16x16 open-center starlight cosmos ring)
+const ASCENDED_HALO_STELLAR_GRID: PixelGrid = [
+  '....PPPPPPPP....',
+  '..PPWWWWWWWWPP..',
+  '.PWW........WWP.',
+  '.PW..........WP.',
+  'PW............WP',
+  'PW............WP',
+  'PW............WP',
+  'PW............WP',
+  'PW............WP',
+  'PW............WP',
+  '.PW..........WP.',
+  '.PWW........WWP.',
+  '..PPWWWWWWWWPP..',
+  '....PPPPPPPP....',
+];
+
 export const registerPixelTextures = (scene: Phaser.Scene): void => {
   // Base heroes (pixelSize 4 -> 56x56)
   for (const classId of ['warrior', 'mage', 'thief', 'bowman'] as const) {
@@ -941,23 +1135,200 @@ export const registerPixelTextures = (scene: Phaser.Scene): void => {
   drawPixelGrid(scene, 'wep_wuxia_needles', WEP_WUXIA_NEEDLES_GRID, GEAR_SHADE_PALETTE, 3);
 
   // Projectiles & Wuxia Martial Arts (crisp drawPixelGrid sprites oriented facing RIGHT +X)
+  // Shared Archetype: Palm Qi Strike (Guo Jing, Yang Guo, Tianshan, Toad Stance)
+  drawPixelGrid(
+    scene,
+    'proj_palm_dragon',
+    ARCHETYPE_PALM_GRID,
+    { O: '#ea580c', G: '#f59e0b', Y: '#fde047', W: '#fef9c3', R: '#ef4444', T: '#ffffff' },
+    3,
+    '#7c2d12',
+    'rgba(254, 240, 138, 0.6)'
+  );
+  drawPixelGrid(
+    scene,
+    'proj_palm_melancholic',
+    ARCHETYPE_PALM_GRID,
+    { O: '#312e81', G: '#4338ca', Y: '#6366f1', W: '#a5b4fc', R: '#38bdf8', T: '#ffffff' },
+    3,
+    '#1e1b4b',
+    'rgba(186, 230, 253, 0.6)'
+  );
+  drawPixelGrid(
+    scene,
+    'proj_palm_tianshan',
+    ARCHETYPE_PALM_GRID,
+    { O: '#9f1239', G: '#be123c', Y: '#f43f5e', W: '#fbcfe8', R: '#e11d48', T: '#ffffff' },
+    3,
+    '#500724',
+    'rgba(251, 207, 232, 0.6)'
+  );
+  drawPixelGrid(
+    scene,
+    'proj_palm_toad',
+    ARCHETYPE_PALM_GRID,
+    { O: '#065f46', G: '#047857', Y: '#10b981', W: '#6ee7b7', R: '#facc15', T: '#ffffff' },
+    3,
+    '#022c22',
+    'rgba(190, 242, 100, 0.6)'
+  );
+
+  // Shared Archetype: Flying Swords (Jade Maiden, Taiji Yin-Yang)
+  drawPixelGrid(
+    scene,
+    'proj_sword_jade',
+    ARCHETYPE_FLYING_SWORD_GRID,
+    { R: '#f43f5e', K: '#334155', G: '#fbbf24', B: '#38bdf8', W: '#e0f2fe', T: '#ffffff' },
+    3,
+    '#4c0519',
+    'rgba(224, 242, 254, 0.6)'
+  );
+  drawPixelGrid(
+    scene,
+    'proj_sword_taiji',
+    ARCHETYPE_FLYING_SWORD_GRID,
+    { R: '#fde047', K: '#0f172a', G: '#334155', B: '#1e293b', W: '#f8fafc', T: '#67e8f9' },
+    3,
+    '#090d16',
+    'rgba(103, 232, 249, 0.6)'
+  );
+
+  // Shared Archetype: Heavy Blades & Sabers (Xuantie Heavy Iron, Dragon-Slaying Saber)
+  drawPixelGrid(
+    scene,
+    'proj_blade_iron',
+    ARCHETYPE_HEAVY_BLADE_GRID,
+    { G: '#fbbf24', K: '#334155', S: '#94a3b8', B: '#3b0764', P: '#a855f7', W: '#f5d0fe', T: '#ffffff' },
+    3,
+    '#2e1065',
+    'rgba(245, 208, 254, 0.6)'
+  );
+  drawPixelGrid(
+    scene,
+    'proj_blade_dragon_saber',
+    ARCHETYPE_HEAVY_BLADE_GRID,
+    { G: '#d97706', K: '#451a03', S: '#78350f', B: '#b45309', P: '#f59e0b', W: '#fef08a', T: '#ffffff' },
+    3,
+    '#451a03',
+    'rgba(254, 240, 138, 0.65)'
+  );
+
+  // Shared Archetype: Whirling Vortex Wheels (Dog-Beating Staff, Great Shift, Shifting Stars)
+  drawPixelGrid(
+    scene,
+    'proj_vortex_staff',
+    ARCHETYPE_VORTEX_WHEEL_GRID,
+    { G: '#10b981', C: '#6ee7b7', E: '#047857', W: '#fef08a' },
+    3,
+    '#064e3b',
+    'rgba(167, 243, 208, 0.6)'
+  );
+  drawPixelGrid(
+    scene,
+    'proj_vortex_qiankun',
+    ARCHETYPE_VORTEX_WHEEL_GRID,
+    { G: '#ea580c', C: '#facc15', E: '#991b1b', W: '#ffffff' },
+    3,
+    '#450a0a',
+    'rgba(254, 240, 138, 0.65)'
+  );
+  drawPixelGrid(
+    scene,
+    'proj_vortex_shifting_stars',
+    ARCHETYPE_VORTEX_WHEEL_GRID,
+    { G: '#6366f1', C: '#a5b4fc', E: '#312e81', W: '#ffffff' },
+    3,
+    '#1e1b4b',
+    'rgba(199, 210, 254, 0.6)'
+  );
+
+  // Shared Archetype: Meridian Lances & Needles (Six-Pulse Divine Sword, Flicking Finger)
+  drawPixelGrid(
+    scene,
+    'proj_lance_six_pulse',
+    ARCHETYPE_MERIDIAN_LANCE_GRID,
+    { G: '#f59e0b', Y: '#fde047', C: '#06b6d4', W: '#cffafe', T: '#ffffff' },
+    3,
+    '#164e63',
+    'rgba(207, 250, 254, 0.65)'
+  );
+  drawPixelGrid(
+    scene,
+    'proj_lance_finger',
+    ARCHETYPE_MERIDIAN_LANCE_GRID,
+    { G: '#ef4444', Y: '#f97316', C: '#f59e0b', W: '#fef08a', T: '#ffffff' },
+    3,
+    '#7c2d12',
+    'rgba(254, 240, 138, 0.65)'
+  );
+
+  // Shared Archetype: Sonic Crescent Waves (Peach Blossom Flute)
+  drawPixelGrid(
+    scene,
+    'proj_wave_flute',
+    ARCHETYPE_SONIC_WAVE_GRID,
+    { C: '#2dd4bf', W: '#99f6e4', T: '#ffffff', N: '#f472b6' },
+    3,
+    '#134e4a',
+    'rgba(153, 246, 228, 0.6)'
+  );
+
+  // Ascended Martial Arts Halos & Celestial Aura Rings
+  drawPixelGrid(
+    scene,
+    'fx_ascended_halo_dragon',
+    ASCENDED_HALO_DRAGON_GRID,
+    { O: '#ea580c', Y: '#fde047', T: '#ffffff' },
+    3,
+    '#7c2d12',
+    'rgba(254, 240, 138, 0.7)'
+  );
+  drawPixelGrid(
+    scene,
+    'fx_ascended_halo_lotus',
+    ASCENDED_HALO_LOTUS_GRID,
+    { P: '#f472b6', W: '#e0f2fe', T: '#ffffff' },
+    3,
+    '#4c0519',
+    'rgba(244, 114, 182, 0.65)'
+  );
+  drawPixelGrid(
+    scene,
+    'fx_ascended_halo_bagua',
+    ASCENDED_HALO_BAGUA_GRID,
+    { Y: '#fde047', C: '#38bdf8' },
+    3,
+    '#090d16',
+    'rgba(103, 232, 249, 0.65)'
+  );
+  drawPixelGrid(
+    scene,
+    'fx_ascended_halo_venom',
+    ASCENDED_HALO_VENOM_GRID,
+    { G: '#047857', Y: '#4ade80' },
+    3,
+    '#022c22',
+    'rgba(163, 230, 53, 0.65)'
+  );
+  drawPixelGrid(
+    scene,
+    'fx_ascended_halo_stellar',
+    ASCENDED_HALO_STELLAR_GRID,
+    { P: '#6366f1', W: '#c7d2fe' },
+    3,
+    '#1e1b4b',
+    'rgba(199, 210, 254, 0.65)'
+  );
+
+  // Legacy texture aliases mapped to archetype grids
   drawPixelGrid(
     scene,
     'proj_palm_qi',
-    [
-      '.....GGGGW..',
-      '...GGGYYWWW.',
-      '.GG...YYYWW.',
-      'G...YYYYWWWT',
-      'GG.YYYYWWWWT',
-      'GG.YYYYWWWWT',
-      'G...YYYYWWWT',
-      '.GG...YYYWW.',
-      '...GGGYYWWW.',
-      '.....GGGGW..',
-    ],
-    { G: '#f59e0b', Y: '#fde047', W: '#fef9c3', T: '#ffffff' },
-    3
+    ARCHETYPE_PALM_GRID,
+    { O: '#ea580c', G: '#f59e0b', Y: '#fde047', W: '#fef9c3', R: '#ef4444', T: '#ffffff' },
+    3,
+    '#7c2d12',
+    'rgba(254, 240, 138, 0.6)'
   );
   drawPixelGrid(
     scene,
@@ -1213,18 +1584,21 @@ export const registerPixelTextures = (scene: Phaser.Scene): void => {
     3
   );
 
-  // Soul-Chilling Ice Needle (facing RIGHT +X)
+  // Melancholic Soul-Severing Palm — Base: Surging Indigo Sea-Tide Palm Wave (facing RIGHT +X)
   drawPixelGrid(
     scene,
     'fx_ice_needle',
     [
-      '.........CC...',
-      '..CCCCCCWWWT..',
-      'CCWWWWWWWWWWTT',
-      '..CCCCCCWWWT..',
-      '.........CC...',
+      '....BBBBBB......',
+      '..BBCCCCCCBB....',
+      '.BCCWWWWWWCCBT..',
+      'BCWWYYYYYYWWCTTT',
+      'BCWWYYYYYYWWCTTT',
+      '.BCCWWWWWWCCBT..',
+      '..BBCCCCCCBB....',
+      '....BBBBBB......',
     ],
-    { C: '#818cf8', W: '#e0e7ff', T: '#ffffff' },
+    { B: '#4f46e5', C: '#818cf8', Y: '#38bdf8', W: '#e0e7ff', T: '#ffffff' },
     3
   );
 
@@ -1455,37 +1829,43 @@ export const registerPixelTextures = (scene: Phaser.Scene): void => {
     3
   );
 
-  // Soul-Chilling Ice Needles — Ultimate: Barbed Frost-Venom Crystal Javelin
+  // Melancholic Soul-Severing Palm — Ultimate: Heartbreak Crashing Sea-Tide Palm Crest
   drawPixelGrid(
     scene,
     'fx_ice_crystal_spear',
     [
-      '.....PP....CCCC...',
-      '..PPP..CCCCWWWWCT.',
-      'PPPCCCCCCCCWWWWTTT',
-      'TTTTTTTTTTTTTTTTTT',
-      'PPPCCCCCCCCWWWWTTT',
-      '..PPP..CCCCWWWWCT.',
-      '.....PP....CCCC...',
+      '.....BBBBBBBB.....',
+      '...BBCCCCCCCCBB...',
+      '..BCCYYYYYYYYCCBT.',
+      '.BCYYWWWWWWWWYYCTT',
+      'BCYWWTTTTTTTTWWCTT',
+      'BCYWWTTTTTTTTWWCTT',
+      '.BCYYWWWWWWWWYYCTT',
+      '..BCCYYYYYYYYCCBT.',
+      '...BBCCCCCCCCBB...',
+      '.....BBBBBBBB.....',
     ],
-    { P: '#c084fc', C: '#38bdf8', W: '#bae6fd', T: '#ffffff' },
+    { B: '#4338ca', C: '#6366f1', Y: '#38bdf8', W: '#bae6fd', T: '#ffffff' },
     3
   );
 
-  // Soul-Chilling Ice Needles — Grandmaster: 8-Point Blooming Frost-Venom Lotus
+  // Melancholic Soul-Severing Palm — Grandmaster: Sovereign Abyssal Condor Sea-Tide Palm
   drawPixelGrid(
     scene,
     'fx_ice_blizzard_lotus',
     [
-      '.....CC....CC.....',
-      '..P..CCWWWWCC..P..',
-      '.PPCCCWWTTWWCCCPP.',
-      'CCWWTTTTTTTTTTWWCC',
-      '.PPCCCWWTTWWCCCPP.',
-      '..P..CCWWWWCC..P..',
-      '.....CC....CC.....',
+      '.....PPPP....BBBBBB...',
+      '...PPBBBBBBBBCCCCCCBT.',
+      '..PBBCCCCCCCCYYYYYYCTT',
+      '.PBCYYYYYYYYWWWWWWWWTT',
+      'PBCYWWWWWWWWTTTTTTTTTT',
+      'PBCYWWWWWWWWTTTTTTTTTT',
+      '.PBCYYYYYYYYWWWWWWWWTT',
+      '..PBBCCCCCCCCYYYYYYCTT',
+      '...PPBBBBBBBBCCCCCCBT.',
+      '.....PPPP....BBBBBB...',
     ],
-    { P: '#a855f7', C: '#38bdf8', W: '#e0f2fe', T: '#ffffff' },
+    { P: '#a855f7', B: '#4f46e5', C: '#38bdf8', Y: '#7dd3fc', W: '#e0f2fe', T: '#ffffff' },
     3
   );
 

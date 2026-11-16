@@ -6,8 +6,6 @@ import { Button, type ButtonVariant } from '@astryxdesign/core/Button';
 import { Card, type CardVariant } from '@astryxdesign/core/Card';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { HStack } from '@astryxdesign/core/HStack';
-import { Kbd } from '@astryxdesign/core/Kbd';
-import { Switch } from '@astryxdesign/core/Switch';
 import { Text } from '@astryxdesign/core/Text';
 import { Theme, type ThemeMode } from '@astryxdesign/core/theme';
 import { VStack } from '@astryxdesign/core/VStack';
@@ -48,7 +46,7 @@ function readStoredThemeMode(): ThemeMode {
   return 'dark';
 }
 
-let currentThemeSnapshot: ThemeSnapshot = {
+const currentThemeSnapshot: ThemeSnapshot = {
   choice: typeof window !== 'undefined' ? readStoredThemeChoice() : 'gothic',
   mode: typeof window !== 'undefined' ? readStoredThemeMode() : 'dark',
 };
@@ -67,37 +65,6 @@ function syncDocumentThemeAttributes(snapshot: ThemeSnapshot): void {
 
 export function initAstryxRootAttributes(): void {
   syncDocumentThemeAttributes(currentThemeSnapshot);
-}
-
-export function setAstryxThemeChoice(choice: AstryxThemeChoice): void {
-  const nextMode: ThemeMode = choice === 'gothic' ? 'dark' : currentThemeSnapshot.mode;
-  currentThemeSnapshot = { choice, mode: nextMode };
-  try {
-    window.localStorage.setItem(THEME_CHOICE_KEY, choice);
-    window.localStorage.setItem(THEME_MODE_KEY, nextMode);
-  } catch {
-    // Ignore storage failures.
-  }
-  syncDocumentThemeAttributes(currentThemeSnapshot);
-  for (const listener of themeListeners) {
-    listener();
-  }
-}
-
-export function setAstryxThemeMode(mode: ThemeMode): void {
-  const nextChoice: AstryxThemeChoice =
-    mode === 'light' ? 'neutral' : currentThemeSnapshot.choice;
-  currentThemeSnapshot = { choice: nextChoice, mode };
-  try {
-    window.localStorage.setItem(THEME_CHOICE_KEY, nextChoice);
-    window.localStorage.setItem(THEME_MODE_KEY, mode);
-  } catch {
-    // Ignore storage failures.
-  }
-  syncDocumentThemeAttributes(currentThemeSnapshot);
-  for (const listener of themeListeners) {
-    listener();
-  }
 }
 
 function subscribeTheme(listener: () => void): () => void {
@@ -147,13 +114,9 @@ export function mountAstryxNode(container: HTMLElement, element: ReactNode): voi
 }
 
 export type AstryxCampTopBarProps = {
-  username: string;
-  streakDays: number;
-  restedStacks: number;
   gold: number;
   shards: number;
   bossCores: number;
-  goldenTickets: number;
   accountLevel: number;
   isMuted: boolean;
   onToggleMute: () => void;
@@ -162,45 +125,21 @@ export type AstryxCampTopBarProps = {
 };
 
 export function AstryxCampTopBar(props: AstryxCampTopBarProps): ReactNode {
-  const snapshot = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getThemeSnapshot);
-  const isLightMode = snapshot.choice === 'neutral' && snapshot.mode === 'light';
-
   return (
     <HStack justify="between" align="center" gap={2} wrap="wrap" style={{ width: '100%' }}>
       <HStack align="center" gap={1.5} wrap="wrap">
         <Text type="large" weight="bold" style={{ letterSpacing: '0.04em' }}>
           WUXIA SPIRE
         </Text>
-        <Badge variant="neutral" label={`u/${props.username}`} />
         <Badge variant="cyan" label={`Realm Lv.${props.accountLevel}`} />
-        <Badge
-          variant={props.restedStacks > 0 ? 'green' : 'orange'}
-          label={`🔥 ${props.streakDays}d${props.restedStacks > 0 ? ` • ${props.restedStacks}x Rested` : ''}`}
-        />
       </HStack>
 
       <HStack align="center" gap={1.5} wrap="wrap">
-        <Badge variant="yellow" label={`🪙 ${props.gold}g`} />
-        <Badge variant="blue" label={`💎 ${props.shards} Shards`} />
-        <Badge variant="purple" label={`🔮 ${props.bossCores} Cores`} />
-        <Badge variant="neutral" label={`🎫 ${props.goldenTickets}`} />
+        <Badge variant="yellow" label={`Gold: ${props.gold}`} />
+        <Badge variant="blue" label={`Shards: ${props.shards}`} />
+        <Badge variant="purple" label={`Cores: ${props.bossCores}`} />
         <Button
-          label={snapshot.choice === 'gothic' ? 'Theme: Gothic' : 'Theme: Slate'}
-          variant="secondary"
-          size="sm"
-          tooltip="Switch between Gothic and Slate UI themes"
-          onClick={() =>
-            setAstryxThemeChoice(snapshot.choice === 'gothic' ? 'neutral' : 'gothic')
-          }
-        />
-        <Switch
-          label="Light"
-          size="sm"
-          value={isLightMode}
-          onChange={(checked) => setAstryxThemeMode(checked ? 'light' : 'dark')}
-        />
-        <Button
-          label={props.isMuted ? '🔇 Muted' : '🔊 SFX'}
+          label={props.isMuted ? 'Muted' : 'Audio'}
           variant="ghost"
           size="sm"
           onClick={props.onToggleMute}
@@ -379,43 +318,6 @@ export function AstryxModalBanner({
   );
 }
 
-export type AstryxRunHudHeaderProps = {
-  biomeName: string;
-  runModeLabel: string;
-  buffCount: number;
-  isBossActive: boolean;
-};
-
-export function AstryxRunHudHeader({
-  biomeName,
-  runModeLabel,
-  buffCount,
-  isBossActive,
-}: AstryxRunHudHeaderProps): ReactNode {
-  return (
-    <HStack align="center" gap={1.5} wrap="wrap">
-      <Badge variant="info" label={runModeLabel} />
-      <Badge variant="neutral" label={biomeName} />
-      <Badge variant="purple" label={`${buffCount} Manuals`} />
-      {isBossActive ? <Badge variant="red" label="CULT BOSS" /> : null}
-      <HStack align="center" gap={1}>
-        <Kbd keys="q" />
-        <Text type="supporting" size="2xs">
-          Burst
-        </Text>
-        <Kbd keys="space" />
-        <Text type="supporting" size="2xs">
-          Qinggong
-        </Text>
-        <Kbd keys="w" />
-        <Text type="supporting" size="2xs">
-          Pill
-        </Text>
-      </HStack>
-    </HStack>
-  );
-}
-
 export type AstryxEmptyPanelProps = {
   title: string;
   description: string;
@@ -474,13 +376,6 @@ export function mountAstryxModalBanner(
   props: AstryxModalBannerProps
 ): void {
   mountAstryxNode(container, <AstryxModalBanner {...props} />);
-}
-
-export function mountAstryxRunHudHeader(
-  container: HTMLElement,
-  props: AstryxRunHudHeaderProps
-): void {
-  mountAstryxNode(container, <AstryxRunHudHeader {...props} />);
 }
 
 export function mountAstryxEmptyPanel(

@@ -29,9 +29,9 @@ import { calculateLeaderboardScore, createInitialProfile, mulberry32 } from '../
 
 void describe('Wuxia Spire Martial Arts, Inner Qi & Secret Synergies', () => {
   void it('maintains expected catalog sizes, unique IDs, and valid secret pairs', () => {
-    assert.equal(WUXIA_ACTIVE_ARTS.length, 8);
-    assert.equal(WUXIA_INNER_QI.length, 10);
-    assert.equal(WUXIA_SECRET_SYNERGIES.length, 8);
+    assert.equal(WUXIA_ACTIVE_ARTS.length, 14);
+    assert.equal(WUXIA_INNER_QI.length, 13);
+    assert.equal(WUXIA_SECRET_SYNERGIES.length, 23);
     assert.equal(WUXIA_ENLIGHTENMENT_SCROLLS.length, 10);
 
     const uniqueIds = new Set(ALL_WUXIA_MANUALS.map((m) => m.id));
@@ -42,6 +42,24 @@ void describe('Wuxia Spire Martial Arts, Inner Qi & Secret Synergies', () => {
       assert.ok(getWuxiaInnerQiById(syn.innerQiId), `Missing inner qi ${syn.innerQiId}`);
       assert.ok(syn.riddleHint.length > 10);
     }
+
+    // Verify Heavenly Sword and Dragon Sabre additions (Zhang Wuji signature arts)
+    assert.ok(getWuxiaActiveArtById('art_great_shift'));
+    assert.ok(getWuxiaActiveArtById('art_taiji_sword'));
+    assert.ok(getWuxiaActiveArtById('art_dragon_saber'));
+    assert.ok(getWuxiaInnerQiById('qi_pure_yang'));
+    assert.ok(getWuxiaInnerQiById('qi_great_shift'));
+    assert.ok(getWuxiaInnerQiById('qi_nine_yang'));
+
+    // Verify Legend of Condor Heroes Toad Stance
+    assert.ok(getWuxiaActiveArtById('art_toad_stance'));
+
+    // Verify Demi-Gods and Semi-Devils additions
+    assert.ok(getWuxiaActiveArtById('art_shifting_stars'));
+    assert.ok(getWuxiaActiveArtById('art_tianshan_six_yang'));
+    assert.ok(getWuxiaInnerQiById('qi_lingbo_steps'));
+    assert.ok(getWuxiaInnerQiById('qi_xiao_wuxiang'));
+    assert.ok(getWuxiaInnerQiById('qi_yi_jin_jing'));
   });
 
   void it('enforces 3 slots / Lv.3 on F1-10 and unlocks 4th slot + Lv.4/Lv.5 breakthroughs at higher floors', () => {
@@ -57,7 +75,7 @@ void describe('Wuxia Spire Martial Arts, Inner Qi & Secret Synergies', () => {
       'qi_nine_yang',
       'qi_nine_yin',
       'qi_heaven_earth',
-      'qi_iron_cloth', // 4th distinct qi blocked on F1-14, unlocked at F15+
+      'qi_jade_maiden', // 4th distinct passive skill blocked on F1-14, unlocked at F15+
     ];
 
     const earlyLoadout = computeWuxiaLoadout(drafted, 5);
@@ -68,18 +86,18 @@ void describe('Wuxia Spire Martial Arts, Inner Qi & Secret Synergies', () => {
     assert.equal(earlyLoadout.innerQis.length, WUXIA_MAX_INNER_QI_SLOTS);
     assert.equal(earlyLoadout.activeLevels.art_dragon_palm, 3);
     assert.equal(earlyLoadout.activeLevels.art_heavy_iron, undefined);
-    assert.equal(earlyLoadout.innerQiLevels.qi_iron_cloth, undefined);
+    assert.equal(earlyLoadout.innerQiLevels.qi_jade_maiden, undefined);
 
     const earlyCandidates = buildWuxiaDraftCandidates(drafted, 5);
     assert.equal(
       earlyCandidates.some((c) => c.option.id === 'art_heavy_iron'),
       false,
-      'Unowned 4th active art must not be offered when 3 Active slots are full before Floor 15'
+      'Unowned 4th active technique must not be offered when 3 Active slots are full before Floor 15'
     );
     assert.equal(
-      earlyCandidates.some((c) => c.option.id === 'qi_iron_cloth'),
+      earlyCandidates.some((c) => c.option.id === 'qi_jade_maiden'),
       false,
-      'Unowned 4th inner qi must not be offered when 3 Qi slots are full before Floor 15'
+      'Unowned 4th passive skill must not be offered when 3 passive skill slots are full before Floor 15'
     );
 
     const midLoadout = computeWuxiaLoadout(drafted, 16);
@@ -116,9 +134,9 @@ void describe('Wuxia Spire Martial Arts, Inner Qi & Secret Synergies', () => {
       'art_dog_staff',
       'art_dog_staff',
       'art_dog_staff',
-      'qi_iron_cloth',
-      'qi_iron_cloth',
-      'qi_iron_cloth',
+      'qi_jade_maiden',
+      'qi_jade_maiden',
+      'qi_jade_maiden',
       'qi_star_absorb',
       'qi_star_absorb',
       'qi_star_absorb',
@@ -139,10 +157,10 @@ void describe('Wuxia Spire Martial Arts, Inner Qi & Secret Synergies', () => {
       ...Array.from({ length: 5 }, () => 'art_jade_sword'),
       ...Array.from({ length: 5 }, () => 'art_dog_staff'),
       ...Array.from({ length: 5 }, () => 'art_six_pulse'),
-      ...Array.from({ length: 5 }, () => 'qi_iron_cloth'),
-      ...Array.from({ length: 5 }, () => 'qi_star_absorb'),
+      ...Array.from({ length: 5 }, () => 'qi_pure_yang'),
+      ...Array.from({ length: 5 }, () => 'qi_great_shift'),
       ...Array.from({ length: 5 }, () => 'qi_solitary_sword'),
-      ...Array.from({ length: 5 }, () => 'qi_dragon_elephant'),
+      ...Array.from({ length: 5 }, () => 'qi_xiao_wuxiang'),
     ];
     const endlessCards = rollWuxiaDraftCards(rng, maxed4x4NonMatching, 32, 3);
     assert.equal(endlessCards.length, 3);

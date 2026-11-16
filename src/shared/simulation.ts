@@ -25,8 +25,10 @@ import {
   WUXIA_INNER_QI,
   WUXIA_SECRET_SYNERGIES,
   computeWuxiaLoadout,
+  getActiveAwakenedSynergy,
+  getSynergiesForActive,
+  getSynergiesForInnerQi,
   getWuxiaActiveArtById,
-  getWuxiaSynergyById,
   isCultLeaderFloor,
   isRandomMiniBossFloor,
   rollWuxiaDraftCards,
@@ -369,7 +371,9 @@ const scoreDraftOption = (
 
   if (option.kind === 'active') {
     const art = getWuxiaActiveArtById(option.id);
-    const hasPairedQi = art ? (loadout.innerQiLevels[art.pairedQiId] ?? 0) > 0 : false;
+    const hasPairedQi = art
+      ? getSynergiesForActive(art.id).some((s) => (loadout.innerQiLevels[s.innerQiId] ?? 0) > 0)
+      : false;
     const base =
       option.currentLevel === 0
         ? strategy === 'aggressive'
@@ -384,9 +388,10 @@ const scoreDraftOption = (
       score += 85;
     }
   } else if (option.kind === 'inner_qi') {
-    const partneredActive = WUXIA_ACTIVE_ARTS.find(
-      (a) => a.pairedQiId === option.id && (loadout.activeLevels[a.id] ?? 0) > 0
-    );
+    const partneredSynergies = getSynergiesForInnerQi(option.id);
+    const partneredActive = partneredSynergies
+      .map((s) => getWuxiaActiveArtById(s.activeId))
+      .find((a) => a !== null && (loadout.activeLevels[a.id] ?? 0) > 0);
     score += option.currentLevel === 0 ? 150 : 165 + option.nextLevel * 28;
     if (partneredActive) {
       const actLv = loadout.activeLevels[partneredActive.id] ?? 0;
@@ -396,14 +401,13 @@ const scoreDraftOption = (
     const offensiveQis = new Set([
       'qi_nine_yin',
       'qi_solitary_sword',
-      'qi_sunflower_manual',
+      'qi_jade_maiden',
       'qi_dragon_elephant',
     ]);
     const defensiveQis = new Set([
       'qi_nine_yang',
       'qi_heaven_earth',
-      'qi_toad_venom',
-      'qi_iron_cloth',
+      'qi_bagua_harmony',
       'qi_star_absorb',
     ]);
     if (strategy === 'aggressive' && offensiveQis.has(option.id)) score += 110;
@@ -480,17 +484,19 @@ const buildFloorEnemies = (
     floor <= 10
       ? 1 + (floor - 1) * 0.08
       : floor <= 20
-        ? 1.72 * Math.pow(1.12, floor - 10)
+        ? 1.72 * Math.pow(1.1, floor - 10)
         : floor <= 30
-          ? 5.3 * Math.pow(1.14, floor - 20)
-          : 19.7 * Math.pow(1.15, floor - 30);
+          ? 4.46 * Math.pow(1.1, floor - 20)
+          : 11.57 * Math.pow(1.06, floor - 30);
 
   const realmAtkMult =
     floor <= 10
-      ? 1
+      ? 1 + (floor - 1) * 0.04
       : floor <= 20
-        ? 1 + (floor - 10) * 0.14
-        : 2.4 * Math.pow(1.09, floor - 20);
+        ? 1.36 + (floor - 10) * 0.08
+        : floor <= 30
+          ? 2.16 + (floor - 20) * 0.12
+          : 3.36 * Math.pow(1.035, floor - 30);
 
   const makeActor = (opts: {
     name: string;
@@ -569,18 +575,30 @@ const buildFloorEnemies = (
       bossTier === 1
         ? 4800
         : bossTier === 2
-          ? 28000
+          ? 26000
           : bossTier === 3
-            ? 115000
-            : Math.round(115000 * Math.pow(3.4, bossTier - 3));
+            ? 95000
+            : bossTier === 4
+              ? 165000
+              : bossTier === 5
+                ? 285000
+                : bossTier === 6
+                  ? 480000
+                  : Math.round(480000 * Math.pow(1.5, bossTier - 6));
     const cultLeaderAtk =
       bossTier === 1
         ? 68
         : bossTier === 2
-          ? 240
+          ? 210
           : bossTier === 3
-            ? 620
-            : Math.round(620 * Math.pow(2.2, bossTier - 3));
+            ? 460
+            : bossTier === 4
+              ? 620
+              : bossTier === 5
+                ? 820
+                : bossTier === 6
+                  ? 1080
+                  : Math.round(1080 * Math.pow(1.25, bossTier - 6));
 
     const baseHp = isEndBoss
       ? cultLeaderHp
@@ -723,7 +741,7 @@ const buildFloorEnemies = (
 
     mobs.push(
       makeActor({
-        name: isElite ? `★ ${mobName}` : mobName,
+        name: isElite ? `Elite ${mobName}` : mobName,
         x,
         hp: maxHp,
         atk,
@@ -863,7 +881,7 @@ export const simulateSingleRun = (opts: {
         hasLeg('war_cape_aegis'),
         isLegCursed('war_cape_aegis')
       ) + loadout.aggregatedStats.shieldOnFloor;
-    invulnHitsLeft = hasLeg('war_head_balrog') ? (isLegCursed('war_head_balrog') ? 1 : 3) : 0;
+    invulnHitsLeft = 0;
 
     let potionCharges = 1;
     const isBossFloor =
@@ -1031,9 +1049,7 @@ export const simulateSingleRun = (opts: {
       if (!art) return;
 
       const level = Math.min(5, Math.max(1, loadout.activeLevels[artId] ?? 1));
-      const syn = loadout.awakenedSynergies.includes(art.synergyId)
-        ? getWuxiaSynergyById(art.synergyId)
-        : null;
+      const syn = getActiveAwakenedSynergy(art.id, loadout.awakenedSynergies);
       const tier: 'base' | 'ultimate' | 'grandmaster' =
         syn !== null || level >= 4 ? 'grandmaster' : level >= 3 ? 'ultimate' : 'base';
 
@@ -1084,7 +1100,11 @@ export const simulateSingleRun = (opts: {
           if (target.hp > 0 && art.style === 'venom_needles') {
             target.chillTimer = Math.max(target.chillTimer, 2.5);
           }
-          if (target.hp > 0 && art.style === 'palm_wave' && !target.mutations.includes('juggernaut')) {
+          if (
+            target.hp > 0 &&
+            (art.style === 'palm_wave' || art.style === 'venom_needles') &&
+            !target.mutations.includes('juggernaut')
+          ) {
             target.x = Math.min(ARENA_WIDTH - 55, target.x + 28);
           }
         }
@@ -1172,7 +1192,7 @@ export const simulateSingleRun = (opts: {
           healHero(stats.maxHp * 0.015 * dt);
         }
 
-        // Dantian Burst (Active skill)
+        // Dantian Burst (Active Skill)
         if (skillTimer <= 0) {
           skillTimer = Math.max(2.5, (loadout.actives.length > 0 ? 7.5 : 4.5) * cdMult);
           if (loadout.actives.length === 0) {
@@ -1197,9 +1217,7 @@ export const simulateSingleRun = (opts: {
         for (const slot of loadout.actives) {
           const art = getWuxiaActiveArtById(slot.id);
           if (!art) continue;
-          const syn = loadout.awakenedSynergies.includes(art.synergyId)
-            ? getWuxiaSynergyById(art.synergyId)
-            : null;
+          const syn = getActiveAwakenedSynergy(art.id, loadout.awakenedSynergies);
           const baseCdMs = syn ? syn.cooldownMs : (art.cooldownsMs[slot.level - 1] ?? 2600);
           const cdSec = Math.max(0.75, (baseCdMs / 1000) * cdMult);
           const curTimer = (wuxiaArtTimers[art.id] ?? 0.35) - dt;

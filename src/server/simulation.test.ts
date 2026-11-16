@@ -96,8 +96,8 @@ void describe('Wuxia Spire Automated Simulation & Evaluation Framework', () => {
     assert.ok(o.medianFloor <= o.p75Floor);
     assert.ok(o.p75Floor <= o.p90Floor);
     assert.ok(o.p90Floor <= o.maxFloor);
-    assert.equal(evalSummary.wuxiaTelemetry.activeArts.length, 8);
-    assert.equal(evalSummary.wuxiaTelemetry.secretSynergies.length, 8);
+    assert.equal(evalSummary.wuxiaTelemetry.activeArts.length, 14);
+    assert.equal(evalSummary.wuxiaTelemetry.secretSynergies.length, 23);
     assert.ok(evalSummary.healthChecks.length >= 4);
 
     const md = formatEvaluationMarkdown(evalSummary);

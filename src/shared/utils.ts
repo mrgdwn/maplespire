@@ -120,32 +120,126 @@ export const getLegionUpgradeCost = (currentLevel: number): number => {
 };
 
 export const getDismantleShardValue = (item: GearItem): number => {
-  if (item.tier === 'legendary') return 25;
-  if (item.tier === 'rare') return 10 + Math.floor(item.level / 2);
-  return 4 + Math.floor(item.level / 3);
+  const powerBonus = Math.max(0, Math.floor(item.baseStatBonus / (item.tier === 'legendary' ? 4 : item.tier === 'rare' ? 6 : 10)));
+  if (item.tier === 'legendary') {
+    const pristineBonus = item.isCursed ? 0 : 8;
+    return 28 + Math.floor(item.level * 1.5) + powerBonus + pristineBonus;
+  }
+  if (item.tier === 'rare') {
+    return 10 + Math.floor(item.level * 0.8) + powerBonus;
+  }
+  return 4 + Math.floor(item.level * 0.4) + powerBonus;
 };
 
-const NORMAL_NAMES: Record<GearSlot, string> = {
+const NORMAL_FALLBACK_NAMES: Record<GearSlot, string> = {
   weapon: 'Wuxia Blade',
   headgear: 'Silk Headband',
   top: 'Wuxia Robe',
   cape: 'Cloud Mantle',
 };
 
+const CLASS_WEAPON_NAMES: Record<ClassId, readonly string[]> = {
+  warrior: [
+    'Black-Iron Broadsword (玄铁阔剑)',
+    'Yanling Willow-Leaf Saber (雁翎刀)',
+    'Mount Song Ring-Pommel Dao (厚背环刀)',
+    'Tiger-Head Crescent Blade (虎头月牙刀)',
+    'Heavy Steel Falchion (厚背重砍刀)',
+    'Dragon-Pattern Greatsword (龙纹大剑)',
+  ],
+  mage: [
+    'Green-Bamboo Staff (青竹仗)',
+    'Mount Wudang Peachwood Sword (武当桃木剑)',
+    'Cold-Jade Melody Flute (寒玉长笛)',
+    'Seven-Star Bronze Sword (七星古铜剑)',
+    'Daoist Pure-Yang Whisk (纯阳拂尘)',
+    'Ancient Tomb Iron-Lute (古墓铁琴)',
+  ],
+  thief: [
+    'Willow-Leaf Twin Daggers (柳叶双刃)',
+    'Iron-Ribbed Scholar Fan (铁骨折扇)',
+    'Cicada-Wing Shadow Blade (蝉翼短剑)',
+    'Cold-Iron Stabbing Awl (透骨寒铁锥)',
+    'Meteor Flying Darts (流星飞镖)',
+    'Fish-Intestine Concealed Dagger (鱼肠短匕)',
+  ],
+  bowman: [
+    'Black-Horn Steppe Recurve Bow (黑角复合弓)',
+    'Mulberry-Wood Heavy Bow (落月桑木弓)',
+    'Thousand-Needle Sleeve Launcher (袖里千针筒)',
+    'Flying Feather Short Warbow (飞羽战弓)',
+    'Iron-Bodkin Heavy Crossbow (穿云铁矢弩)',
+    'Whistling-Wind Steppe Longbow (鸣镝长弓)',
+  ],
+};
+
+const HEADGEAR_NAMES: readonly string[] = [
+  'Bamboo Weaver Hat (竹编斗笠)',
+  'Daoist Pure-Yang Topknot Cap (纯阳巾)',
+  'Beggar Coarse Linen Bandana (丐帮粗葛巾)',
+  'Ancient Tomb White-Jade Hairpin (古墓白玉簪)',
+  'Mount Hua Scholar Crest (华山文生巾)',
+  'Iron-Plate Martial Headband (青铜护额带)',
+  'Cloud-Mist Concealment Veil (青纱遮面帽)',
+];
+
+const TOP_NAMES: readonly string[] = [
+  'Wandering Disciple Indigo Robe (青布直裰)',
+  'Daoist Eight-Trigram Vestment (太极八卦袍)',
+  'Shaolin Hundred-Patch Monk Robe (百衲袈裟)',
+  'Ancient Tomb Pure-White Silk Dress (素白轻纱长衫)',
+  'Iron-Ring Leather Armor (铁环护心甲)',
+  'Beggar Sect Patchwork Tunic (丐帮百结衣)',
+  'Imperial Brocade Uniform (飞鱼锦衣)',
+];
+
+const CAPE_NAMES: readonly string[] = [
+  'Wind-Torn Wanderer Cloak (破旧斗篷)',
+  'Autumn-River Azure Silk Mantle (秋水长风披)',
+  'Pine-Needle Weather Straw Cape (避雨蓑衣)',
+  'Northern Steppe Wolf-Fur Mantle (北地狼皮氅)',
+  'Night-Crow Stealth Silk Shroud (夜行隐风斗篷)',
+  'Golden-Thread Cloud Scarf (金丝青云披)',
+];
+
 const RARE_PREFIXES: readonly string[] = [
-  'Jade-Forged',
-  'Celestial',
+  'Dragon-Forged',
   'Nine-Yang',
-  'Xuantie',
-  'Dragon-Scale',
+  'Nine-Yin',
+  'Black-Iron',
+  'Cold-Jade',
+  'Peach-Blossom',
+  'Mount-Wudang',
+  'Shaolin',
+  'Beggar-Chief',
+  'Ancient-Tomb',
+  'Dugu',
+  'Mount-Hua',
+  'Tang-Clan',
+  'Carefree',
 ];
 
 const RARE_AFFIXES: readonly string[] = [
-  '+10% Crit Power',
-  '+8% Attack Speed',
-  '+12% Boss DMG',
-  '+10% Armor Pen',
-  '+15% Gold Find',
+  '+14% Nine-Yang Inner Heat (+ATK & Yang Burn)',
+  '+12% Nine-Yin Cold Meridian (Slow & Chill)',
+  '+15% Dugu Sword Speed (+ATK Speed)',
+  '+18% Dragon-Subduing Critical Power (+Crit DMG)',
+  '+12% Acupoint Precision Strike (+Crit Chance)',
+  '+16% Iron-Shirt Impenetrable Defense (+Armor)',
+  '+15% Beggar Carefree Footwork (+Dodge)',
+  '+10% Lingbo Microsteps (+Move Speed)',
+  '+16% Hall Master Bane (+Boss DMG)',
+  '+25% Taels & Silver Greed (+Gold Find)',
+  '+10% Dantian Circulation (+Cooldown Reduction)',
+  '+6% Blood-Demon Vitality Leech (+Lifesteal)',
+  '+16% Meridian-Piercing Force (+Armor Pen)',
+  '+15% Vitality Acupoint Harmony (+Max HP)',
+  '+20% Wall-Slam Shockwave Damage',
+  '+12% Spirit Barrier Generation',
+  '+10% Evasive Counter-Slash Chance',
+  '+15% Projectile Velocity & Piercing',
+  '+12% Boss Stun Duration Extension',
+  '+18% First-Strike Lethal Ambush',
 ];
 
 export const createGearItem = (
@@ -156,20 +250,31 @@ export const createGearItem = (
   floorLevel: number,
   idSuffix: string
 ): GearItem => {
-  const def = getClassDefinition(classId);
   const tierMult = tier === 'rare' ? 1.5 : 1.0;
   const baseStatBonus = Math.round((6 + floorLevel * 2.2) * tierMult);
 
-  let name = slot === 'weapon' ? `Basic ${def.weaponLabel}` : NORMAL_NAMES[slot];
-  let affixText = 'Standard sect disciple attire.';
+  const baseName =
+    slot === 'weapon'
+      ? (CLASS_WEAPON_NAMES[classId][
+          Math.floor(rng() * CLASS_WEAPON_NAMES[classId].length)
+        ] ??
+        CLASS_WEAPON_NAMES[classId][0] ??
+        'Wuxia Blade')
+      : slot === 'headgear'
+        ? (HEADGEAR_NAMES[Math.floor(rng() * HEADGEAR_NAMES.length)] ?? 'Silk Headband')
+        : slot === 'top'
+          ? (TOP_NAMES[Math.floor(rng() * TOP_NAMES.length)] ?? 'Wuxia Robe')
+          : (CAPE_NAMES[Math.floor(rng() * CAPE_NAMES.length)] ?? 'Cloud Mantle');
+
+  let name = baseName;
+  let affixText = 'Standard martial arts attire worn by Jianghu wanderers.';
 
   if (tier === 'rare') {
-    const prefix = RARE_PREFIXES[Math.floor(rng() * RARE_PREFIXES.length)] ?? 'Mithril';
-    const affix = RARE_AFFIXES[Math.floor(rng() * RARE_AFFIXES.length)] ?? '+10% Crit Power';
-    name =
-      slot === 'weapon'
-        ? `${prefix} ${def.weaponLabel}`
-        : `${prefix} ${NORMAL_NAMES[slot]}`;
+    const prefix = RARE_PREFIXES[Math.floor(rng() * RARE_PREFIXES.length)] ?? 'Dragon-Forged';
+    const affix =
+      RARE_AFFIXES[Math.floor(rng() * RARE_AFFIXES.length)] ??
+      '+14% Nine-Yang Inner Heat (+ATK & Yang Burn)';
+    name = `${prefix} ${baseName}`;
     affixText = affix;
   }
 
@@ -372,7 +477,8 @@ export const parseGearItem = (raw: unknown): GearItem | null => {
     }
     if (LEGACY_GEAR_PATTERN.test(name)) {
       const def = getClassDefinition(raw.classId);
-      const baseName = raw.slot === 'weapon' ? def.weaponLabel : NORMAL_NAMES[raw.slot];
+      const baseName =
+        raw.slot === 'weapon' ? def.weaponLabel : NORMAL_FALLBACK_NAMES[raw.slot];
       name =
         raw.tier === 'rare'
           ? `Jade-Forged ${baseName}`

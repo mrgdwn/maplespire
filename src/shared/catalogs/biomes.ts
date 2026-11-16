@@ -310,7 +310,7 @@ export const BOSS_MUTATIONS: readonly BossMutationDefinition[] = [
   {
     id: 'golden_gilded',
     name: 'Golden-Gilded',
-    icon: '💰',
+    icon: '',
     colorHex: '#ffd700',
     tintHex: 0xffd700,
     visualTell: 'Shiny gold tint + coin sparkles',
@@ -320,7 +320,7 @@ export const BOSS_MUTATIONS: readonly BossMutationDefinition[] = [
   {
     id: 'juggernaut',
     name: 'Juggernaut',
-    icon: '🛡️',
+    icon: '',
     colorHex: '#94a3b8',
     tintHex: 0x94a3b8,
     visualTell: 'Giant size (+25% sprite scale)',
@@ -330,7 +330,7 @@ export const BOSS_MUTATIONS: readonly BossMutationDefinition[] = [
   {
     id: 'hasted',
     name: 'Hasted',
-    icon: '⚡',
+    icon: '',
     colorHex: '#38bdf8',
     tintHex: 0x38bdf8,
     visualTell: 'Blue wind trails + rapid animation',
@@ -340,7 +340,7 @@ export const BOSS_MUTATIONS: readonly BossMutationDefinition[] = [
   {
     id: 'vampiric',
     name: 'Vampiric',
-    icon: '🦇',
+    icon: '',
     colorHex: '#ef4444',
     tintHex: 0xef4444,
     visualTell: 'Crimson bat aura',
@@ -350,7 +350,7 @@ export const BOSS_MUTATIONS: readonly BossMutationDefinition[] = [
   {
     id: 'volatile',
     name: 'Volatile',
-    icon: '💣',
+    icon: '',
     colorHex: '#fb923c',
     tintHex: 0xfb923c,
     visualTell: 'Glowing orange cracks',
@@ -360,7 +360,7 @@ export const BOSS_MUTATIONS: readonly BossMutationDefinition[] = [
   {
     id: 'twin_soul',
     name: 'Twin-Soul',
-    icon: '👯',
+    icon: '',
     colorHex: '#c084fc',
     tintHex: 0xc084fc,
     visualTell: 'Faint purple spectral shadow',

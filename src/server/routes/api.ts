@@ -895,7 +895,7 @@ api.post('/share-comment', async (c) => {
     `**Wuxia Spire Daily Report (${dateKey}) — u/${username}**`,
     `- **Path:** Wuxia Wanderer | **Result:** ${outcomeText} in ${timeSec}s`,
     `- **Cult Sect:** ${biome.name}${mutNames ? ` (${mutNames})` : ''}`,
-    `- **Silver Taels Banked:** ${goldBanked}`,
+    `- **Gold Banked:** ${goldBanked}`,
   ];
   if (synergyNames.length > 0) {
     lines.push(`- **Secret Synergies:** ${synergyNames.join(', ')}`);
@@ -905,7 +905,7 @@ api.post('/share-comment', async (c) => {
   }
   if (legendaryName) {
     lines.push(
-      `- **Altar of Fate Drop:** ${legendaryName} (${legendaryCursed ? 'Cursed' : 'Pristine ✨'})`
+      `- **Altar of Fate Drop:** ${legendaryName} (${legendaryCursed ? 'Cursed' : 'Pristine'})`
     );
   }
   const commentText = lines.join('\n');
