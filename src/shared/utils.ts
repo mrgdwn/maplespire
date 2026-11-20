@@ -1,11 +1,19 @@
 import { BIOME_CATALOG } from './catalogs/biomes.ts';
 import { CLASS_IDS, GEAR_SLOTS, getClassDefinition } from './catalogs/classes.ts';
-import { getLegendariesForClass, getLegendaryById } from './catalogs/legendaries.ts';
+import {
+  LEGENDARY_CATALOG,
+  getLegendariesForClass,
+  getLegendaryById,
+} from './catalogs/legendaries.ts';
+import { computeWuxiaLoadout } from './catalogs/wuxia.ts';
 import type {
   BiomeId,
   ClassId,
   ClassProgress,
   ClassesProgressMap,
+  DailyMasteryBounty,
+  DailyMasteryBountyId,
+  DailySectDecree,
   ElementId,
   EquippedGearMap,
   GearItem,
@@ -14,6 +22,7 @@ import type {
   LeaderboardEntry,
   LegionLevels,
   LegionStatKey,
+  LoginStreakState,
   PlayerProfile,
   RunOutcome,
   SlotLevelsMap,
@@ -100,7 +109,7 @@ export const awardClassExp = (
 
 export const getSlotUpgradeCost = (slotLevel: number): { shards: number; gold: number } => ({
   shards: 10 + slotLevel * 6,
-  gold: 60 + slotLevel * 45,
+  gold: 0,
 });
 
 export const SANCTUM_PURIFY_COST = {
@@ -363,6 +372,18 @@ const createClassProgress = (classId: ClassId): ClassProgress => ({
   slotLevels: createDefaultSlotLevels(),
 });
 
+export const createDefaultLoginStreak = (): LoginStreakState => ({
+  currentStreak: 0,
+  longestStreak: 0,
+  totalLoginDays: 0,
+  lastClaimDate: '',
+  graceUsedWeekKey: '',
+  dailyChestsDate: '',
+  dailyChestsClaimed: [],
+  dailyBountyCompletedDate: '',
+  endlessBestFloor: 0,
+});
+
 export const createInitialProfile = (username: string): PlayerProfile => ({
   username,
   gold: 100,
@@ -386,10 +407,15 @@ export const createInitialProfile = (username: string): PlayerProfile => ({
   legion: {
     atk: 0,
     hp: 0,
-    gold: 0,
+    armor: 0,
+    critRate: 0,
     critDmg: 0,
+    dodge: 0,
+    cdr: 0,
+    gold: 0,
   },
   autoDismantleNormal: false,
+  loginStreak: createDefaultLoginStreak(),
 });
 
 export const calculateLeaderboardScore = (
@@ -438,7 +464,14 @@ export const isRunOutcome = (val: unknown): val is RunOutcome =>
   val === 'cleared' || val === 'extracted' || val === 'died';
 
 export const isLegionStatKey = (val: unknown): val is LegionStatKey =>
-  val === 'atk' || val === 'hp' || val === 'gold' || val === 'critDmg';
+  val === 'atk' ||
+  val === 'hp' ||
+  val === 'armor' ||
+  val === 'critRate' ||
+  val === 'critDmg' ||
+  val === 'dodge' ||
+  val === 'cdr' ||
+  val === 'gold';
 
 const LEGACY_GEAR_PATTERN =
   /Mithril|Rune-Etched|Shadow-Forged|Iron Cap|Leather Tunic|Traveler|Warblade|Grimoire|Dagger|Recurve|Cloak|Helm|Armor|Boots/;
@@ -564,8 +597,35 @@ export const parsePlayerProfile = (raw: unknown, fallbackUsername: string): Play
   const legion: LegionLevels = {
     atk: isNumber(legionRaw.atk) ? legionRaw.atk : 0,
     hp: isNumber(legionRaw.hp) ? legionRaw.hp : 0,
-    gold: isNumber(legionRaw.gold) ? legionRaw.gold : 0,
+    armor: isNumber(legionRaw.armor) ? legionRaw.armor : 0,
+    critRate: isNumber(legionRaw.critRate) ? legionRaw.critRate : 0,
     critDmg: isNumber(legionRaw.critDmg) ? legionRaw.critDmg : 0,
+    dodge: isNumber(legionRaw.dodge) ? legionRaw.dodge : 0,
+    cdr: isNumber(legionRaw.cdr) ? legionRaw.cdr : 0,
+    gold: isNumber(legionRaw.gold) ? legionRaw.gold : 0,
+  };
+
+  const streakRaw = isRecord(raw.loginStreak) ? raw.loginStreak : {};
+  const dailyChestsClaimed: number[] = [];
+  if (Array.isArray(streakRaw.dailyChestsClaimed)) {
+    for (const f of streakRaw.dailyChestsClaimed) {
+      if (isNumber(f)) dailyChestsClaimed.push(f);
+    }
+  }
+  const loginStreak: LoginStreakState = {
+    currentStreak: isNumber(streakRaw.currentStreak) ? Math.max(0, streakRaw.currentStreak) : 0,
+    longestStreak: isNumber(streakRaw.longestStreak) ? Math.max(0, streakRaw.longestStreak) : 0,
+    totalLoginDays: isNumber(streakRaw.totalLoginDays) ? Math.max(0, streakRaw.totalLoginDays) : 0,
+    lastClaimDate: isString(streakRaw.lastClaimDate) ? streakRaw.lastClaimDate : '',
+    graceUsedWeekKey: isString(streakRaw.graceUsedWeekKey) ? streakRaw.graceUsedWeekKey : '',
+    dailyChestsDate: isString(streakRaw.dailyChestsDate) ? streakRaw.dailyChestsDate : '',
+    dailyChestsClaimed,
+    dailyBountyCompletedDate: isString(streakRaw.dailyBountyCompletedDate)
+      ? streakRaw.dailyBountyCompletedDate
+      : '',
+    endlessBestFloor: isNumber(streakRaw.endlessBestFloor)
+      ? Math.max(0, streakRaw.endlessBestFloor)
+      : 0,
   };
 
   return {
@@ -589,6 +649,7 @@ export const parsePlayerProfile = (raw: unknown, fallbackUsername: string): Play
       : 1,
     legion,
     autoDismantleNormal: isBoolean(raw.autoDismantleNormal) ? raw.autoDismantleNormal : false,
+    loginStreak,
   };
 };
 
@@ -627,3 +688,379 @@ export const parseLeaderboardEntry = (raw: unknown): LeaderboardEntry | null => 
 
 export const ensureSlotLevelsReference = (slot: GearSlot): GearSlot =>
   GEAR_SLOTS.includes(slot) ? slot : 'weapon';
+
+// ======================== DAILY SECT DECREES, BOUNTIES & LOGIN STREAK ========================
+
+export const DAILY_REWARD_MULT = 1.6;
+export const ENDLESS_REWARD_MULT = 0.65;
+export const DAILY_CHEST_FLOORS: readonly number[] = [10, 20, 30];
+
+export const getDailyChestRewards = (
+  floor: number
+): { gold: number; shards: number; rareDrop: boolean; legendaryDrop: boolean } => {
+  if (floor >= 30) {
+    return { gold: 900, shards: 45, rareDrop: false, legendaryDrop: true };
+  }
+  if (floor >= 20) {
+    return { gold: 450, shards: 25, rareDrop: true, legendaryDrop: false };
+  }
+  return { gold: 220, shards: 15, rareDrop: false, legendaryDrop: false };
+};
+
+export const DAILY_SECT_DECREES: readonly DailySectDecree[] = [
+  {
+    id: 'sword_tomb_resonance',
+    name: 'Sword Tomb Resonance',
+    summary: '+25% Player ATK, enemies have +15% HP.',
+    playerAtkMult: 1.25,
+    enemyHpMult: 1.15,
+    goldMult: 1,
+    potionHealMult: 1,
+    bonusBossShield: 0,
+    extraFloor1Reroll: 0,
+    critRateBonus: 0,
+  },
+  {
+    id: 'jianghu_greed',
+    name: 'Jianghu Greed',
+    summary: '2x Gold from foes, healing vials restore 30% less.',
+    playerAtkMult: 1,
+    enemyHpMult: 1,
+    goldMult: 2,
+    potionHealMult: 0.7,
+    bonusBossShield: 0,
+    extraFloor1Reroll: 0,
+    critRateBonus: 0,
+  },
+  {
+    id: 'grandmaster_pace',
+    name: 'Grandmaster Pace',
+    summary: '+2 Draft Rerolls at start, bosses gain +1 Hit-Shield.',
+    playerAtkMult: 1.1,
+    enemyHpMult: 1.08,
+    goldMult: 1,
+    potionHealMult: 1,
+    bonusBossShield: 1,
+    extraFloor1Reroll: 2,
+    critRateBonus: 0,
+  },
+  {
+    id: 'iron_fortress',
+    name: 'Iron Fortress',
+    summary: 'Enemies have +20% HP, +40% Gold & +15% Crit Rate.',
+    playerAtkMult: 1.05,
+    enemyHpMult: 1.2,
+    goldMult: 1.4,
+    potionHealMult: 1,
+    bonusBossShield: 0,
+    extraFloor1Reroll: 0,
+    critRateBonus: 0.15,
+  },
+  {
+    id: 'crimson_tempest',
+    name: 'Crimson Tempest',
+    summary: '+18% Crit Rate & +15% ATK, healing vials -20%.',
+    playerAtkMult: 1.15,
+    enemyHpMult: 1.1,
+    goldMult: 1.15,
+    potionHealMult: 0.8,
+    bonusBossShield: 0,
+    extraFloor1Reroll: 0,
+    critRateBonus: 0.18,
+  },
+];
+
+export const getDailySectDecree = (dateKey: string): DailySectDecree => {
+  const h = hashString(`decree:${dateKey}`);
+  return DAILY_SECT_DECREES[h % DAILY_SECT_DECREES.length] ?? DAILY_SECT_DECREES[0]!;
+};
+
+export const DAILY_MASTERY_BOUNTIES: readonly DailyMasteryBounty[] = [
+  {
+    id: 'awaken_synergy',
+    name: 'Peerless Convergence',
+    description: 'Awaken any Secret Synergy during a Daily Run.',
+    shardReward: 35,
+  },
+  {
+    id: 'reach_floor_15',
+    name: 'Inner Pagoda Ascent',
+    description: 'Reach Floor 15 or higher in a Daily Run.',
+    shardReward: 30,
+  },
+  {
+    id: 'master_active_lv3',
+    name: 'Grandmaster Technique',
+    description: 'Raise any Active Skill to Lv. 3+ in a Daily Run.',
+    shardReward: 25,
+  },
+  {
+    id: 'dual_passive_harmony',
+    name: 'Twin Meridian Balance',
+    description: 'Learn at least 2 distinct Passive Skills in a Daily Run.',
+    shardReward: 25,
+  },
+  {
+    id: 'clear_floor_20',
+    name: 'Cult Leader Bane',
+    description: 'Defeat the Floor 20 Cult Leader in a Daily Run.',
+    shardReward: 40,
+  },
+];
+
+export const getDailyMasteryBounty = (dateKey: string): DailyMasteryBounty => {
+  const h = hashString(`bounty:${dateKey}`);
+  return DAILY_MASTERY_BOUNTIES[h % DAILY_MASTERY_BOUNTIES.length] ?? DAILY_MASTERY_BOUNTIES[0]!;
+};
+
+export const evaluateDailyMasteryBounty = (
+  bountyId: DailyMasteryBountyId,
+  floorReached: number,
+  draftedBuffIds: readonly string[]
+): boolean => {
+  const loadout = computeWuxiaLoadout(draftedBuffIds, Math.max(1, floorReached));
+  switch (bountyId) {
+    case 'awaken_synergy':
+      return loadout.awakenedSynergies.length > 0;
+    case 'reach_floor_15':
+      return floorReached >= 15;
+    case 'master_active_lv3':
+      return loadout.actives.some((a) => a.level >= 3);
+    case 'dual_passive_harmony':
+      return loadout.innerQis.length >= 2;
+    case 'clear_floor_20':
+      return floorReached >= 20;
+  }
+};
+
+export const getIsoWeekKey = (dateKey: string): string => {
+  const d = new Date(`${dateKey}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return '1970-W01';
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+};
+
+export type LoginStreakStatus = {
+  canClaimToday: boolean;
+  currentStreak: number;
+  nextStreak: number;
+  nextCycleDay: number; // 1..7
+  nextTotalDays: number;
+  graceWillApply: boolean;
+  isMilestone14: boolean;
+  isMilestone21: boolean;
+  isMilestone30: boolean;
+  needsSlotChoice: boolean;
+  needsDay14Choice: boolean;
+  needsFullSelector: boolean;
+};
+
+export const getLoginStreakStatus = (
+  profile: PlayerProfile,
+  todayKey: string = getUtcDateKey()
+): LoginStreakStatus => {
+  const st = profile.loginStreak;
+  const canClaimToday = st.lastClaimDate !== todayKey;
+  const weekKey = getIsoWeekKey(todayKey);
+
+  let nextStreak = st.currentStreak;
+  let graceWillApply = false;
+  if (canClaimToday) {
+    if (!st.lastClaimDate) {
+      nextStreak = 1;
+    } else {
+      const gap = daysBetweenUtc(st.lastClaimDate, todayKey);
+      if (gap === 1) {
+        nextStreak = st.currentStreak + 1;
+      } else if (gap === 2 && st.graceUsedWeekKey !== weekKey) {
+        nextStreak = st.currentStreak + 1;
+        graceWillApply = true;
+      } else {
+        nextStreak = 1;
+      }
+    }
+  }
+
+  const nextTotalDays = canClaimToday ? st.totalLoginDays + 1 : st.totalLoginDays;
+  const nextCycleDay = ((Math.max(1, nextStreak) - 1) % 7) + 1;
+  const isMilestone30 = canClaimToday && nextStreak > 0 && nextStreak % 30 === 0;
+  const isMilestone21 = canClaimToday && !isMilestone30 && nextStreak === 21;
+  const isMilestone14 = canClaimToday && !isMilestone30 && nextStreak === 14;
+  const needsFullSelector = isMilestone30;
+  const needsDay14Choice = isMilestone14;
+  const needsSlotChoice = canClaimToday && !isMilestone30 && (isMilestone14 || nextCycleDay === 7);
+
+  return {
+    canClaimToday,
+    currentStreak: st.currentStreak,
+    nextStreak,
+    nextCycleDay,
+    nextTotalDays,
+    graceWillApply,
+    isMilestone14,
+    isMilestone21,
+    isMilestone30,
+    needsSlotChoice,
+    needsDay14Choice,
+    needsFullSelector,
+  };
+};
+
+export const createSpecificLegendaryGearItem = (
+  legendaryId: string,
+  isCursed: boolean,
+  idSuffix: string,
+  floorLevel = 15
+): GearItem => {
+  const chosen = getLegendaryById(legendaryId) ?? LEGENDARY_CATALOG[0]!;
+  const extraFloors = Math.max(0, floorLevel - 10);
+  const scaledPower = 42 + Math.round(extraFloors * 2.8);
+  return {
+    id: `leg_${Date.now().toString(36)}_${idSuffix}`,
+    name: chosen.name,
+    slot: chosen.slot,
+    classId: chosen.classId,
+    tier: 'legendary',
+    level: Math.max(10, floorLevel),
+    baseStatBonus: scaledPower,
+    affixText: chosen.signatureText,
+    sockets: [],
+    maxSockets: 0,
+    legendaryId: chosen.id,
+    isCursed,
+  };
+};
+
+export const getDay14SlotLegendaryChoices = (
+  slot: GearSlot,
+  dateKey: string
+): readonly (typeof LEGENDARY_CATALOG)[number][] => {
+  const pool = LEGENDARY_CATALOG.filter((l) => l.slot === slot);
+  const rng = mulberry32(hashString(`day14:${dateKey}:${slot}`));
+  const shuffled = [...pool].sort(() => rng() - 0.5);
+  return shuffled.slice(0, 3);
+};
+
+export const claimLoginStreakReward = (
+  profile: PlayerProfile,
+  todayKey: string,
+  chosenSlot?: GearSlot,
+  chosenLegendaryId?: string
+): { profile: PlayerProfile; message: string } => {
+  const status = getLoginStreakStatus(profile, todayKey);
+  if (!status.canClaimToday) {
+    return { profile, message: 'Daily login reward already claimed today.' };
+  }
+
+  const next: PlayerProfile = {
+    ...profile,
+    inventory: [...profile.inventory],
+    loginStreak: {
+      ...profile.loginStreak,
+      dailyChestsClaimed: [...profile.loginStreak.dailyChestsClaimed],
+    },
+  };
+
+  const cls = next.classes[next.selectedClass];
+  const scaleLevel = Math.max(10, cls.level);
+  const rng = mulberry32(hashString(`login:${todayKey}:${next.username}:${status.nextStreak}`));
+  let message = '';
+
+  if (status.isMilestone30) {
+    const picked =
+      (chosenLegendaryId ? getLegendaryById(chosenLegendaryId) : undefined) ?? LEGENDARY_CATALOG[0]!;
+    const item = createSpecificLegendaryGearItem(picked.id, false, `streak30_${todayKey}`, 25);
+    next.inventory.push(item);
+    next.shards += 60;
+    message = `Day 30 Grandmaster Milestone! Claimed Pristine ${item.name} + 60 Shards.`;
+  } else if (status.isMilestone21) {
+    const cursedInBag = next.inventory.find((i) => i.tier === 'legendary' && i.isCursed);
+    if (cursedInBag) {
+      const idx = next.inventory.indexOf(cursedInBag);
+      next.inventory[idx] = { ...cursedInBag, isCursed: false };
+      next.shards += 40;
+      message = `Day 21 Milestone! Purified ${cursedInBag.name} for free + 40 Shards.`;
+    } else {
+      next.shards += 80;
+      next.bossCores += 2;
+      message = 'Day 21 Milestone! Claimed +80 Shards & +2 Boss Cores.';
+    }
+  } else if (status.isMilestone14) {
+    const slot: GearSlot = chosenSlot ?? 'weapon';
+    const choices = getDay14SlotLegendaryChoices(slot, todayKey);
+    const picked =
+      (chosenLegendaryId ? choices.find((c) => c.id === chosenLegendaryId) : undefined) ??
+      choices[0] ??
+      LEGENDARY_CATALOG[0]!;
+    const item = createSpecificLegendaryGearItem(picked.id, false, `streak14_${todayKey}`, 20);
+    next.inventory.push(item);
+    next.bossCores += 2;
+    message = `Day 14 Milestone! Claimed Pristine ${item.name} + 2 Boss Cores.`;
+  } else {
+    switch (status.nextCycleDay) {
+      case 1:
+        next.gold += 250;
+        next.goldenTickets += 1;
+        message = 'Day 1 Login Reward: +250 Gold & +1 Golden Ascent Writ.';
+        break;
+      case 2:
+        next.shards += 20;
+        message = 'Day 2 Login Reward: +20 Spirit Shards.';
+        break;
+      case 3: {
+        const slot = GEAR_SLOTS[Math.floor(rng() * GEAR_SLOTS.length)] ?? 'weapon';
+        const rare = createGearItem(
+          rng,
+          next.selectedClass,
+          slot,
+          'rare',
+          scaleLevel,
+          `streak3_${todayKey}`
+        );
+        next.inventory.push(rare);
+        message = `Day 3 Login Reward: Guaranteed Rare ${rare.name}!`;
+        break;
+      }
+      case 4:
+        next.gold += 400;
+        next.shards += 30;
+        message = 'Day 4 Login Reward: +400 Gold & +30 Spirit Shards.';
+        break;
+      case 5:
+        next.goldenTickets += 2;
+        next.bossCores += 1;
+        message = 'Day 5 Login Reward: +2 Golden Ascent Writs & +1 Boss Core.';
+        break;
+      case 6:
+        next.gold += 600;
+        next.shards += 50;
+        message = 'Day 6 Login Reward: +600 Gold & +50 Spirit Shards.';
+        break;
+      case 7:
+      default: {
+        const slot: GearSlot = chosenSlot ?? 'weapon';
+        const pool = LEGENDARY_CATALOG.filter((l) => l.slot === slot);
+        const picked = pool[Math.floor(rng() * pool.length)] ?? LEGENDARY_CATALOG[0]!;
+        const leg = createSpecificLegendaryGearItem(picked.id, false, `streak7_${todayKey}`, 15);
+        next.inventory.push(leg);
+        message = `Day 7 Login Reward: Pristine ${leg.name} (${slot})!`;
+        break;
+      }
+    }
+  }
+
+  next.loginStreak.currentStreak = status.nextStreak;
+  next.loginStreak.longestStreak = Math.max(next.loginStreak.longestStreak, status.nextStreak);
+  next.loginStreak.totalLoginDays = status.nextTotalDays;
+  next.loginStreak.lastClaimDate = todayKey;
+  if (status.graceWillApply) {
+    next.loginStreak.graceUsedWeekKey = getIsoWeekKey(todayKey);
+    message = `${message} (Weekly Grace Day preserved your streak!)`;
+  }
+  next.streakDays = status.nextStreak;
+
+  return { profile: next, message };
+};

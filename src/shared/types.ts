@@ -27,7 +27,61 @@ export type RunMode = 'daily' | 'practice';
 
 export type RunOutcome = 'cleared' | 'extracted' | 'died';
 
-export type LegionStatKey = 'atk' | 'hp' | 'gold' | 'critDmg';
+export type LegionStatKey =
+  | 'atk'
+  | 'hp'
+  | 'armor'
+  | 'critRate'
+  | 'critDmg'
+  | 'dodge'
+  | 'cdr'
+  | 'gold';
+
+export type DailySectDecreeId =
+  | 'sword_tomb_resonance'
+  | 'jianghu_greed'
+  | 'grandmaster_pace'
+  | 'iron_fortress'
+  | 'crimson_tempest';
+
+export type DailySectDecree = {
+  id: DailySectDecreeId;
+  name: string;
+  summary: string;
+  playerAtkMult: number;
+  enemyHpMult: number;
+  goldMult: number;
+  potionHealMult: number;
+  bonusBossShield: number;
+  extraFloor1Reroll: number;
+  critRateBonus: number;
+};
+
+export type DailyMasteryBountyId =
+  | 'awaken_synergy'
+  | 'reach_floor_15'
+  | 'master_active_lv3'
+  | 'dual_passive_harmony'
+  | 'clear_floor_20';
+
+export type DailyMasteryBounty = {
+  id: DailyMasteryBountyId;
+  name: string;
+  description: string;
+  shardReward: number;
+};
+
+export type LoginStreakState = {
+  currentStreak: number;
+  longestStreak: number;
+  totalLoginDays: number;
+  lastClaimDate: string;
+  graceUsedWeekKey: string;
+  dailyChestsDate: string;
+  dailyChestsClaimed: number[];
+  dailyBountyCompletedDate: string;
+  endlessBestFloor: number;
+};
 
 export type GearItem = {
   id: string;
@@ -76,8 +130,12 @@ export type ClassesProgressMap = {
 export type LegionLevels = {
   atk: number;
   hp: number;
-  gold: number;
+  armor: number;
+  critRate: number;
   critDmg: number;
+  dodge: number;
+  cdr: number;
+  gold: number;
 };
 
 export type PlayerProfile = {
@@ -97,6 +155,7 @@ export type PlayerProfile = {
   unlockedBanishSlots: number;
   legion: LegionLevels;
   autoDismantleNormal: boolean;
+  loginStreak: LoginStreakState;
 };
 
 export type DailyChallenge = {
@@ -199,6 +258,9 @@ export type RunRewardSummary = {
   autoDismantledShards: number;
   legendaryDrop: GearItem | null;
   playerRank: number | null;
+  dailyChestsUnlocked?: number[];
+  dailyBountyCompleted?: boolean;
+  dailyBountyShards?: number;
 };
 
 export type CompleteRunResponse = {
@@ -220,7 +282,12 @@ export type CampActionRequest =
   | { action: 'unlock_banish_slot' }
   | { action: 'toggle_banish_buff'; buffId: string }
   | { action: 'upgrade_legion'; stat: LegionStatKey }
-  | { action: 'toggle_auto_dismantle' };
+  | { action: 'toggle_auto_dismantle' }
+  | {
+      action: 'claim_login_reward';
+      chosenSlot?: GearSlot;
+      chosenLegendaryId?: string;
+    };
 
 export type CampActionResponse = {
   type: 'camp_action';

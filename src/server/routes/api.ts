@@ -21,14 +21,21 @@ import type {
   ShareCommentResponse,
 } from '../../shared/types.ts';
 import {
+  DAILY_CHEST_FLOORS,
+  DAILY_REWARD_MULT,
+  ENDLESS_REWARD_MULT,
   SANCTUM_PURIFY_COST,
   awardClassExp,
   calculateLeaderboardScore,
+  claimLoginStreakReward,
   createGearItem,
   createInitialProfile,
   createLegendaryGearItem,
   daysBetweenUtc,
+  evaluateDailyMasteryBounty,
   getDailyChallengeConfig,
+  getDailyChestRewards,
+  getDailyMasteryBounty,
   getDismantleShardValue,
   getLegionUpgradeCost,
   getNextBanishSlotCost,
@@ -311,13 +318,20 @@ api.post('/run/complete', async (c) => {
 
     const lootForfeited = false;
     const penaltyMult = 1;
+    const modeRewardMult = mode === 'daily' ? DAILY_REWARD_MULT : ENDLESS_REWARD_MULT;
     const bountyApplied = classId === dailyConfig.bountyClass;
     const restedApplied = profile.restedStacks > 0;
 
-    const goldBanked = Math.round(
-      goldCollected * penaltyMult * (bountyApplied ? 1.25 : 1) * (restedApplied ? 2 : 1)
+    const goldBankedBase = Math.round(
+      goldCollected *
+        modeRewardMult *
+        penaltyMult *
+        (bountyApplied ? 1.25 : 1) *
+        (restedApplied ? 2 : 1)
     );
-    const shardsBankedBase = Math.round(shardsCollected * penaltyMult * (restedApplied ? 2 : 1));
+    const shardsBankedBase = Math.round(
+      shardsCollected * modeRewardMult * penaltyMult * (restedApplied ? 2 : 1)
+    );
     const clearedFloors = outcome === 'died' ? Math.max(0, floorReached - 1) : floorReached;
     const cultLeadersDefeated = Math.floor(clearedFloors / 10);
     const coresBanked =
@@ -393,6 +407,58 @@ api.post('/run/complete', async (c) => {
         }
       }
     }
+
+    const nextLoginStreak = {
+      ...profile.loginStreak,
+      dailyChestsClaimed: [...profile.loginStreak.dailyChestsClaimed],
+    };
+    const dailyChestsUnlocked: number[] = [];
+    let chestGoldBonus = 0;
+    let chestShardBonus = 0;
+    let dailyBountyCompleted = false;
+    let dailyBountyShards = 0;
+
+    if (mode === 'practice') {
+      nextLoginStreak.endlessBestFloor = Math.max(nextLoginStreak.endlessBestFloor, floorReached);
+    } else {
+      if (nextLoginStreak.dailyChestsDate !== dateKey) {
+        nextLoginStreak.dailyChestsDate = dateKey;
+        nextLoginStreak.dailyChestsClaimed = [];
+      }
+      for (const chestFloor of DAILY_CHEST_FLOORS) {
+        const reachedMilestone =
+          floorReached >= chestFloor || (chestFloor === 30 && outcome === 'cleared');
+        if (reachedMilestone && !nextLoginStreak.dailyChestsClaimed.includes(chestFloor)) {
+          const chestReward = getDailyChestRewards(chestFloor);
+          chestGoldBonus += chestReward.gold;
+          chestShardBonus += chestReward.shards;
+          if (chestReward.rareDrop) {
+            const slot = slots[Math.floor(rng() * slots.length)] ?? 'weapon';
+            keptDrops.unshift(
+              createGearItem(rng, classId, slot, 'rare', chestFloor, `chest_f${chestFloor}`)
+            );
+          }
+          if (chestReward.legendaryDrop) {
+            legendaryDrops.push(
+              createLegendaryGearItem(rng, classId, false, `chest_f${chestFloor}`, chestFloor)
+            );
+          }
+          nextLoginStreak.dailyChestsClaimed.push(chestFloor);
+          dailyChestsUnlocked.push(chestFloor);
+        }
+      }
+
+      const bounty = getDailyMasteryBounty(dateKey);
+      if (
+        nextLoginStreak.dailyBountyCompletedDate !== dateKey &&
+        evaluateDailyMasteryBounty(bounty.id, floorReached, draftedBuffIds)
+      ) {
+        nextLoginStreak.dailyBountyCompletedDate = dateKey;
+        dailyBountyCompleted = true;
+        dailyBountyShards = bounty.shardReward;
+      }
+    }
+
     const legendaryDrop: GearItem | null = legendaryDrops[legendaryDrops.length - 1] ?? null;
     const allKeptDrops = [...legendaryDrops, ...keptDrops];
 
@@ -400,7 +466,9 @@ api.post('/run/complete', async (c) => {
     const expResult = awardClassExp(currentClass, expGained);
 
     const nextInventory = [...allKeptDrops, ...profile.inventory].slice(0, 60);
-    const totalShardsBanked = shardsBankedBase + autoDismantledShards;
+    const goldBanked = goldBankedBase + chestGoldBonus;
+    const totalShardsBanked =
+      shardsBankedBase + autoDismantledShards + chestShardBonus + dailyBountyShards;
 
     profile = {
       ...profile,
@@ -415,6 +483,7 @@ api.post('/run/complete', async (c) => {
         [classId]: expResult.updated,
       },
       inventory: nextInventory,
+      loginStreak: nextLoginStreak,
     };
 
     await saveProfile(profile);
@@ -485,6 +554,9 @@ api.post('/run/complete', async (c) => {
         autoDismantledShards,
         legendaryDrop,
         playerRank,
+        dailyChestsUnlocked,
+        dailyBountyCompleted,
+        dailyBountyShards,
       },
     });
   } catch (error) {
@@ -669,11 +741,12 @@ api.post('/camp/action', async (c) => {
         const cls = profile.classes[body.classId];
         const currentLvl = cls.slotLevels[body.slot];
         const cost = getSlotUpgradeCost(currentLvl);
-        if (profile.shards < cost.shards || profile.gold < cost.gold) {
-          return c.json<ErrorResponse>(
-            { status: 'error', message: `Need ${cost.gold}g and ${cost.shards} Shards` },
-            400
-          );
+        if (profile.shards < cost.shards || (cost.gold > 0 && profile.gold < cost.gold)) {
+          const errMsg =
+            cost.gold > 0
+              ? `Need ${cost.gold}g and ${cost.shards} Spirit Shards`
+              : `Need ${cost.shards} Spirit Shards`;
+          return c.json<ErrorResponse>({ status: 'error', message: errMsg }, 400);
         }
         profile = {
           ...profile,
@@ -819,6 +892,22 @@ api.post('/camp/action', async (c) => {
         message = profile.autoDismantleNormal
           ? 'Auto-dismantle Normal drops enabled'
           : 'Auto-dismantle Normal drops disabled';
+        break;
+      }
+
+      case 'claim_login_reward': {
+        const chosenSlot = isGearSlot(body.chosenSlot) ? body.chosenSlot : undefined;
+        const chosenLegendaryId = isString(body.chosenLegendaryId)
+          ? body.chosenLegendaryId
+          : undefined;
+        const result = claimLoginStreakReward(
+          profile,
+          getUtcDateKey(),
+          chosenSlot,
+          chosenLegendaryId
+        );
+        profile = result.profile;
+        message = result.message;
         break;
       }
 

@@ -267,20 +267,22 @@ export const computeHeroCombatStats = (
   let critDmg = def.critDmg;
   let dodgeRate = def.dodgeRate;
   let skillPowerPct = links.skillDmgPct;
-  let goldBonusPct = profile.legion.gold;
-  let cooldownReductionPct = 0;
+  let goldBonusPct = profile.legion.gold * 6;
+  let cooldownReductionPct = profile.legion.cdr * 2;
   let lifestealPct = 0;
   let damageTakenMult = 1;
   let allDamageMult = 1;
   let range = def.range;
   let knockbackPower = def.knockbackPower * (cls.level >= 15 && classId === 'warrior' ? 1.2 : 1);
 
-  // Account Link Skills + Legion Board
-  maxHp *= 1 + (links.maxHpPct + profile.legion.hp) / 100;
-  atk *= 1 + profile.legion.atk / 100;
+  // Account Link Skills + Permanent Passive Stats (Gold Upgrades)
+  maxHp *= 1 + (links.maxHpPct + profile.legion.hp * 5) / 100;
+  atk *= 1 + (profile.legion.atk * 4) / 100;
+  armor += profile.legion.armor * 5;
   attackSpeed *= 1 + links.attackSpeedPct / 100;
-  critRate += links.critRatePct / 100;
-  critDmg += profile.legion.critDmg / 100;
+  critRate += links.critRatePct / 100 + profile.legion.critRate * 0.015;
+  critDmg += profile.legion.critDmg * 0.08;
+  dodgeRate += profile.legion.dodge * 0.015;
 
   // Bronze Draft Buffs
   const sharpened = countBuff(draftedBuffIds, 'bronze_sharpened_edge');

@@ -7,7 +7,6 @@ import {
   getMiniBossForFloor,
   getMutationById,
 } from '../../shared/catalogs/biomes.ts';
-import { getClassDefinition } from '../../shared/catalogs/classes.ts';
 import { computeHeroCombatStats } from '../../shared/catalogs/classes.ts';
 import {
   computeWuxiaLoadout,
@@ -33,11 +32,12 @@ import type {
 import type {
   ClassId,
   ComputedHeroStats,
+  DailySectDecree,
   ElementId,
   GearSlot,
   MutationId,
 } from '../../shared/types.ts';
-import { mulberry32 } from '../../shared/utils.ts';
+import { getDailySectDecree, getUtcDateKey, mulberry32 } from '../../shared/utils.ts';
 import { getGearVisualStyle, registerPixelTextures } from '../fx/pixelArt.ts';
 import { soundFX } from '../fx/sound.ts';
 import type {
@@ -543,6 +543,7 @@ type EnemyEntity = {
   hpBg: Phaser.GameObjects.Rectangle;
   hpFill: Phaser.GameObjects.Rectangle;
   nameText: Phaser.GameObjects.Text;
+  statusBadge?: Phaser.GameObjects.Text;
   name: string;
   isBoss: boolean;
   isMiniBoss: boolean;
@@ -650,12 +651,13 @@ export class DungeonScene extends Scene {
   private weaponSwingOffsetX: number = 0;
   private weaponSwingOffsetY: number = 0;
   private weaponTween: Phaser.Tweens.Tween | null = null;
-  private heroAura: Phaser.GameObjects.Arc | null = null;
   private heroSutraAuraGfx: Phaser.GameObjects.Graphics | null = null;
-  private heroGlow: Phaser.GameObjects.Arc | null = null;
+  private heroOverheadGfx: Phaser.GameObjects.Graphics | null = null;
+  private heroHpText: Phaser.GameObjects.Text | null = null;
   private hawkSprite: Phaser.GameObjects.Image | null = null;
   private wolfSprite: Phaser.GameObjects.Image | null = null;
   private runeBooks: Phaser.GameObjects.Image[] = [];
+  private activeFloatingTexts: { text: Phaser.GameObjects.Text; isCritical: boolean }[] = [];
 
   private runConfig: RunStartPayload | null = null;
   private activeBiome: BiomeDefinition = getBiomeById('slime_bog');
@@ -671,6 +673,7 @@ export class DungeonScene extends Scene {
   private autoSkill: boolean = true;
 
   private stats: ComputedHeroStats | null = null;
+  private activeDecree: DailySectDecree | null = null;
   private heroHp: number = 200;
   private heroShield: number = 0;
   private heroX: number = 170;
@@ -955,11 +958,11 @@ export class DungeonScene extends Scene {
       .setDepth(14.5);
   }
 
-  private createHeroDisplay(classId: ClassId, level: number): void {
+  private createHeroDisplay(classId: ClassId, _level: number): void {
     this.heroShadow?.destroy();
-    this.heroAura?.destroy();
     this.heroSutraAuraGfx?.destroy();
-    this.heroGlow?.destroy();
+    this.heroOverheadGfx?.destroy();
+    this.heroHpText?.destroy();
     this.heroCapeSprite?.destroy();
     this.heroSprite?.destroy();
     this.heroTopSprite?.destroy();
@@ -980,11 +983,6 @@ export class DungeonScene extends Scene {
       cape: null,
     };
     const gearStyle = getGearVisualStyle(classId, equipped);
-    const clsColor = getClassDefinition(classId).colorInt;
-
-    this.heroAura = this.add
-      .circle(this.heroX, this.groundY - 28, 36, clsColor, level >= 60 ? 0.28 : level >= 35 ? 0.16 : 0.08)
-      .setDepth(4);
 
     this.heroSutraAuraGfx = this.add.graphics().setDepth(4.3);
 
@@ -992,17 +990,6 @@ export class DungeonScene extends Scene {
       .image(this.heroX, this.groundY - 4, 'hd2d_shadow')
       .setScale(0.95, 0.85)
       .setDepth(4.1);
-
-    this.heroGlow = this.add
-      .circle(
-        this.heroX + 16,
-        this.groundY - 26,
-        17,
-        gearStyle.weaponGlowTint ?? 0xfef08a,
-        gearStyle.weaponGlowTint ? 0.42 : level >= 15 ? 0.28 : 0.12
-      )
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(4.5);
 
     this.heroCapeSprite = this.add
       .image(this.heroX, this.groundY - 28, 'gear_cape')
@@ -1031,6 +1018,19 @@ export class DungeonScene extends Scene {
       .setTint(gearStyle.weaponTint)
       .setVisible(gearStyle.hasWeapon)
       .setDepth(6.6);
+
+    this.heroOverheadGfx = this.add.graphics().setDepth(9);
+    this.heroHpText = this.add
+      .text(this.heroX, this.groundY - 88, '', {
+        fontFamily: 'monospace',
+        fontSize: '9px',
+        fontStyle: 'bold',
+        color: '#f8fafc',
+        stroke: '#000000',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(9.5);
 
     if (this.hasEquippedLegendary('bow_cape_goldenfalcon')) {
       this.hawkSprite = this.add
@@ -1158,10 +1158,17 @@ export class DungeonScene extends Scene {
       e.hpBg.destroy();
       e.hpFill.destroy();
       e.nameText.destroy();
+      e.statusBadge?.destroy();
       e.flawRing?.destroy();
       e.flawText?.destroy();
     }
     this.enemies = [];
+
+    for (const ft of this.activeFloatingTexts) {
+      this.tweens.killTweensOf(ft.text);
+      ft.text.destroy();
+    }
+    this.activeFloatingTexts = [];
 
     for (const p of this.projectiles) {
       p.sprite.destroy();
@@ -1187,6 +1194,7 @@ export class DungeonScene extends Scene {
   public startRun(payload: RunStartPayload): void {
     this.clearCombatEntities();
     this.runConfig = payload;
+    this.activeDecree = payload.mode === 'daily' ? getDailySectDecree(getUtcDateKey()) : null;
     this.rng = mulberry32(payload.seed);
     this.applyBiomeVisuals(getBiomeById(payload.biomeId));
 
@@ -1293,13 +1301,22 @@ export class DungeonScene extends Scene {
 
   private recomputeStats(): void {
     if (!this.runConfig) return;
-    this.stats = computeHeroCombatStats(
+    const baseStats = computeHeroCombatStats(
       this.runConfig.profile,
       this.runConfig.classId,
       this.draftedBuffIds,
       this.goldCollected,
       this.floorsCleared
     );
+    if (this.activeDecree) {
+      this.stats = {
+        ...baseStats,
+        atk: Math.max(1, Math.round(baseStats.atk * this.activeDecree.playerAtkMult)),
+        critRate: Math.min(1, Math.max(0.01, baseStats.critRate + this.activeDecree.critRateBonus)),
+      };
+    } else {
+      this.stats = baseStats;
+    }
   }
 
   private applyFloorStartShieldsAndPassives(): void {
@@ -1385,7 +1402,8 @@ export class DungeonScene extends Scene {
 
   private spawnWave(): void {
     const w = this.scale.width || 1024;
-    const hpMult = computeEnemySpawnHpMult(this.draftedBuffIds);
+    const hpMult =
+      computeEnemySpawnHpMult(this.draftedBuffIds) * (this.activeDecree?.enemyHpMult ?? 1);
     const runSeed = this.runConfig?.seed ?? 1;
     const isCultLeader = isCultLeaderFloor(this.floor);
     const isMountHuaSummit = !isCultLeader && this.floor >= 25 && this.floor % 10 === 5;
@@ -1398,7 +1416,7 @@ export class DungeonScene extends Scene {
           ? 1.72 * Math.pow(1.1, this.floor - 10)
           : this.floor <= 30
             ? 4.46 * Math.pow(1.1, this.floor - 20)
-            : 11.57 * Math.pow(1.06, this.floor - 30);
+            : 11.57 * Math.pow(1.045, this.floor - 30);
     const realmAtkMult =
       this.floor <= 10
         ? 1 + (this.floor - 1) * 0.04
@@ -1406,7 +1424,7 @@ export class DungeonScene extends Scene {
           ? 1.36 + (this.floor - 10) * 0.08
           : this.floor <= 30
             ? 2.16 + (this.floor - 20) * 0.12
-            : 3.36 * Math.pow(1.035, this.floor - 30);
+            : 3.36 * Math.pow(1.025, this.floor - 30);
 
     if (isCultLeader || isMiniBoss) {
       const isEndBoss = isCultLeader;
@@ -1552,8 +1570,11 @@ export class DungeonScene extends Scene {
       const sprite = this.add.image(x, y, textureKey).setTint(tint).setDepth(6);
       if (isElite) sprite.setScale(1.3);
 
-      const hpBg = this.add.rectangle(x, y - 42, 46, 6, 0x0f172a).setDepth(8);
-      const hpFill = this.add.rectangle(x, y - 42, 46, 6, isElite ? 0xa855f7 : 0xef4444).setDepth(9);
+      const hpBg = this.add.rectangle(x, y - 42, 46, 6, 0x0f172a).setVisible(isElite).setDepth(8);
+      const hpFill = this.add
+        .rectangle(x, y - 42, 46, 6, isElite ? 0xa855f7 : 0xef4444)
+        .setVisible(isElite)
+        .setDepth(9);
       const nameText = this.add
         .text(x, y - 54, isElite ? `Elite ${mobName}` : mobName, {
           fontSize: '10px',
@@ -1564,6 +1585,18 @@ export class DungeonScene extends Scene {
         .setOrigin(0.5)
         .setVisible(isElite)
         .setDepth(9);
+      const statusBadge = this.add
+        .text(x + 27, y - 42, '', {
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: '#38bdf8',
+          stroke: '#000000',
+          strokeThickness: 3,
+        })
+        .setOrigin(0, 0.5)
+        .setVisible(false)
+        .setDepth(9.5);
 
       this.enemies.push({
         id: this.nextEnemyId++,
@@ -1572,6 +1605,7 @@ export class DungeonScene extends Scene {
         hpBg,
         hpFill,
         nameText,
+        statusBadge,
         name: mobName,
         isBoss: false,
         isMiniBoss: isElite,
@@ -1651,8 +1685,8 @@ export class DungeonScene extends Scene {
       .setScale(isEndBoss ? 1.65 : 1.35, isEndBoss ? 1.2 : 1.05)
       .setDepth(4.1);
     const sprite = this.add.image(x, y, key).setTint(tint).setScale(scale).setDepth(6);
-    const hpBg = this.add.rectangle(x, y - barOffset, 96, 8, 0x0f172a).setDepth(8);
-    const hpFill = this.add.rectangle(x, y - barOffset, 96, 8, 0xf97316).setDepth(9);
+    const hpBg = this.add.rectangle(x, y - barOffset, 96, 8, 0x0f172a).setVisible(false).setDepth(8);
+    const hpFill = this.add.rectangle(x, y - barOffset, 96, 8, 0xf97316).setVisible(false).setDepth(9);
     const nameText = this.add
       .text(x, y - barOffset - 14, name, {
         fontSize: '12px',
@@ -1662,7 +1696,20 @@ export class DungeonScene extends Scene {
         strokeThickness: 4,
       })
       .setOrigin(0.5)
+      .setVisible(false)
       .setDepth(9);
+    const statusBadge = this.add
+      .text(x, y - barOffset, '', {
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#38bdf8',
+        stroke: '#000000',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setVisible(false)
+      .setDepth(9.5);
 
     this.enemies.push({
       id: this.nextEnemyId++,
@@ -1671,13 +1718,17 @@ export class DungeonScene extends Scene {
       hpBg,
       hpFill,
       nameText,
+      statusBadge,
       name,
       isBoss: true,
       isMiniBoss: !isEndBoss,
       isSplitClone,
       hp: maxHp,
       maxHp,
-      hitShield: 0,
+      hitShield:
+        this.activeDecree && this.activeDecree.bonusBossShield > 0
+          ? this.activeDecree.bonusBossShield
+          : 0,
       atk: baseAtk,
       atkIntervalSec,
       atkTimer: 0.9,
@@ -1778,7 +1829,6 @@ export class DungeonScene extends Scene {
           .setScale(0.95 * shScale, 0.85 * shScale)
           .setAlpha(Math.max(0.35, 1 - lift * 0.01));
       }
-      if (this.heroAura) this.heroAura.setPosition(hx, hy);
       if (this.heroSutraAuraGfx) {
         this.heroSutraAuraGfx.clear();
         const loadout = computeWuxiaLoadout(this.draftedBuffIds, this.floor);
@@ -1788,25 +1838,14 @@ export class DungeonScene extends Scene {
           const totalLevels = loadout.innerQis.reduce((sum, s) => sum + s.level, 0);
           const primarySutra = getWuxiaInnerQiById(loadout.innerQis[0]?.id ?? '');
           const baseColor = primarySutra?.colorHex ?? 0x38bdf8;
-          const ringRadiusX = 36 + Math.min(18, totalLevels * 1.4) + pulse * 4;
-          const ringRadiusY = 12 + Math.min(6, totalLevels * 0.5) + pulse * 1.5;
+          const ringRadiusX = 34 + Math.min(16, totalLevels * 1.2) + pulse * 3;
+          const ringRadiusY = 11 + Math.min(5, totalLevels * 0.4) + pulse * 1.2;
 
-          // Ground Passive Skill lotus/aura ring
-          this.heroSutraAuraGfx.lineStyle(2, baseColor, 0.55 + pulse * 0.35);
+          // Subtle ground Passive Skill ellipse ring
+          this.heroSutraAuraGfx.lineStyle(1.5, baseColor, 0.42 + pulse * 0.24);
           this.heroSutraAuraGfx.strokeEllipse(hx, this.groundY - 4, ringRadiusX * 2, ringRadiusY * 2);
-          this.heroSutraAuraGfx.fillStyle(baseColor, 0.1 + pulse * 0.08);
+          this.heroSutraAuraGfx.fillStyle(baseColor, 0.06 + pulse * 0.05);
           this.heroSutraAuraGfx.fillEllipse(hx, this.groundY - 4, ringRadiusX * 1.8, ringRadiusY * 1.8);
-
-          // Vertical spirit halo around the hero body
-          const haloRadius = 34 + Math.min(14, loadout.innerQis.length * 3) + pulse * 3.5;
-          this.heroSutraAuraGfx.lineStyle(2, baseColor, 0.38 + pulse * 0.25);
-          this.heroSutraAuraGfx.strokeCircle(hx, hy - 2, haloRadius);
-
-          // Awakened Secret Synergy outer golden resonance ring
-          if (loadout.awakenedSynergies.length > 0) {
-            this.heroSutraAuraGfx.lineStyle(2, 0xfbbf24, 0.5 + pulse * 0.35);
-            this.heroSutraAuraGfx.strokeCircle(hx, hy - 2, haloRadius + 6);
-          }
 
           // Orbiting spirit motes — one per learned Passive Skill
           const count = loadout.innerQis.length;
@@ -1826,12 +1865,6 @@ export class DungeonScene extends Scene {
           }
         }
       }
-      if (this.heroGlow) {
-        this.heroGlow.setPosition(
-          hx + 16 + this.weaponSwingOffsetX,
-          hy - 2 + this.weaponSwingOffsetY
-        );
-      }
       if (this.heroCapeSprite) {
         const flutter = Math.sin(this.elapsedRunMs * 0.01) * 0.06;
         this.heroCapeSprite.setPosition(hx, hy).setRotation(hRot + flutter);
@@ -1846,6 +1879,57 @@ export class DungeonScene extends Scene {
         this.heroWeaponSprite
           .setPosition(hx + 16 + this.weaponSwingOffsetX, hy - 2 + this.weaponSwingOffsetY)
           .setRotation(this.weaponAngle + hRot);
+      }
+
+      // Player Overhead HP + Shield + Qi Bar (replaces bottom-left HUD vitals pane)
+      if (this.heroOverheadGfx && this.stats) {
+        this.heroOverheadGfx.clear();
+        const barW = 58;
+        const hpH = 6;
+        const qiH = 3;
+        const barX = Math.round(hx - barW / 2);
+        const barY = Math.round(hy - 50);
+        const maxHp = Math.max(1, this.stats.maxHp);
+        const hpRatio = Math.max(0, Math.min(1, this.heroHp / maxHp));
+        const hpColor = hpRatio > 0.5 ? 0x22c55e : hpRatio > 0.25 ? 0xf59e0b : 0xef4444;
+
+        // HP bar track + fill
+        this.heroOverheadGfx.fillStyle(0x0a0d1c, 0.85);
+        this.heroOverheadGfx.fillRect(barX - 1, barY - 1, barW + 2, hpH + 2);
+        if (hpRatio > 0) {
+          this.heroOverheadGfx.fillStyle(hpColor, 1);
+          this.heroOverheadGfx.fillRect(barX, barY, Math.round(barW * hpRatio), hpH);
+        }
+
+        // Shield overlay strip on top edge of HP bar when active
+        if (this.heroShield > 0) {
+          const shieldRatio = Math.max(0, Math.min(1, this.heroShield / maxHp));
+          this.heroOverheadGfx.fillStyle(0x38bdf8, 0.95);
+          this.heroOverheadGfx.fillRect(barX, barY, Math.max(2, Math.round(barW * shieldRatio)), 2);
+        }
+
+        // Qi micro-bar tucked directly below HP bar
+        const qiY = barY + hpH + 2;
+        const qiRatio =
+          this.ultimateStocks >= this.maxUltimateStocks
+            ? 1
+            : Math.max(0, Math.min(1, this.ultimateGauge / 100));
+        this.heroOverheadGfx.fillStyle(0x0a0d1c, 0.8);
+        this.heroOverheadGfx.fillRect(barX - 1, qiY - 1, barW + 2, qiH + 2);
+        if (qiRatio > 0) {
+          this.heroOverheadGfx.fillStyle(this.ultimateStocks > 0 ? 0xfde047 : 0xd97706, 1);
+          this.heroOverheadGfx.fillRect(barX, qiY, Math.round(barW * qiRatio), qiH);
+        }
+
+        if (this.heroHpText) {
+          const hpInt = Math.max(0, Math.round(this.heroHp));
+          const shInt = Math.round(this.heroShield);
+          const label = shInt > 0 ? `${hpInt}/${maxHp} +${shInt}` : `${hpInt}/${maxHp}`;
+          if (this.heroHpText.text !== label) {
+            this.heroHpText.setText(label);
+          }
+          this.heroHpText.setPosition(hx, barY - 8);
+        }
       }
     }
     if (this.hawkSprite) {
@@ -2708,7 +2792,6 @@ export class DungeonScene extends Scene {
       for (const e of this.enemies) {
         e.sprite.x = Phaser.Math.Linear(e.sprite.x, target.sprite.x, 0.55);
       }
-      this.spawnFloatingText(target.sprite.x, target.sprite.y - 45, 'VOID PULL!', '#c084fc', 14);
     }
 
     if (echoProcs) {
@@ -2975,7 +3058,6 @@ export class DungeonScene extends Scene {
 
     // Smoke Bomb dodge check
     if (enemy.smokeActiveTimer > 0 && this.rng() < 0.5) {
-      this.spawnFloatingText(enemy.sprite.x, enemy.sprite.y - 36, 'DODGE!', '#cbd5e1', 12);
       return;
     }
 
@@ -3070,7 +3152,10 @@ export class DungeonScene extends Scene {
         enemy.sprite.y - 34 - Math.floor(this.rng() * 14),
         callout.text,
         callout.color,
-        callout.size
+        callout.size,
+        1,
+        true,
+        callout.stroke
       );
 
       if (this.draftedBuffIds.includes('silver_vampiric_touch') && this.vampiricTouchCd <= 0) {
@@ -3084,7 +3169,6 @@ export class DungeonScene extends Scene {
             other.hp = Math.max(0, other.hp - skyDmg);
             this.spawnLightningVfx(other.sprite.x, other.sprite.y - 110, other.sprite.x, other.sprite.y, 0x38bdf8);
             this.spawnHitSpark(other.sprite.x, other.sprite.y, false, 0x38bdf8);
-            this.spawnFloatingText(other.sprite.x, other.sprite.y - 26, `ZAP! ${skyDmg}`, '#38bdf8', 13);
             if (other.hp <= 0) {
               this.killEnemy(other);
             }
@@ -3104,8 +3188,10 @@ export class DungeonScene extends Scene {
         enemy.sprite.x + (this.rng() - 0.5) * 16,
         enemy.sprite.y - 24,
         `${finalDmg}`,
-        '#cbd5e1',
-        12
+        '#e2e8f0',
+        11,
+        0.78,
+        false
       );
     }
 
@@ -3138,7 +3224,6 @@ export class DungeonScene extends Scene {
           const arcDmg = Math.max(1, Math.round(finalDmg * 0.4));
           other.hp = Math.max(0, other.hp - arcDmg);
           this.spawnLightningVfx(enemy.sprite.x, enemy.sprite.y, other.sprite.x, other.sprite.y, 0x60a5fa);
-          this.spawnFloatingText(other.sprite.x, other.sprite.y - 26, `ARC ${arcDmg}`, '#60a5fa', 12);
           if (other.hp <= 0) {
             this.killEnemy(other);
           }
@@ -3175,7 +3260,6 @@ export class DungeonScene extends Scene {
         false,
         true
       );
-      this.spawnFloatingText(enemy.sprite.x, enemy.sprite.y - 60, 'MITOSIS SPLIT!', '#6ee7b7', 16);
     }
 
     // Execution check
@@ -3218,6 +3302,7 @@ export class DungeonScene extends Scene {
     enemy.hpBg.destroy();
     enemy.hpFill.destroy();
     enemy.nameText.destroy();
+    enemy.statusBadge?.destroy();
     enemy.flawRing?.destroy();
     enemy.flawRing = null;
     enemy.flawText?.destroy();
@@ -3296,7 +3381,6 @@ export class DungeonScene extends Scene {
         if (e.permafrostTimer <= 0) {
           e.permafrostTimer = 10;
           e.hitShield = e.isMiniBoss ? 8 : 14;
-          this.spawnFloatingText(e.sprite.x, e.sprite.y - 60, 'PERMAFROST ARMOR!', '#67e8f9', 14);
         }
       } else if (e.mechanic === 'overheat_aura') {
         e.overheatTimer -= dt;
@@ -3309,14 +3393,12 @@ export class DungeonScene extends Scene {
         if (e.smokeTimer <= 0) {
           e.smokeTimer = 9;
           e.smokeActiveTimer = 3;
-          this.spawnFloatingText(e.sprite.x, e.sprite.y - 55, 'SMOKE BOMB!', '#c084fc', 14);
         }
       } else if (e.mechanic === 'enrage_timer') {
         e.enrageTimer -= dt;
         if (e.enrageTimer <= 0) {
           e.enrageTimer = 5;
           e.enrageStacks = Math.min(6, e.enrageStacks + 1);
-          this.spawnFloatingText(e.sprite.x, e.sprite.y - 55, `ENRAGE x${e.enrageStacks}`, '#ef4444', 13);
         }
       }
     }
@@ -3383,11 +3465,40 @@ export class DungeonScene extends Scene {
     const barOffset = e.isBoss && !e.isMiniBoss ? 68 : e.isBoss ? 56 : 42;
     const barY = e.sprite.y - barOffset;
     e.shadow.setPosition(e.sprite.x, this.groundY - 4);
-    e.hpBg.setPosition(e.sprite.x, barY);
-    e.hpFill.setPosition(e.sprite.x, barY);
-    const ratio = Math.max(0, Math.min(1, e.hp / e.maxHp));
-    e.hpFill.width = (e.isBoss ? 96 : 46) * ratio;
-    e.nameText.setPosition(e.sprite.x, barY - 14);
+    if (e.isBoss) {
+      e.hpBg.setVisible(false);
+      e.hpFill.setVisible(false);
+      e.nameText.setVisible(false);
+    } else {
+      const showMobBar = e.isMiniBoss || e.hp < e.maxHp;
+      e.hpBg.setVisible(showMobBar);
+      e.hpFill.setVisible(showMobBar);
+      e.nameText.setVisible(e.isMiniBoss);
+      if (showMobBar) {
+        e.hpBg.setPosition(e.sprite.x, barY);
+        e.hpFill.setPosition(e.sprite.x, barY);
+        const ratio = Math.max(0, Math.min(1, e.hp / e.maxHp));
+        e.hpFill.width = 46 * ratio;
+      }
+      if (e.isMiniBoss) {
+        e.nameText.setPosition(e.sprite.x, barY - 14);
+      }
+    }
+
+    if (e.statusBadge) {
+      const parts: string[] = [];
+      if (e.hitShield > 0) parts.push(`[SH ${e.hitShield}]`);
+      if (e.enrageStacks > 0) parts.push(`[EN x${e.enrageStacks}]`);
+      if (parts.length > 0) {
+        e.statusBadge
+          .setText(parts.join(' '))
+          .setColor(e.hitShield > 0 ? '#38bdf8' : '#fbbf24')
+          .setPosition(e.isBoss ? e.sprite.x : e.sprite.x + 27, barY)
+          .setVisible(true);
+      } else {
+        e.statusBadge.setVisible(false);
+      }
+    }
 
     // Interactive Qi Flaw exposure & tracking
     if (e.flawTimer > 0) {
@@ -3419,7 +3530,7 @@ export class DungeonScene extends Scene {
           .setStrokeStyle(3, 0xef4444)
           .setDepth(11);
         e.flawText = this.add
-          .text(e.sprite.x, barY - 30, 'FLAW! [Q / CLICK]', {
+          .text(e.sprite.x, barY - 26, 'FLAW!', {
             fontFamily: 'monospace',
             fontSize: '11px',
             fontStyle: 'bold',
@@ -3497,13 +3608,11 @@ export class DungeonScene extends Scene {
 
     if (this.invulnHitsLeft > 0) {
       this.invulnHitsLeft -= 1;
-      this.spawnFloatingText(this.heroX, this.groundY - 72, 'NEGATED!', '#93c5fd', 14);
       return;
     }
 
     if (this.rng() < this.stats.dodgeRate) {
       this.dodgeCount += 1;
-      this.spawnFloatingText(this.heroX, this.groundY - 72, 'DODGE!', '#a7f3d0', 14);
       if (this.hasEquippedLegendary('thief_head_fox') && attacker) {
         const mult = this.isEquippedLegendaryCursed('thief_head_fox') ? 0.8 : 1;
         this.damageEnemy(attacker, this.stats.atk * 1.1 * mult, false, 'COUNTER');
@@ -4337,26 +4446,24 @@ export class DungeonScene extends Scene {
   private getWuxiaCritCallout(
     labelTag: string | null,
     finalDmg: number
-  ): { text: string; color: string; size: number } {
+  ): { text: string; color: string; size: number; stroke: string } {
     if (labelTag === 'ULTIMATE') {
-      return { text: `ULTIMATE CRIT! ${finalDmg}`, color: '#fef08a', size: 19 };
+      return { text: `ULTIMATE CRIT! ${finalDmg}`, color: '#fde047', size: 16, stroke: '#000000' };
     }
     if (labelTag === 'SHATTER') {
-      return { text: `MERIDIAN SHATTER! ${finalDmg}`, color: '#fde047', size: 18 };
+      return { text: `MERIDIAN SHATTER! ${finalDmg}`, color: '#fde047', size: 18, stroke: '#991b1b' };
     }
-    const callouts: readonly { phrase: string; color: string }[] = [
-      { phrase: 'MERIDIAN PIERCE!', color: '#fde047' },
-      { phrase: 'CRITICAL STRIKE!', color: '#fbbf24' },
-      { phrase: 'SWORD SEVER!', color: '#38bdf8' },
-      { phrase: 'BURST RUPTURE!', color: '#fb923c' },
-      { phrase: 'YIN-YANG RUPTURE!', color: '#e879f9' },
-      { phrase: 'PRECISION STRIKE!', color: '#f87171' },
-      { phrase: 'HEAVEN CRIT!', color: '#fef08a' },
+    const callouts: readonly string[] = [
+      'MERIDIAN PIERCE!',
+      'CRITICAL STRIKE!',
+      'SWORD SEVER!',
+      'BURST RUPTURE!',
+      'YIN-YANG RUPTURE!',
+      'PRECISION STRIKE!',
+      'HEAVEN CRIT!',
     ];
-    const picked = callouts[Math.floor(this.rng() * callouts.length)] ?? callouts[0];
-    const phrase = picked?.phrase ?? 'MERIDIAN PIERCE!';
-    const color = picked?.color ?? '#fde047';
-    return { text: `${phrase} ${finalDmg}`, color, size: 16 };
+    const phrase = callouts[Math.floor(this.rng() * callouts.length)] ?? 'CRITICAL STRIKE!';
+    return { text: `${phrase} ${finalDmg}`, color: '#fde047', size: 15, stroke: '#000000' };
   }
 
   private addUltimateGauge(amount: number): void {
@@ -4546,7 +4653,8 @@ export class DungeonScene extends Scene {
 
     this.potionCharges -= 1;
     this.potionCooldown = 10;
-    this.healHero(this.stats.maxHp * 0.35, true);
+    const potionMult = this.activeDecree?.potionHealMult ?? 1;
+    this.healHero(this.stats.maxHp * 0.35 * potionMult, true);
     soundFX.playDraft();
     this.emitHud();
   }
@@ -4670,6 +4778,10 @@ export class DungeonScene extends Scene {
 
   private spawnLootDrop(x: number, y: number, kind: 'coin' | 'orb' | 'chest', value: number): void {
     const key = kind === 'coin' ? 'loot_coin' : kind === 'chest' ? 'loot_chest' : 'proj_orb_hp';
+    const scaledValue =
+      kind === 'coin' && this.activeDecree
+        ? Math.max(1, Math.round(value * this.activeDecree.goldMult))
+        : value;
     const sprite = this.add.image(x, y - 10, key).setDepth(7);
     if (kind === 'chest') {
       sprite.setScale(1.3);
@@ -4678,7 +4790,7 @@ export class DungeonScene extends Scene {
     this.loots.push({
       sprite,
       kind,
-      value,
+      value: scaledValue,
       vx: (this.rng() - 0.5) * 140,
       vy: -190 - this.rng() * 90,
       age: 0,
@@ -4734,25 +4846,53 @@ export class DungeonScene extends Scene {
     }
   }
 
-  private spawnFloatingText(x: number, y: number, msg: string, color: string, sizePx: number): void {
+  private spawnFloatingText(
+    x: number,
+    y: number,
+    msg: string,
+    color: string,
+    sizePx: number,
+    alpha = 1,
+    isCritical = sizePx >= 15,
+    strokeColor = '#000000'
+  ): void {
+    const maxFloatingTexts = 14;
+    while (this.activeFloatingTexts.length >= maxFloatingTexts) {
+      let evictIdx = this.activeFloatingTexts.findIndex((entry) => !entry.isCritical);
+      if (evictIdx === -1) evictIdx = 0;
+      const evicted = this.activeFloatingTexts.splice(evictIdx, 1)[0];
+      if (evicted) {
+        this.tweens.killTweensOf(evicted.text);
+        evicted.text.destroy();
+      }
+    }
+
     const txt = this.add
       .text(x, y, msg, {
         fontFamily: 'monospace',
         fontSize: `${sizePx}px`,
         fontStyle: 'bold',
         color,
-        stroke: '#000000',
+        stroke: strokeColor,
         strokeThickness: 4,
       })
       .setOrigin(0.5)
+      .setAlpha(alpha)
       .setDepth(12);
+
+    const entry = { text: txt, isCritical };
+    this.activeFloatingTexts.push(entry);
 
     this.tweens.add({
       targets: txt,
       y: y - 34,
       alpha: 0,
       duration: 620,
-      onComplete: () => txt.destroy(),
+      onComplete: () => {
+        const idx = this.activeFloatingTexts.indexOf(entry);
+        if (idx !== -1) this.activeFloatingTexts.splice(idx, 1);
+        txt.destroy();
+      },
     });
   }
 

@@ -19,8 +19,10 @@ export type ElementDefinition = {
 };
 
 export type HybridElementDefinition = {
+  id: string;
   elements: readonly [ElementId, ElementId];
   name: string;
+  displayName: string;
   colorHex: string;
   effectText: string;
 };
@@ -58,26 +60,34 @@ export const ELEMENT_CATALOG: readonly ElementDefinition[] = [
 
 export const HYBRID_ELEMENTS: readonly HybridElementDefinition[] = [
   {
+    id: 'plasma',
     elements: ['fire', 'lightning'],
     name: 'Plasma',
+    displayName: 'Nine-Yang Lightning',
     colorHex: '#ff9800',
     effectText: 'Violent Qi-thunder detonations trigger on burning cultists.',
   },
   {
+    id: 'abyssal_frost',
     elements: ['ice', 'dark'],
     name: 'Abyssal Frost',
+    displayName: 'Cold-Jade Frost',
     colorHex: '#3f51b5',
     effectText: 'Slows cultists while shredding Iron-Shirt defense & draining HP.',
   },
   {
+    id: 'hellfire',
     elements: ['fire', 'dark'],
     name: 'Hellfire',
+    displayName: 'Crimson Lotus Flame',
     colorHex: '#e91e63',
     effectText: 'Yang Burn deals bonus damage based on missing foe armor.',
   },
   {
+    id: 'void_storm',
     elements: ['lightning', 'dark'],
     name: 'Void Storm',
+    displayName: 'Abyssal Qi Storm',
     colorHex: '#7c4dff',
     effectText: 'Chain Qi arcs apply Abyssal armor shred to every cultist hit.',
   },
@@ -307,37 +317,37 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'thief_wep_phantom',
-    name: 'Flying Dagger of Little Li (小李飞刀)',
+    name: 'Ice-Soul Silver Needles (冰魄银针)',
     classId: 'thief',
     slot: 'weapon',
-    signatureText: 'Gu Long’s supreme immortal weapon — "Little Li’s Flying Dagger never misses" (例无虚发): strikes ignore 60% of Armor and inflict Bleed.',
+    signatureText: 'Red-Dust Fairy Li Mochou’s lethal silver needles — forged with freezing venom that pierces guard: strikes ignore 60% of Armor and inflict Bleed.',
     cursedName: 'Unsteady Flick',
     cursedText: 'Bleed duration is shortened by 1 second.',
   },
   {
     id: 'thief_head_eclipse',
-    name: 'Lu Xiaofeng Four-Eyebrows Headband (陆小凤灵犀束发带)',
+    name: 'Linghu Chong Wanderer Headband (令狐冲笑傲束发带)',
     classId: 'thief',
     slot: 'headgear',
-    signatureText: 'Spirit Finger champion’s headband: guaranteed 100% Critical Hit Chance for the first 4 seconds of every floor.',
-    cursedName: 'Fleeting Intuition',
+    signatureText: 'Mount Hua prodigy Linghu Chong’s carefree headband — reads every flaw in an instant: guaranteed 100% Critical Hit Chance for the first 4 seconds of every floor.',
+    cursedName: 'Fleeting Sword-Intuition',
     cursedText: 'Guaranteed Crit duration lasts for 2.5 seconds instead.',
   },
   {
     id: 'thief_head_bandana',
-    name: 'Tang Clan Rainstorm Needle Hood (唐门暴雨梨花针冠)',
+    name: 'Ancient Tomb Jade-Bee Hood (古墓玉蜂针冠)',
     classId: 'thief',
     slot: 'headgear',
-    signatureText: 'Tang Clan’s most dreaded hidden-weapon engine: projectiles and needle waves pierce through up to 3 cultists in a line.',
-    cursedName: 'Worn Tang Band',
+    signatureText: 'Ancient Tomb Sect’s prized Jade-Bee Needle crest: projectiles and needle waves pierce through up to 3 cultists in a line.',
+    cursedName: 'Frayed Tomb Band',
     cursedText: 'Projectiles only pierce through up to 2 cultists.',
   },
   {
     id: 'thief_head_fox',
-    name: 'Chu Liuxiang Bandit-King Mask (盗帅楚留香白玉面具)',
+    name: 'Yang Guo Human-Skin Mask (杨过人皮面具)',
     classId: 'thief',
     slot: 'headgear',
-    signatureText: 'Fragrant Bandit Chu Liuxiang’s white-jade mask: +30% Dodge Chance; evading an attack triggers an instant counter-slash.',
+    signatureText: 'The Condor Hero’s uncanny disguise crafted by Cheng Ying: +30% Dodge Chance; evading an attack triggers an instant counter-slash.',
     cursedName: 'Restricted Vision',
     cursedText: 'Counter-slash damage is reduced by 20%.',
   },
