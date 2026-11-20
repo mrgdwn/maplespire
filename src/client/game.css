@@ -521,6 +521,17 @@ body {
   color: #e9d5ff;
 }
 
+.btn-warn {
+  background: linear-gradient(180deg, #4c1d1d 0%, #2a0f12 100%);
+  border-color: #f87171;
+  color: #fecaca;
+}
+
+.btn-warn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #632424 0%, #3a1418 100%);
+  color: #fee2e2;
+}
+
 .btn-green {
   background: linear-gradient(180deg, #13392e 0%, #0b221b 100%);
   border-color: #6ee7b7;
@@ -1130,6 +1141,16 @@ body {
   font-size: 13px;
   font-weight: 800;
   line-height: 1;
+  pointer-events: none;
+}
+
+.hud-medallion-touch {
+  display: none;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   pointer-events: none;
 }
 
@@ -2432,6 +2453,45 @@ body {
   }
 }
 
+@media (max-width: 420px) {
+  .equip-stage {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .equip-stage__center {
+    grid-column: 1 / -1;
+    order: -1;
+    padding: 6px 4px 8px;
+  }
+
+  .equip-stage__col {
+    display: contents;
+  }
+
+  .equip-slot-tile {
+    min-height: 64px;
+    padding: 5px 4px;
+  }
+
+  .equip-slot-tile__top {
+    gap: 2px;
+  }
+
+  .equip-slot-tile__slot {
+    font-size: 8.5px;
+  }
+
+  .equip-slot-tile__name {
+    font-size: 9.5px;
+  }
+
+  .equip-slot-tile__pwr {
+    font-size: 8.5px;
+  }
+}
+
 /* ================= MOBILE / TOUCH OPTIMIZATIONS & DE-CLUTTERING ================= */
 @media (max-width: 640px), (pointer: coarse) {
   .hud-ink-keycap {
@@ -2466,8 +2526,8 @@ body {
   }
 
   .hud-medallion {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
 
   .hud-medallion-key {
@@ -2509,6 +2569,16 @@ body {
     pointer-events: auto;
     position: relative;
     z-index: 2;
+  }
+}
+
+@media (pointer: coarse) {
+  .hud-medallion-key {
+    display: none;
+  }
+
+  .hud-medallion-touch {
+    display: block;
   }
 }
 

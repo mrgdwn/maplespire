@@ -815,21 +815,21 @@ export const getDailyMasteryBounty = (dateKey: string): DailyMasteryBounty => {
 
 export const evaluateDailyMasteryBounty = (
   bountyId: DailyMasteryBountyId,
-  floorReached: number,
+  clearedFloors: number,
   draftedBuffIds: readonly string[]
 ): boolean => {
-  const loadout = computeWuxiaLoadout(draftedBuffIds, Math.max(1, floorReached));
+  const loadout = computeWuxiaLoadout(draftedBuffIds, Math.max(1, clearedFloors));
   switch (bountyId) {
     case 'awaken_synergy':
       return loadout.awakenedSynergies.length > 0;
     case 'reach_floor_15':
-      return floorReached >= 15;
+      return clearedFloors >= 15;
     case 'master_active_lv3':
       return loadout.actives.some((a) => a.level >= 3);
     case 'dual_passive_harmony':
       return loadout.innerQis.length >= 2;
     case 'clear_floor_20':
-      return floorReached >= 20;
+      return clearedFloors >= 20;
   }
 };
 
@@ -967,7 +967,7 @@ export const claimLoginStreakReward = (
   const cls = next.classes[next.selectedClass];
   const scaleLevel = Math.max(10, cls.level);
   const rng = mulberry32(hashString(`login:${todayKey}:${next.username}:${status.nextStreak}`));
-  let message = '';
+  let message: string;
 
   if (status.isMilestone30) {
     const picked =
@@ -984,9 +984,32 @@ export const claimLoginStreakReward = (
       next.shards += 40;
       message = `Day 21 Milestone! Purified ${cursedInBag.name} for free + 40 Shards.`;
     } else {
-      next.shards += 80;
-      next.bossCores += 2;
-      message = 'Day 21 Milestone! Claimed +80 Shards & +2 Boss Cores.';
+      const selectedCls = next.classes[next.selectedClass];
+      let purifiedEquippedName = '';
+      const nextEquipped = { ...selectedCls.equipped };
+      for (const slot of GEAR_SLOTS) {
+        const eq = nextEquipped[slot];
+        if (eq && eq.tier === 'legendary' && eq.isCursed) {
+          nextEquipped[slot] = { ...eq, isCursed: false };
+          purifiedEquippedName = eq.name;
+          break;
+        }
+      }
+      if (purifiedEquippedName) {
+        next.classes = {
+          ...next.classes,
+          [next.selectedClass]: {
+            ...selectedCls,
+            equipped: nextEquipped,
+          },
+        };
+        next.shards += 40;
+        message = `Day 21 Milestone! Purified ${purifiedEquippedName} for free + 40 Shards.`;
+      } else {
+        next.shards += 80;
+        next.bossCores += 2;
+        message = 'Day 21 Milestone! Claimed +80 Shards & +2 Boss Cores.';
+      }
     }
   } else if (status.isMilestone14) {
     const slot: GearSlot = chosenSlot ?? 'weapon';

@@ -25,6 +25,7 @@ import {
   calculateLeaderboardScore,
   claimLoginStreakReward,
   createInitialProfile,
+  createSpecificLegendaryGearItem,
   evaluateDailyMasteryBounty,
   getDailyChallengeConfig,
   getDailyMasteryBounty,
@@ -313,6 +314,48 @@ void describe('Wuxia Spire Shared Catalogs & Game Logic', async () => {
     const day14Item = day14Res.profile.inventory[day14Res.profile.inventory.length - 1];
     assert.equal(day14Item?.legendaryId, chosen14.id);
     assert.equal(day14Item?.isCursed, false);
+
+    // Day 21 -> Purifies an equipped cursed legendary when bag has none (+40 Shards)
+    const equippedCursedLeg = createSpecificLegendaryGearItem(
+      LEGENDARY_CATALOG[0]!.id,
+      true,
+      'day21_equipped',
+      15
+    );
+    const day21Profile = {
+      ...profile,
+      shards: 100,
+      bossCores: 1,
+      inventory: [],
+      classes: {
+        ...profile.classes,
+        [profile.selectedClass]: {
+          ...profile.classes[profile.selectedClass],
+          equipped: {
+            ...profile.classes[profile.selectedClass].equipped,
+            [equippedCursedLeg.slot]: equippedCursedLeg,
+          },
+        },
+      },
+      loginStreak: {
+        ...profile.loginStreak,
+        currentStreak: 20,
+        lastClaimDate: '2026-11-20',
+      },
+    };
+    const day21Status = getLoginStreakStatus(day21Profile, '2026-11-21');
+    assert.equal(day21Status.isMilestone21, true);
+    const day21Res = claimLoginStreakReward(day21Profile, '2026-11-21');
+    const purifiedEquipped =
+      day21Res.profile.classes[day21Profile.selectedClass].equipped[equippedCursedLeg.slot];
+    assert.equal(purifiedEquipped?.id, equippedCursedLeg.id);
+    assert.equal(purifiedEquipped?.isCursed, false);
+    assert.equal(day21Res.profile.shards, 140);
+    assert.equal(day21Res.profile.bossCores, 1);
+    assert.equal(
+      day21Profile.classes[day21Profile.selectedClass].equipped[equippedCursedLeg.slot]?.isCursed,
+      true
+    );
 
     // Day 30 -> Full Selector (any Legendary from catalog)
     const day30Profile = {

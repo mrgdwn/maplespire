@@ -441,21 +441,6 @@ export class OverlayManager {
             equipped: { ...selectedCls.equipped, [item.slot]: item },
           },
         };
-        if (item.classId !== selectedClsId) {
-          const itemCls = nextClasses[item.classId];
-          const prevItemClsEquipped = itemCls.equipped[item.slot];
-          if (
-            prevItemClsEquipped &&
-            prevItemClsEquipped.id !== prevEquipped?.id &&
-            !prevItemClsEquipped.id.startsWith('starter_wep_')
-          ) {
-            nextInv.unshift(prevItemClsEquipped);
-          }
-          nextClasses[item.classId] = {
-            ...itemCls,
-            equipped: { ...itemCls.equipped, [item.slot]: item },
-          };
-        }
         p = {
           ...p,
           inventory: nextInv,
@@ -964,6 +949,13 @@ export class OverlayManager {
           void this.launchRun('daily', true);
         },
       });
+    } else {
+      items.push({
+        label: 'Daily Completed',
+        hint: 'Resets 00:00 UTC',
+        isDisabled: true,
+        onSelect: () => {},
+      });
     }
     const endlessBest = p.loginStreak.endlessBestFloor;
     items.push({
@@ -1077,7 +1069,11 @@ export class OverlayManager {
     const milestones: readonly { day: number; label: string; active: boolean }[] = [
       { day: 14, label: 'Day 14: 1-of-3 Slot Pick', active: status.isMilestone14 },
       { day: 21, label: 'Day 21: Free Purify', active: status.isMilestone21 },
-      { day: 30, label: 'Day 30: Any of 48 Jin Yong Relics', active: status.isMilestone30 },
+      {
+        day: 30,
+        label: `Day 30: Any of ${LEGENDARY_CATALOG.length} Jin Yong Relics`,
+        active: status.isMilestone30,
+      },
     ];
     for (const ms of milestones) {
       const reached =
@@ -1139,12 +1135,12 @@ export class OverlayManager {
       }
 
       if (status.needsFullSelector) {
-        // Day 30: All 48 Jin Yong Legendaries (filterable by slot)
+        // Day 30: All Jin Yong Legendaries (filterable by slot)
         claimHost.appendChild(
           this.el(
             'div',
             'login-picker-title',
-            'Day 30 Grandmaster Milestone — Choose Any of the 48 Jin Yong Relics (+60 Shards)'
+            `Day 30 Grandmaster Milestone — Choose Any of the ${LEGENDARY_CATALOG.length} Jin Yong Relics (+60 Shards)`
           )
         );
 
@@ -1597,10 +1593,21 @@ export class OverlayManager {
       const actionsCol = this.el('div', 'equip-inspector__actions');
       if (inspectedSource === 'bag') {
         if (item.isCursed) {
-          const cursedBtn = this.el('button', 'btn btn-sm btn-purple', 'Cursed · Purify in Upgrades');
-          cursedBtn.type = 'button';
-          cursedBtn.disabled = true;
-          actionsCol.appendChild(cursedBtn);
+          const equipCursedBtn = this.el('button', 'btn btn-sm btn-warn', 'Equip (Cursed)');
+          equipCursedBtn.type = 'button';
+          equipCursedBtn.title =
+            'Equip this cursed relic now (curse drawback remains active until purified)';
+          equipCursedBtn.addEventListener('click', () => {
+            void this.sendCampAction({ action: 'equip_item', itemId: item.id });
+          });
+          actionsCol.appendChild(equipCursedBtn);
+
+          const purifyNavBtn = this.el('button', 'btn btn-sm btn-purple', 'Purify in Upgrades');
+          purifyNavBtn.type = 'button';
+          purifyNavBtn.addEventListener('click', () => {
+            this.openCampTab('buildings');
+          });
+          actionsCol.appendChild(purifyNavBtn);
         } else {
           const equipBtn = this.el('button', 'btn btn-sm btn-primary', 'Equip');
           equipBtn.type = 'button';
@@ -1752,7 +1759,7 @@ export class OverlayManager {
 
         const tile = this.el('button', tileClasses);
         tile.type = 'button';
-        tile.title = `${getItemDisplayName(item)} · PWR ${item.baseStatBonus}${item.isCursed ? ' (Cursed)' : ' (Double-click to equip)'}`;
+        tile.title = `${getItemDisplayName(item)} · PWR ${item.baseStatBonus}${item.isCursed ? ' (Cursed · Double-click to equip)' : ' (Double-click to equip)'}`;
 
         const top = this.el('div', 'equip-tile__top');
         top.appendChild(this.el('span', 'equip-tile__slot', slotCodes[item.slot]));
@@ -1773,10 +1780,6 @@ export class OverlayManager {
         });
 
         tile.addEventListener('dblclick', () => {
-          if (item.isCursed) {
-            this.showToastSafe('Cursed relic — purify in Upgrades first.');
-            return;
-          }
           void this.sendCampAction({ action: 'equip_item', itemId: item.id });
         });
 
@@ -2250,7 +2253,8 @@ export class OverlayManager {
     this.mode = 'dungeon';
     this.releaseMenuKeys();
     this.currentRunSeed = seed;
-    this.bankedRerolls = 2;
+    this.bankedRerolls =
+      2 + (actualMode === 'daily' ? getDailySectDecree(getUtcDateKey()).extraFloor1Reroll : 0);
     this.isDraftMinimized = false;
     this.currentRunBiomeId =
       actualMode === 'daily'
@@ -2402,6 +2406,7 @@ export class OverlayManager {
     skillBtn.id = 'hud-skill-btn';
     skillBtn.setAttribute('type', 'button');
     skillBtn.appendChild(this.el('span', 'hud-medallion-key', 'Q'));
+    skillBtn.appendChild(this.el('span', 'hud-medallion-touch', 'Tech'));
     skillBtn.appendChild(this.el('span', 'hud-medallion-sub', 'RDY'));
     skillBtn.addEventListener('click', () => {
       this.bridge?.triggerActiveSkill();
@@ -2410,8 +2415,9 @@ export class OverlayManager {
     const potBtn = this.el('button', 'hud-medallion hud-medallion--pot');
     potBtn.id = 'hud-pot-btn';
     potBtn.setAttribute('type', 'button');
-    potBtn.innerHTML =
-      '<span class="hud-medallion-key">W</span><span class="hud-medallion-sub">×1</span>';
+    potBtn.appendChild(this.el('span', 'hud-medallion-key', 'W'));
+    potBtn.appendChild(this.el('span', 'hud-medallion-touch', 'Heal'));
+    potBtn.appendChild(this.el('span', 'hud-medallion-sub', '×1'));
     potBtn.addEventListener('click', () => {
       this.bridge?.triggerPotion();
     });
@@ -2419,8 +2425,9 @@ export class OverlayManager {
     const dashBtn = this.el('button', 'hud-medallion hud-medallion--dash');
     dashBtn.id = 'hud-dash-btn';
     dashBtn.setAttribute('type', 'button');
-    dashBtn.innerHTML =
-      '<span class="hud-medallion-key">␣</span><span class="hud-medallion-sub">RDY</span>';
+    dashBtn.appendChild(this.el('span', 'hud-medallion-key', '␣'));
+    dashBtn.appendChild(this.el('span', 'hud-medallion-touch', 'Dash'));
+    dashBtn.appendChild(this.el('span', 'hud-medallion-sub', 'RDY'));
     dashBtn.addEventListener('click', () => {
       this.bridge?.triggerDash();
     });
@@ -2429,8 +2436,9 @@ export class OverlayManager {
     ultBtn.id = 'hud-ult-btn';
     ultBtn.setAttribute('type', 'button');
     ultBtn.disabled = true;
-    ultBtn.innerHTML =
-      '<span class="hud-medallion-key">R</span><span class="hud-medallion-sub">0%</span>';
+    ultBtn.appendChild(this.el('span', 'hud-medallion-key', 'R'));
+    ultBtn.appendChild(this.el('span', 'hud-medallion-touch', 'Ult'));
+    ultBtn.appendChild(this.el('span', 'hud-medallion-sub', '0%'));
     ultBtn.addEventListener('click', () => {
       this.bridge?.triggerUltimateSkill();
     });
@@ -2535,9 +2543,11 @@ export class OverlayManager {
       ultBtn.className = hasStock
         ? 'hud-medallion hud-medallion--ult hud-medallion--ready'
         : 'hud-medallion hud-medallion--ult';
-      ultBtn.innerHTML = hasStock
-        ? '<span class="hud-medallion-key">R</span><span class="hud-medallion-sub">MAX</span>'
-        : `<span class="hud-medallion-key">R</span><span class="hud-medallion-sub">${hud.ultimateGauge}%</span>`;
+      ultBtn.replaceChildren(
+        this.el('span', 'hud-medallion-key', 'R'),
+        this.el('span', 'hud-medallion-touch', 'Ult'),
+        this.el('span', 'hud-medallion-sub', hasStock ? 'MAX' : `${hud.ultimateGauge}%`)
+      );
       ultBtn.title = `${hud.ultimateName}: ${hud.ultimateStocks}/${hud.maxUltimateStocks} stored (${hud.ultimateGauge}%)`;
     }
 
@@ -2551,6 +2561,7 @@ export class OverlayManager {
       skillBtn.classList.toggle('hidden', hud.autoSkill);
       skillBtn.replaceChildren(
         this.el('span', 'hud-medallion-key', 'Q'),
+        this.el('span', 'hud-medallion-touch', 'Tech'),
         this.el(
           'span',
           'hud-medallion-sub',
@@ -2565,9 +2576,15 @@ export class OverlayManager {
       dashBtn.className = hud.dashReady
         ? 'hud-medallion hud-medallion--dash hud-medallion--ready'
         : 'hud-medallion hud-medallion--dash';
-      dashBtn.innerHTML = hud.dashReady
-        ? '<span class="hud-medallion-key">␣</span><span class="hud-medallion-sub">RDY</span>'
-        : `<span class="hud-medallion-key">␣</span><span class="hud-medallion-sub">${Math.ceil(hud.dashCooldownPct * 5)}s</span>`;
+      dashBtn.replaceChildren(
+        this.el('span', 'hud-medallion-key', '␣'),
+        this.el('span', 'hud-medallion-touch', 'Dash'),
+        this.el(
+          'span',
+          'hud-medallion-sub',
+          hud.dashReady ? 'RDY' : `${Math.ceil(hud.dashCooldownPct * 5)}s`
+        )
+      );
     }
 
     const potBtn = document.getElementById('hud-pot-btn');
@@ -2577,9 +2594,15 @@ export class OverlayManager {
       potBtn.className = canUse
         ? 'hud-medallion hud-medallion--pot hud-medallion--ready'
         : 'hud-medallion hud-medallion--pot';
-      potBtn.innerHTML = hud.potionDisabledReason
-        ? '<span class="hud-medallion-key">W</span><span class="hud-medallion-sub">OFF</span>'
-        : `<span class="hud-medallion-key">W</span><span class="hud-medallion-sub">×${hud.potionCharges}</span>`;
+      potBtn.replaceChildren(
+        this.el('span', 'hud-medallion-key', 'W'),
+        this.el('span', 'hud-medallion-touch', 'Heal'),
+        this.el(
+          'span',
+          'hud-medallion-sub',
+          hud.potionDisabledReason ? 'OFF' : `×${hud.potionCharges}`
+        )
+      );
       potBtn.title =
         hud.potionDisabledReason ?? `Healing Elixir: ${hud.potionCharges} charges left [W]`;
     }
@@ -3269,7 +3292,7 @@ export class OverlayManager {
 
       if (nextLoginStreak.dailyBountyCompletedDate !== dateKey) {
         const bounty = getDailyMasteryBounty(dateKey);
-        if (evaluateDailyMasteryBounty(bounty.id, payload.floorReached, payload.draftedBuffIds)) {
+        if (evaluateDailyMasteryBounty(bounty.id, clearedFloors, payload.draftedBuffIds)) {
           dailyBountyCompleted = true;
           dailyBountyShards = bounty.shardReward;
           shardsBase += bounty.shardReward;

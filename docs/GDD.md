@@ -156,7 +156,7 @@ The spire progression is balanced across 4 distinct phases. **The Daily Dungeon 
 | **Early Game** | **Levels 1–10** | *Outer Martial Courtyard* | `1.0 + (F - 1) * 0.08` | `1.0 + (F - 1) * 0.04` | 3–5 mobs | 0%–18% elite spawn; 0 hit shields. Teaches active skill usage. | 2 Hall Master mini-bosses + **Floor 10 Cult Leader Tier 1** (`4,800 HP`, `68 ATK`). First extraction checkpoint. |
 | **Mid Game** | **Levels 11–20** | *Inner Sect Pagoda* | `1.72 * 1.10^(F - 10)` | `1.36 + (F - 10) * 0.08` | 4–6 mobs | 20%–35% elite spawn; 1–2 hit Qi Shields. Unlocks 4th active/inner slots and Lv. 4 Breakthrough. | 2 Hall Master mini-bosses + **Floor 20 Cult Leader Tier 2** (`26,000 HP`, `210 ATK`). Second extraction checkpoint. |
 | **Late Game** | **Levels 21–30** | *Grandmaster Peak* | `4.46 * 1.10^(F - 20)` | `2.16 + (F - 20) * 0.12` | 5–7 mobs | 35%–50% elite spawn; 3–4 hit Qi Shields. Transcendent Lv. 5 breakthroughs & Secret Synergies. | F25 Mount Hua Dual Master Ambush + **Floor 30 Supreme Cult Leader Tier 3** (`95,000 HP`, `460 ATK`). **DAILY DUNGEON VICTORY!** |
-| **Endless Spire** | **Levels 31+** | *Endless Heavenly Spire* | `11.57 * 1.06^(F - 30)` | `3.36 * 1.035^(F - 30)` | 6–8 mobs | 50%–65% elite spawn; multi-hit shields & mutations. Tests sustain, barriers, and DPS optimization. | Cult Leader checkpoints every 10 floors (F40: `165k HP`, F50: `285k HP`, F60: `480k HP`, scaling `1.5x` thereafter). Stretched out! |
+| **Endless Spire** | **Levels 31+** | *Endless Heavenly Spire* | `11.57 * 1.045^(F - 30)` | `3.36 * 1.025^(F - 30)` | 6–8 mobs | 50%–65% elite spawn; multi-hit shields & mutations. Tests sustain, barriers, and DPS optimization. | Cult Leader checkpoints every 10 floors (F40: `165k HP`, F50: `285k HP`, F60: `480k HP`, scaling `1.5x` thereafter). Stretched out! |
 
 #### Key Rules for Daily vs. Endless
 1. **Daily Spire Mode (`mode: 'daily'`)**:
@@ -166,7 +166,7 @@ The spire progression is balanced across 4 distinct phases. **The Daily Dungeon 
 2. **Endless Spire Mode (`mode: 'practice'` or Spire Delve)**:
    - Does NOT terminate at Floor 30.
    - After defeating Cult Leaders at Floor 30, 40, 50, etc., players receive an extraction prompt allowing them to either bank 100% of collected loot or ascend higher into stretched-out endless levels.
-   - Mob HP scales at a steady `+6%` per floor, and Mob ATK scales at `+3.5%` per floor, allowing skilled players with optimized secret synergies and high-realm scrolls to push into high floor tiers without facing sudden mathematical walls.
+   - Mob HP scales at a steady `+4.5%` per floor, and Mob ATK scales at `+2.5%` per floor, allowing skilled players with optimized secret synergies and high-realm scrolls to push into high floor tiers without facing sudden mathematical walls.
 
 ---
 

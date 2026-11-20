@@ -1,4 +1,5 @@
 import type * as Phaser from 'phaser';
+import { CLASS_IDS } from '../../shared/catalogs/classes.ts';
 import type { ClassId, ElementId, GearItem, GearSlot } from '../../shared/types.ts';
 
 type PixelGrid = readonly string[];
@@ -1035,7 +1036,7 @@ const ASCENDED_HALO_STELLAR_GRID: PixelGrid = [
 
 export const registerPixelTextures = (scene: Phaser.Scene): void => {
   // Base heroes (pixelSize 4 -> 56x56)
-  for (const classId of ['warrior', 'mage', 'thief', 'bowman'] as const) {
+  for (const classId of CLASS_IDS) {
     const cfg = HERO_GRIDS[classId];
     drawPixelGrid(scene, `hero_${classId}`, cfg.grid, cfg.palette, 4);
     drawPixelGrid(scene, `gear_head_${classId}`, GEAR_HEAD_GRIDS[classId], GEAR_SHADE_PALETTE, 4);

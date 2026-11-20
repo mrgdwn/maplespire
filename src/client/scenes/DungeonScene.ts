@@ -36,6 +36,7 @@ import type {
   ElementId,
   GearSlot,
   MutationId,
+  RunOutcome,
 } from '../../shared/types.ts';
 import { getDailySectDecree, getUtcDateKey, mulberry32 } from '../../shared/utils.ts';
 import { getGearVisualStyle, registerPixelTextures } from '../fx/pixelArt.ts';
@@ -4958,6 +4959,11 @@ export class DungeonScene extends Scene {
       );
     }
 
+    if (this.runConfig?.mode === 'daily' && this.floor >= 30) {
+      this.finishRun('cleared');
+      return;
+    }
+
     // Pause for 3-Buff Draft after floors 1-9
     this.phase = 'paused';
     const silverMult = this.hasEquippedLegendary('bow_cape_sylvanspirit')
@@ -5037,10 +5043,10 @@ export class DungeonScene extends Scene {
   public retreatWithLoot(): void {
     if (!this.runConfig || this.phase === 'idle') return;
     soundFX.playVictory();
-    this.finishRun('extracted');
+    this.finishRun('extracted', Math.max(0, this.floor - 1));
   }
 
-  private finishRun(outcome: 'cleared' | 'extracted' | 'died'): void {
+  private finishRun(outcome: RunOutcome, overrideFloorReached?: number): void {
     if (outcome === 'died') soundFX.playDefeat();
     this.phase = 'idle';
     this.clearCombatEntities();
@@ -5050,7 +5056,7 @@ export class DungeonScene extends Scene {
       runId: this.runConfig.runId,
       mode: this.runConfig.mode,
       classId: this.runConfig.classId,
-      floorReached: this.floor,
+      floorReached: overrideFloorReached ?? this.floor,
       outcome,
       durationMs: Math.max(2000, Math.round(this.elapsedRunMs)),
       goldCollected: this.goldCollected,

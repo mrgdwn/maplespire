@@ -2,7 +2,12 @@ import { Hono } from 'hono';
 import { context, redis, reddit } from '@devvit/web/server';
 import { getBiomeById, getMutationById } from '../../shared/catalogs/biomes.ts';
 import { getBuffById } from '../../shared/catalogs/buffs.ts';
-import { getWuxiaSynergyById, isCultLeaderFloor, isRandomMiniBossFloor } from '../../shared/catalogs/wuxia.ts';
+import {
+  getWuxiaManualById,
+  getWuxiaSynergyById,
+  isCultLeaderFloor,
+  isRandomMiniBossFloor,
+} from '../../shared/catalogs/wuxia.ts';
 import { getClassDefinition } from '../../shared/catalogs/classes.ts';
 import type {
   CampActionResponse,
@@ -98,31 +103,18 @@ const saveProfile = async (profile: PlayerProfile): Promise<void> => {
 const applyDailyLoginState = (profile: PlayerProfile, dateKey: string): PlayerProfile => {
   if (profile.lastPlayedDate === dateKey) return profile;
 
-  let streakDays = profile.streakDays;
   let restedStacks = profile.restedStacks;
-  let goldenTickets = profile.goldenTickets;
 
-  if (!profile.lastPlayedDate) {
-    streakDays = 1;
-  } else {
+  if (profile.lastPlayedDate) {
     const gap = daysBetweenUtc(profile.lastPlayedDate, dateKey);
-    if (gap === 1) {
-      streakDays += 1;
-    } else if (gap > 1) {
-      streakDays = 1;
+    if (gap > 1) {
       restedStacks = Math.min(3, restedStacks + (gap - 1));
     }
   }
 
-  if (streakDays > 0 && streakDays % 7 === 0) {
-    goldenTickets += 1;
-  }
-
   return {
     ...profile,
-    streakDays,
     restedStacks,
-    goldenTickets,
     lastPlayedDate: dateKey,
   };
 };
@@ -342,7 +334,7 @@ api.post('/run/complete', async (c) => {
       floorReached * 42 +
       cultLeadersDefeated * 90 +
       (outcome === 'cleared' ? 120 : outcome === 'extracted' ? 50 : 15);
-    const expGained = expBase * (bountyApplied ? 2 : 1);
+    const expGained = Math.round(expBase * modeRewardMult * (bountyApplied ? 2 : 1));
 
     const dropSeed = hashString(`${runId}:${username}:${floorReached}`);
     const rng = mulberry32(dropSeed);
@@ -427,7 +419,7 @@ api.post('/run/complete', async (c) => {
       }
       for (const chestFloor of DAILY_CHEST_FLOORS) {
         const reachedMilestone =
-          floorReached >= chestFloor || (chestFloor === 30 && outcome === 'cleared');
+          clearedFloors >= chestFloor || (chestFloor === 30 && outcome === 'cleared');
         if (reachedMilestone && !nextLoginStreak.dailyChestsClaimed.includes(chestFloor)) {
           const chestReward = getDailyChestRewards(chestFloor);
           chestGoldBonus += chestReward.gold;
@@ -451,7 +443,7 @@ api.post('/run/complete', async (c) => {
       const bounty = getDailyMasteryBounty(dateKey);
       if (
         nextLoginStreak.dailyBountyCompletedDate !== dateKey &&
-        evaluateDailyMasteryBounty(bounty.id, floorReached, draftedBuffIds)
+        evaluateDailyMasteryBounty(bounty.id, clearedFloors, draftedBuffIds)
       ) {
         nextLoginStreak.dailyBountyCompletedDate = dateKey;
         dailyBountyCompleted = true;
@@ -612,24 +604,6 @@ api.post('/camp/action', async (c) => {
             },
           },
         };
-        if (item.classId !== selectedClsId) {
-          const itemCls = nextClasses[item.classId];
-          const prevItemClsEquipped = itemCls.equipped[item.slot];
-          if (
-            prevItemClsEquipped &&
-            prevItemClsEquipped.id !== prevEquipped?.id &&
-            !prevItemClsEquipped.id.startsWith('starter_wep_')
-          ) {
-            nextInventory.unshift(prevItemClsEquipped);
-          }
-          nextClasses[item.classId] = {
-            ...itemCls,
-            equipped: {
-              ...itemCls.equipped,
-              [item.slot]: item,
-            },
-          };
-        }
         profile = {
           ...profile,
           inventory: nextInventory,
@@ -962,7 +936,7 @@ api.post('/share-comment', async (c) => {
 
   const buffNames = topBuffIds
     .slice(0, 5)
-    .map((id) => getBuffById(id)?.name ?? id)
+    .map((id) => getWuxiaManualById(id)?.name ?? getBuffById(id)?.name ?? id)
     .join(', ');
   const synergyNames: string[] = [];
   for (const id of topBuffIds) {
