@@ -3119,26 +3119,84 @@ export class OverlayManager {
     const clearedFloors =
       payload.outcome === 'died' ? Math.max(0, payload.floorReached - 1) : payload.floorReached;
     const bossCount = Math.max(1, Math.floor(clearedFloors / 10));
+    const slotLabels: Record<GearSlot, string> = {
+      weapon: 'Weapon',
+      headgear: 'Crown',
+      top: 'Robe',
+      cape: 'Mantle',
+    };
+
+    const classRelics = LEGENDARY_CATALOG.filter((item) => item.classId === payload.classId);
+    const relicPool = classRelics.length > 0 ? classRelics : LEGENDARY_CATALOG;
+    const altarHash = hashString(`altar:${this.currentRunSeed}:${payload.floorReached}`);
+    const revealedRelic = relicPool[altarHash % relicPool.length] ?? LEGENDARY_CATALOG[0];
+
     mountHdBanner(bannerHost, {
       status: 'warning',
       title: 'Altar of Fate — Legendary Purification',
-      description: `You defeated ${bossCount} Boss${bossCount > 1 ? 'es' : ''}! Guaranteed Legendary Drop (${getRelicLineageLabel(payload.classId)}). Purify (50/50) for Pristine, or claim it Cursed with full power.`,
+      description: `You defeated ${bossCount} Boss${bossCount > 1 ? 'es' : ''}! Guaranteed Legendary Drop (${getRelicLineageLabel(payload.classId)}). Inspect the revealed relic below, then claim it safely or risk purification for Pristine.`,
       badgeText: 'LEGENDARY',
       badgeTier: 'gold',
     });
     box.appendChild(bannerHost);
 
-    const statusEl = this.el('div', 'roulette-window', 'Ready to Purify');
+    if (revealedRelic) {
+      const previewCard = this.el('div', 'altar-relic-preview');
+
+      const previewHead = this.el('div', 'altar-relic-preview__head');
+      const previewTitle = this.el('div', 'altar-relic-preview__name', revealedRelic.name);
+      const previewSlot = this.el(
+        'span',
+        'altar-relic-preview__slot',
+        `${slotLabels[revealedRelic.slot]} • ${getRelicLineageLabel(revealedRelic.classId)}`
+      );
+      previewHead.appendChild(previewTitle);
+      previewHead.appendChild(previewSlot);
+      previewCard.appendChild(previewHead);
+
+      const sigBlock = this.el('div', 'altar-relic-preview__section');
+      sigBlock.appendChild(this.el('div', 'altar-relic-preview__label', 'Signature Passive'));
+      sigBlock.appendChild(this.el('div', 'altar-relic-preview__effect', revealedRelic.signatureText));
+      previewCard.appendChild(sigBlock);
+
+      const curseBlock = this.el('div', 'altar-relic-preview__section altar-relic-preview__section--curse');
+      curseBlock.appendChild(
+        this.el('div', 'altar-relic-preview__label altar-relic-preview__label--curse', `Curse Trade-Off — ${revealedRelic.cursedName}`)
+      );
+      curseBlock.appendChild(this.el('div', 'altar-relic-preview__curse', revealedRelic.cursedText));
+      previewCard.appendChild(curseBlock);
+
+      box.appendChild(previewCard);
+    }
+
+    const statusEl = this.el('div', 'roulette-window', 'Choose Your Fate');
     const rollHost = this.el('div', 'camp-footer');
-    const renderRollBtn = (disabled: boolean): void => {
+    const renderActionBtns = (disabled: boolean): void => {
       mountHdActionRow(rollHost, [
         {
-          label: 'Purify Item (50/50)',
+          label: 'Claim Cursed (Safe)',
+          variant: 'secondary',
+          size: 'md',
+          isDisabled: disabled,
+          onClick: () => {
+            renderActionBtns(true);
+            soundFX.playRouletteTick();
+            statusEl.textContent = 'Claimed Cursed — Wearable & Purifiable in Camp';
+            window.setTimeout(() => {
+              void this.submitAndShowSummary({
+                ...payload,
+                greedGamblePurified: false,
+              });
+            }, 550);
+          },
+        },
+        {
+          label: 'Purify at Altar (50/50)',
           variant: 'primary',
           size: 'md',
           isDisabled: disabled,
           onClick: () => {
-            renderRollBtn(true);
+            renderActionBtns(true);
             const purified = this.rouletteRng() < 0.5;
             if (purified) {
               soundFX.playVictory();
@@ -3157,7 +3215,7 @@ export class OverlayManager {
         },
       ]);
     };
-    renderRollBtn(false);
+    renderActionBtns(false);
 
     box.appendChild(statusEl);
     box.appendChild(rollHost);

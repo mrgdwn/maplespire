@@ -68,3 +68,12 @@ This backlog tracks planned features and retention mechanics reserved for upcomi
 - [x] **3. Streamlined Currency Sinks (Zero Shop)**:
   - **Gold (farming & runs)** → Buy **Permanent Passive Stats** (`ATK`, `Max HP`, `Armor`, `Crit Rate`, `Crit DMG`, `Dodge`, `Cooldown Haste`, `Gold Find`).
   - **Spirit Shards (dismantling gear & Daily Bounties)** → Upgrade **Gear Slot Levels** (`Weapon`, `Crown`, `Robe`, `Mantle`, `+10%` gear power per level) + Purify Cursed Relics.
+
+---
+
+## 6. ARPG Veteran Combat Feel, Buildcraft & Loot Overhaul (Completed)
+- [x] **1. Fix Skill Evolution & Projectile Cap (`DungeonScene.ts`)**: Replace `tier === 'grandmaster'` with `isHighTier` across all 7 styles so Lv. 5 & Secret Synergies never downgrade; lift punitive projectile caps so advertised 4–8 projectile evolutions actually fire.
+- [x] **2. Telegraphed Boss Heavy Strikes & Qinggong Perfect Dodge (`DungeonScene.ts`)**: Add 1.2s telegraphed Boss Heavy Strikes counterable via timely Dash (hitstop + counter-slash + expose `FLAW!`), let Dash defuse `volatile` bombs, and separate `Space` (Dash) from `Q`/Click (Meridian Shatter).
+- [x] **3. Wire Missing/Half-Implemented Legendaries & Reveal-First Altar of Fate (`DungeonScene.ts`, `classes.ts`, `OverlayManager.ts`)**: Implement all 15 remaining Jin Yong Legendary effects and reveal the earned Legendary before the Altar of Fate claim/purify choice.
+- [x] **4. Hitstop & Layered Procedural Wuxia Audio (`sound.ts`, `DungeonScene.ts`)**: Add 35–60ms hitstop on big impacts and upgrade `sound.ts` with noise bursts, pitch jitter, throttling, and distinct martial-style SFX.
+- [x] **5. Distinct Skill Mechanics & 3 Mob Archetypes (`DungeonScene.ts`)**: Real Jade Flute ricochet, Taiji/Great Shift pull & mitigation, AoE bypassing Smoke Bomb, and Bruiser / Ranged Disciple / Fast Flanker mob behaviors.

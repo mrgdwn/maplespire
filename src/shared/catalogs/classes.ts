@@ -377,14 +377,22 @@ export const computeHeroCombatStats = (
     const cap = equippedLegIds.get('war_cape_hundred') ? 0.1 : 0.2;
     allDamageMult += Math.min(cap, floorsClearedThisRun * 0.02);
   }
+  if (equippedLegIds.has('war_cape_crimson')) {
+    const cursed = equippedLegIds.get('war_cape_crimson') === true;
+    goldBonusPct += cursed ? 12 : 25;
+    allDamageMult += cursed ? 0.06 : 0.12;
+  }
   if (equippedLegIds.has('mage_wep_abyssal') && equippedLegIds.get('mage_wep_abyssal')) {
     maxHp *= 0.85;
   }
   if (equippedLegIds.has('mage_wep_glacial') && equippedLegIds.get('mage_wep_glacial')) {
     attackSpeed *= 0.9;
   }
-  if (equippedLegIds.has('mage_head_archmage') && equippedLegIds.get('mage_head_archmage')) {
-    cooldownReductionPct -= 5;
+  if (equippedLegIds.has('mage_head_archmage')) {
+    const cursed = equippedLegIds.get('mage_head_archmage') === true;
+    atk *= cursed ? 1.08 : 1.12;
+    maxHp *= cursed ? 1.08 : 1.12;
+    cooldownReductionPct += cursed ? -5 : 8;
   }
   if (equippedLegIds.has('mage_top_frost') && equippedLegIds.get('mage_top_frost')) {
     armor *= 0.85;
@@ -394,6 +402,10 @@ export const computeHeroCombatStats = (
   }
   if (equippedLegIds.has('mage_cape_seraphim')) {
     dodgeRate += equippedLegIds.get('mage_cape_seraphim') ? 0.2 : 0.35;
+  }
+  if (equippedLegIds.has('thief_wep_phantom')) {
+    const cursed = equippedLegIds.get('thief_wep_phantom') === true;
+    allDamageMult += cursed ? 0.1 : 0.18;
   }
   if (equippedLegIds.has('thief_head_fox')) {
     dodgeRate += 0.3;
