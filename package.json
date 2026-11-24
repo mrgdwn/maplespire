@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@astryxdesign/core": "^0.7.16",
-    "@astryxdesign/theme-gothic": "^0.7.16",
+    "@astryxdesign/theme-gothic": "^0.7.17",
     "@astryxdesign/theme-neutral": "^0.7.16",
     "@devvit/start": "0.15.3",
     "@devvit/web": "0.15.3",
