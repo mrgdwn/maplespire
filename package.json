@@ -24,7 +24,7 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
-    "@astryxdesign/core": "^0.7.16",
+    "@astryxdesign/core": "^0.7.17",
     "@astryxdesign/theme-gothic": "^0.7.16",
     "@astryxdesign/theme-neutral": "^0.7.16",
     "@devvit/start": "0.15.3",
