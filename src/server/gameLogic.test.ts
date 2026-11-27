@@ -169,7 +169,7 @@ void describe('Wuxia Spire Shared Catalogs & Game Logic', async () => {
     const migrated = parsePlayerProfile(legacySaved, 'fallback');
     assert.equal(
       migrated.classes.warrior.equipped.headgear?.name,
-      'Ancient Tomb Jade-Bee Hood (古墓玉蜂针冠)'
+      'Ancient Tomb Jade-Bee Hood'
     );
     assert.equal(
       migrated.classes.warrior.equipped.headgear?.affixText,

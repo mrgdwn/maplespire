@@ -1,6 +1,7 @@
 import { context, navigateTo, requestExpandedMode, showToast } from '@devvit/web/client';
 import { getBiomeById } from '../shared/catalogs/biomes.ts';
 import { getDailyChallengeConfig, getUtcDateKey, isRecord, isString } from '../shared/utils.ts';
+import { mountWuxiaVista } from './fx/wuxiaVista.ts';
 
 const setText = (id: string, text: string): void => {
   const el = document.getElementById(id);
@@ -28,6 +29,11 @@ const renderDailyInfo = (
 };
 
 const initSplash = async (): Promise<void> => {
+  const vistaCanvas = document.getElementById('splash-vista');
+  if (vistaCanvas instanceof HTMLCanvasElement) {
+    mountWuxiaVista(vistaCanvas, { showWanderer: true, pagodaSide: 'right' });
+  }
+
   const username = context.username ?? 'Wanderer';
   setText('greeting', `u/${username}`);
 
@@ -46,7 +52,7 @@ const initSplash = async (): Promise<void> => {
   if (howToBtn instanceof HTMLButtonElement) {
     howToBtn.addEventListener('click', () => {
       showToast(
-        'Begin unarmed. Draft Martial Arts & Inner Qi, awaken Secret Synergies, store Ultimate Qi on kills [R], and keep 100% of your spoils.'
+        'Start unarmed. Draft 3 Martial Arts and 3 Inner Qi, awaken synergies, unleash [R] Ultimate Qi, and keep all spoils.'
       );
     });
   }

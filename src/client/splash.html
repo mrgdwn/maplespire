@@ -10,9 +10,9 @@
     <title>Wuxia Spire — Ascend the Nine Heavens</title>
   </head>
   <body class="hd-splash">
-    <div class="hd-splash__scene"></div>
+    <canvas class="hd-splash__vista" id="splash-vista" aria-hidden="true"></canvas>
 
-    <header class="hd-win hd-splash__topbar">
+    <header class="hd-splash__topbar">
       <span class="hd-splash__user" id="greeting">Wanderer</span>
       <div class="hd-splash__stats">
         <span>Streak <b id="stat-streak">1d</b></span>
@@ -22,24 +22,26 @@
     </header>
 
     <div class="hd-splash__center">
-      <h1 class="hd-splash__title">WUXIA SPIRE</h1>
-      <div class="hd-splash__subtitle">— Ascend the Nine Heavens —</div>
-      <div class="hd-splash__hero" aria-hidden="true"></div>
+      <div class="hd-splash__lockup">
+        <span class="wuxia-seal" aria-hidden="true">武</span>
+        <h1 class="hd-splash__title">WUXIA SPIRE</h1>
+      </div>
+      <div class="hd-splash__subtitle">Nine Heavens · Daily Spire</div>
     </div>
 
     <nav class="hd-win hd-splash__menu" aria-label="Main commands">
       <button class="hd-splash__item is-primary" id="start-button" type="button">
-        <span class="hd-splash__cursor">▶</span>
+        <span class="hd-splash__cursor" aria-hidden="true">▸</span>
         <span class="hd-splash__label">ASCEND THE SPIRE</span>
         <span class="hd-splash__hint" id="biome-name">Daily Sect</span>
       </button>
       <button class="hd-splash__item" id="how-to-btn" type="button">
-        <span class="hd-splash__cursor">▶</span>
+        <span class="hd-splash__cursor" aria-hidden="true">▸</span>
         <span class="hd-splash__label">Martial Codex</span>
         <span class="hd-splash__hint" id="sub-status">Unarmed · 3 Arts + 3 Qi</span>
       </button>
       <button class="hd-splash__item" id="reddit-link" type="button">
-        <span class="hd-splash__cursor">▶</span>
+        <span class="hd-splash__cursor" aria-hidden="true">▸</span>
         <span class="hd-splash__label">Sect Hall</span>
         <span class="hd-splash__hint">r/Devvit</span>
       </button>

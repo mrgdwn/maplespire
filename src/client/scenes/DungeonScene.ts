@@ -205,79 +205,65 @@ const paintHd2dSkyCanvas = (
   const skyBot = hexIntToRgb(biome.skyBottomHex);
   const accent = parseAccentRgb(biome.accentHex);
   const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
-  skyGrad.addColorStop(0, rgbaCss(scaleRgb(skyTop, 0.68), 1));
-  skyGrad.addColorStop(0.45, rgbaCss(skyTop, 1));
-  skyGrad.addColorStop(0.8, rgbaCss(skyBot, 1));
-  skyGrad.addColorStop(1, rgbaCss(mixRgb(skyBot, accent, 0.36), 1));
+  skyGrad.addColorStop(0, rgbaCss(scaleRgb(skyTop, 0.58), 1));
+  skyGrad.addColorStop(0.42, rgbaCss(skyTop, 1));
+  skyGrad.addColorStop(0.78, rgbaCss(skyBot, 1));
+  skyGrad.addColorStop(1, rgbaCss(mixRgb(skyBot, accent, 0.24), 1));
   ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, w, h);
 
-  // Deterministic stars
+  // Subtle distant pinpoint stars (warm ivory, no chunky + crosses)
   const rng = mulberry32(hashTextSeed(biome.id));
-  for (let i = 0; i < 48; i += 1) {
+  for (let i = 0; i < 42; i += 1) {
     const sx = Math.round(rng() * w);
-    const sy = Math.round(rng() * h * 0.56);
-    const alpha = 0.25 + rng() * 0.65;
-    ctx.fillStyle = i % 7 === 0 ? rgbaCss(accent, alpha) : `rgba(248, 250, 252, ${alpha})`;
-    const sz = i % 9 === 0 ? 2 : 1;
-    ctx.fillRect(sx, sy, sz, sz);
-    if (i % 15 === 0) {
-      ctx.fillStyle = `rgba(255, 251, 235, ${alpha * 0.55})`;
-      ctx.fillRect(sx - 2, sy, 5, 1);
-      ctx.fillRect(sx, sy - 2, 1, 5);
-    }
+    const sy = Math.round(rng() * h * 0.52);
+    const alpha = 0.16 + rng() * 0.45;
+    ctx.fillStyle = i % 6 === 0 ? rgbaCss(accent, alpha) : `rgba(244, 236, 216, ${alpha.toFixed(2)})`;
+    ctx.fillRect(sx, sy, 1, 1);
   }
 
-  // Celestial moon / sun disc with Octopath double corona bloom
-  const moonX = Math.round(w * 0.74);
-  const moonY = Math.round(h * 0.25);
-  const outerBloom = ctx.createRadialGradient(moonX, moonY, 8, moonX, moonY, 118);
-  outerBloom.addColorStop(0, 'rgba(255, 250, 230, 0.38)');
-  outerBloom.addColorStop(0.35, rgbaCss(accent, 0.22));
+  // Celestial moon with soft feathered radial atmospheric bloom (zero hard trapezoid beams)
+  const moonX = Math.round(w * 0.76);
+  const moonY = Math.round(h * 0.24);
+  const outerBloom = ctx.createRadialGradient(moonX, moonY, 10, moonX, moonY, 150);
+  outerBloom.addColorStop(0, 'rgba(245, 228, 186, 0.3)');
+  outerBloom.addColorStop(0.32, rgbaCss(accent, 0.14));
+  outerBloom.addColorStop(0.68, rgbaCss(skyBot, 0.06));
   outerBloom.addColorStop(1, rgbaCss(accent, 0));
   ctx.fillStyle = outerBloom;
-  ctx.beginPath();
-  ctx.arc(moonX, moonY, 118, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillRect(0, 0, w, h);
 
-  const moonDiscGrad = ctx.createRadialGradient(moonX - 7, moonY - 7, 3, moonX, moonY, 26);
-  moonDiscGrad.addColorStop(0, '#fffdf5');
-  moonDiscGrad.addColorStop(0.68, rgbaCss(mixRgb([254, 243, 199], accent, 0.25), 0.96));
-  moonDiscGrad.addColorStop(1, rgbaCss(mixRgb(skyBot, accent, 0.55), 0.9));
+  const moonDiscGrad = ctx.createRadialGradient(moonX - 6, moonY - 6, 2, moonX, moonY, 24);
+  moonDiscGrad.addColorStop(0, '#f8f0dc');
+  moonDiscGrad.addColorStop(0.72, rgbaCss(mixRgb([238, 220, 180], accent, 0.22), 0.96));
+  moonDiscGrad.addColorStop(1, rgbaCss(mixRgb(skyBot, accent, 0.45), 0.88));
   ctx.fillStyle = moonDiscGrad;
   ctx.beginPath();
-  ctx.arc(moonX, moonY, 26, 0, Math.PI * 2);
+  ctx.arc(moonX, moonY, 24, 0, Math.PI * 2);
   ctx.fill();
 
-  // High-altitude drifting ink cloud wisps
-  for (let c = 0; c < 4; c += 1) {
-    const cx = 65 + c * 118 + (rng() - 0.5) * 32;
-    const cy = 62 + (c % 2) * 38 + rng() * 24;
-    const cloudCol = mixRgb(skyBot, accent, 0.32);
-    ctx.fillStyle = rgbaCss(cloudCol, 0.22);
+  // Soft feathered ink-wash cloud wisps (radial gradients, never hard brown ellipses)
+  const drawCloudWisp = (cx: number, cy: number, rx: number, ry: number, alpha: number): void => {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(1, ry / Math.max(1, rx));
+    const cloudCol = mixRgb(skyBot, [224, 206, 174], 0.26);
+    const cg = ctx.createRadialGradient(0, 0, rx * 0.08, 0, 0, rx);
+    cg.addColorStop(0, rgbaCss(cloudCol, alpha));
+    cg.addColorStop(0.55, rgbaCss(cloudCol, alpha * 0.45));
+    cg.addColorStop(1, rgbaCss(cloudCol, 0));
+    ctx.fillStyle = cg;
     ctx.beginPath();
-    ctx.ellipse(cx, cy, 58, 11, 0, 0, Math.PI * 2);
-    ctx.ellipse(cx + 28, cy + 4, 42, 9, 0, 0, Math.PI * 2);
+    ctx.arc(0, 0, rx, 0, Math.PI * 2);
     ctx.fill();
-  }
+    ctx.restore();
+  };
 
-  // Diagonal volumetric god-rays streaming from celestial disc
-  for (let r = 0; r < 4; r += 1) {
-    const spread = (r - 1.5) * 44;
-    const beamStartX = moonX + spread * 0.28;
-    const beamEndX = moonX - 240 + spread * 1.45;
-    const rayGrad = ctx.createLinearGradient(beamStartX, moonY, beamEndX, h);
-    rayGrad.addColorStop(0, 'rgba(255, 248, 225, 0.14)');
-    rayGrad.addColorStop(0.55, rgbaCss(accent, 0.08));
-    rayGrad.addColorStop(1, rgbaCss(accent, 0));
-    ctx.fillStyle = rayGrad;
-    ctx.beginPath();
-    ctx.moveTo(beamStartX - 10, moonY);
-    ctx.lineTo(beamStartX + 18, moonY);
-    ctx.lineTo(beamEndX + 52, h);
-    ctx.lineTo(beamEndX - 28, h);
-    ctx.closePath();
-    ctx.fill();
+  for (let c = 0; c < 5; c += 1) {
+    const cx = 48 + c * 105 + (rng() - 0.5) * 36;
+    const cy = 54 + (c % 3) * 28 + rng() * 18;
+    drawCloudWisp(cx, cy, 74 + rng() * 28, 16 + rng() * 7, 0.14);
+    drawCloudWisp(cx + 34, cy + 5, 52 + rng() * 18, 12 + rng() * 5, 0.11);
   }
 };
 
@@ -291,73 +277,186 @@ const paintHd2dFarMountainsCanvas = (
   const pillarRgb = hexIntToRgb(biome.pillarColorHex);
   const skyBot = hexIntToRgb(biome.skyBottomHex);
   const accent = parseAccentRgb(biome.accentHex);
-  const rng = mulberry32(hashTextSeed(`${biome.id}_far`));
-  const phaseA = rng() * Math.PI * 2;
-  const phaseB = rng() * Math.PI * 2;
-  const phaseC = rng() * Math.PI * 2;
 
-  // Back ridge range using periodic Fourier waves so X=0 seamlessly meets X=w
-  const farFill = mixRgb(hillRgb, skyBot, 0.45);
-  ctx.fillStyle = rgbaCss(farFill, 0.88);
+  // Periodic craggy Guilin karst silhouettes (start & end at exact same Y for seamless scrolling)
+  const farPeaks: readonly (readonly [number, number])[] = [
+    [0.0, 0.56],
+    [0.07, 0.38],
+    [0.14, 0.48],
+    [0.23, 0.26],
+    [0.31, 0.44],
+    [0.39, 0.32],
+    [0.48, 0.51],
+    [0.57, 0.29],
+    [0.65, 0.41],
+    [0.74, 0.22],
+    [0.83, 0.46],
+    [0.91, 0.36],
+    [1.0, 0.56],
+  ];
+
+  const farFill = mixRgb(hillRgb, skyBot, 0.42);
+  const farGrad = ctx.createLinearGradient(0, h * 0.2, 0, h);
+  farGrad.addColorStop(0, rgbaCss(farFill, 0.82));
+  farGrad.addColorStop(1, rgbaCss(scaleRgb(farFill, 0.55), 0.96));
+  ctx.fillStyle = farGrad;
   ctx.beginPath();
   ctx.moveTo(0, h);
-  for (let x = 0; x <= w; x += 4) {
-    const theta = (x / w) * Math.PI * 2;
-    const wave =
-      Math.sin(theta * 2 + phaseA) * 28 +
-      Math.sin(theta * 5 + phaseB) * 18 +
-      Math.cos(theta * 9 + phaseC) * 7;
-    const y = Math.round(h * 0.44 + wave);
-    ctx.lineTo(x, y);
+  for (const [px, py] of farPeaks) {
+    ctx.lineTo(Math.round(px * w), Math.round(py * h));
   }
   ctx.lineTo(w, h);
   ctx.closePath();
   ctx.fill();
 
-  // Sharp Wuxia karst spires (closer ridge) with sunlit ridge rim
-  const nearPeakFill = scaleRgb(mixRgb(hillRgb, pillarRgb, 0.35), 0.78);
-  const rimCol = mixRgb([255, 244, 214], accent, 0.42);
-  ctx.fillStyle = rgbaCss(nearPeakFill, 0.96);
+  // Mid-distance misty valley veil separating the two karst planes
+  const midMist = ctx.createLinearGradient(0, h * 0.44, 0, h * 0.85);
+  midMist.addColorStop(0, rgbaCss(skyBot, 0));
+  midMist.addColorStop(0.55, rgbaCss(mixRgb(skyBot, [224, 210, 184], 0.2), 0.32));
+  midMist.addColorStop(1, rgbaCss(skyBot, 0));
+  ctx.fillStyle = midMist;
+  ctx.fillRect(0, Math.round(h * 0.44), w, Math.round(h * 0.42));
+
+  // Closer craggy karst ridge (seamless periodic endpoints at 0.68)
+  const nearPeaks: readonly (readonly [number, number])[] = [
+    [0.0, 0.68],
+    [0.08, 0.52],
+    [0.16, 0.61],
+    [0.26, 0.42],
+    [0.35, 0.58],
+    [0.44, 0.47],
+    [0.54, 0.64],
+    [0.64, 0.46],
+    [0.72, 0.55],
+    [0.82, 0.39],
+    [0.91, 0.57],
+    [1.0, 0.68],
+  ];
+
+  const nearPeakFill = scaleRgb(mixRgb(hillRgb, pillarRgb, 0.28), 0.72);
+  const nearGrad = ctx.createLinearGradient(0, h * 0.38, 0, h);
+  nearGrad.addColorStop(0, rgbaCss(nearPeakFill, 0.95));
+  nearGrad.addColorStop(1, rgbaCss(scaleRgb(nearPeakFill, 0.5), 0.99));
+  ctx.fillStyle = nearGrad;
   ctx.beginPath();
   ctx.moveTo(0, h);
-  const ridgeYs: number[] = [];
-  for (let x = 0; x <= w; x += 4) {
-    const theta = (x / w) * Math.PI * 2;
-    const spire = Math.abs(Math.sin(theta * 3 + phaseB)) * 38;
-    const crag = Math.sin(theta * 7 + phaseA) * 14 + Math.cos(theta * 13 + phaseC) * 6;
-    const y = Math.round(h * 0.66 - spire + crag);
-    ridgeYs.push(y);
-    ctx.lineTo(x, y);
+  for (const [px, py] of nearPeaks) {
+    ctx.lineTo(Math.round(px * w), Math.round(py * h));
   }
   ctx.lineTo(w, h);
   ctx.closePath();
   ctx.fill();
 
-  ctx.strokeStyle = rgbaCss(rimCol, 0.32);
-  ctx.lineWidth = 1.5;
+  // Two cliffside silhouette pagodas perched naturally on peak crests
+  const winGlow = mixRgb([238, 206, 134], accent, 0.2);
+  drawDistantPagoda(ctx, Math.round(0.26 * w), Math.round(0.42 * h) + 5, nearPeakFill, winGlow);
+  drawDistantPagoda(ctx, Math.round(0.82 * w), Math.round(0.39 * h) + 5, nearPeakFill, winGlow);
+
+  // Soft ink-wash valley mist hugging the base
+  const mistGrad = ctx.createLinearGradient(0, h * 0.64, 0, h);
+  mistGrad.addColorStop(0, rgbaCss(skyBot, 0));
+  mistGrad.addColorStop(0.6, rgbaCss(mixRgb(skyBot, accent, 0.16), 0.34));
+  mistGrad.addColorStop(1, rgbaCss(mixRgb(skyBot, [226, 214, 192], 0.22), 0.58));
+  ctx.fillStyle = mistGrad;
+  ctx.fillRect(0, Math.round(h * 0.64), w, Math.round(h * 0.36));
+};
+
+const drawGnarledPine = (
+  ctx: CanvasRenderingContext2D,
+  baseX: number,
+  baseY: number,
+  silCol: RgbTuple,
+  rimCol: RgbTuple
+): void => {
+  ctx.save();
+  // Gnarled curving trunk
+  ctx.strokeStyle = rgbaCss(silCol, 0.96);
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 7;
   ctx.beginPath();
-  for (let i = 0; i < ridgeYs.length; i += 1) {
-    const x = i * 4;
-    const y = ridgeYs[i] ?? h * 0.6;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
+  ctx.moveTo(baseX, baseY);
+  ctx.quadraticCurveTo(baseX - 8, baseY - 46, baseX + 6, baseY - 94);
   ctx.stroke();
 
-  // Two cliffside silhouette pagodas perched along peaks
-  const idxA = Math.floor((136 / w) * (ridgeYs.length - 1));
-  const idxB = Math.floor((392 / w) * (ridgeYs.length - 1));
-  const winGlow = mixRgb([254, 240, 138], accent, 0.2);
-  drawDistantPagoda(ctx, 136, (ridgeYs[idxA] ?? h * 0.55) + 4, nearPeakFill, winGlow);
-  drawDistantPagoda(ctx, 392, (ridgeYs[idxB] ?? h * 0.52) + 4, nearPeakFill, winGlow);
+  // Sweeping upper boughs
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(baseX - 2, baseY - 62);
+  ctx.quadraticCurveTo(baseX - 28, baseY - 70, baseX - 46, baseY - 62);
+  ctx.moveTo(baseX + 3, baseY - 78);
+  ctx.quadraticCurveTo(baseX + 26, baseY - 88, baseX + 44, baseY - 78);
+  ctx.stroke();
 
-  // Horizon ink-wash valley mist
-  const mistGrad = ctx.createLinearGradient(0, h * 0.58, 0, h);
-  mistGrad.addColorStop(0, rgbaCss(skyBot, 0));
-  mistGrad.addColorStop(0.65, rgbaCss(mixRgb(skyBot, accent, 0.22), 0.38));
-  mistGrad.addColorStop(1, rgbaCss(mixRgb(skyBot, [245, 245, 255], 0.25), 0.64));
-  ctx.fillStyle = mistGrad;
-  ctx.fillRect(0, Math.round(h * 0.58), w, Math.round(h * 0.42));
+  // Layered woodblock-style jagged pine needle clusters
+  const pads: readonly [number, number, number, number][] = [
+    [baseX - 38, baseY - 66, 26, 9],
+    [baseX - 10, baseY - 82, 30, 10],
+    [baseX + 28, baseY - 82, 28, 9],
+    [baseX + 6, baseY - 100, 34, 11],
+  ];
+  for (const [cx, cy, rx, ry] of pads) {
+    ctx.fillStyle = rgbaCss(silCol, 0.96);
+    ctx.beginPath();
+    ctx.moveTo(cx - rx, cy + ry * 0.35);
+    ctx.lineTo(cx - rx * 0.65, cy - ry * 0.55);
+    ctx.lineTo(cx - rx * 0.25, cy - ry * 0.2);
+    ctx.lineTo(cx, cy - ry);
+    ctx.lineTo(cx + rx * 0.3, cy - ry * 0.25);
+    ctx.lineTo(cx + rx * 0.7, cy - ry * 0.6);
+    ctx.lineTo(cx + rx, cy + ry * 0.35);
+    ctx.quadraticCurveTo(cx, cy + ry * 0.65, cx - rx, cy + ry * 0.35);
+    ctx.closePath();
+    ctx.fill();
+
+    // Subtle moonlight needle crest strokes
+    ctx.strokeStyle = rgbaCss(rimCol, 0.2);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - rx * 0.65, cy - ry * 0.55);
+    ctx.lineTo(cx, cy - ry);
+    ctx.lineTo(cx + rx * 0.7, cy - ry * 0.6);
+    ctx.stroke();
+  }
+  ctx.restore();
+};
+
+const drawStoneLantern = (
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  baseY: number,
+  stoneCol: RgbTuple,
+  accentRgb: RgbTuple
+): void => {
+  // Pedestal & shaft
+  ctx.fillStyle = rgbaCss(stoneCol, 0.95);
+  ctx.fillRect(cx - 8, baseY - 5, 16, 5);
+  ctx.fillRect(cx - 3.5, baseY - 28, 7, 23);
+  ctx.fillRect(cx - 7, baseY - 31, 14, 3);
+
+  // Firebox & warm candle glow
+  const glow = ctx.createRadialGradient(cx, baseY - 36, 2, cx, baseY - 36, 30);
+  glow.addColorStop(0, 'rgba(245, 208, 128, 0.5)');
+  glow.addColorStop(0.45, rgbaCss(accentRgb, 0.18));
+  glow.addColorStop(1, 'rgba(245, 208, 128, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, baseY - 36, 30, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = rgbaCss(stoneCol, 0.95);
+  ctx.fillRect(cx - 6, baseY - 42, 2, 11);
+  ctx.fillRect(cx + 4, baseY - 42, 2, 11);
+  ctx.fillStyle = '#f5d790';
+  ctx.fillRect(cx - 3, baseY - 40, 6, 8);
+
+  // Curved stone cap
+  ctx.fillStyle = rgbaCss(stoneCol, 0.98);
+  ctx.beginPath();
+  ctx.moveTo(cx - 12, baseY - 42);
+  ctx.quadraticCurveTo(cx, baseY - 51, cx + 12, baseY - 42);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillRect(cx - 2, baseY - 52, 4, 3);
 };
 
 const paintHd2dMidPavilionCanvas = (
@@ -370,95 +469,117 @@ const paintHd2dMidPavilionCanvas = (
   const floorTopRgb = hexIntToRgb(biome.floorTopHex);
   const accent = parseAccentRgb(biome.accentHex);
 
-  const timberDark = scaleRgb(pillarRgb, 0.36);
-  const timberLit = mixRgb(pillarRgb, [255, 228, 180], 0.28);
-  const roofBody = scaleRgb(pillarRgb, 0.54);
-  const roofTrim = mixRgb(accent, [251, 191, 36], 0.45);
-  const terraceWall = scaleRgb(floorTopRgb, 0.5);
-  const terraceRim = mixRgb(floorTopRgb, [255, 245, 220], 0.25);
+  const timberDark = scaleRgb(pillarRgb, 0.32);
+  const timberLit = mixRgb(pillarRgb, [242, 214, 162], 0.25);
+  const roofBody = scaleRgb(pillarRgb, 0.48);
+  const roofTrim = mixRgb(accent, [216, 178, 98], 0.45);
+  const terraceWall = scaleRgb(floorTopRgb, 0.42);
+  const terraceRim = mixRgb(floorTopRgb, [238, 224, 196], 0.22);
 
-  // Stone balustrade terrace base
-  const wallY = h - 28;
+  // Low carved stone courtyard balustrade (keeps sky & mountains wide open)
+  const wallY = h - 22;
   ctx.fillStyle = rgbaCss(terraceWall, 0.96);
-  ctx.fillRect(0, wallY, w, 28);
-  ctx.fillStyle = rgbaCss(terraceRim, 0.55);
+  ctx.fillRect(0, wallY, w, 22);
+  ctx.fillStyle = rgbaCss(terraceRim, 0.5);
   ctx.fillRect(0, wallY, w, 2);
-  ctx.fillStyle = 'rgba(6, 8, 16, 0.45)';
   for (let bx = 0; bx < w; bx += 64) {
-    ctx.fillRect(bx + 12, wallY + 7, 40, 11);
-    ctx.fillRect(bx, wallY, 2, 28);
+    ctx.fillStyle = 'rgba(10, 8, 6, 0.42)';
+    ctx.fillRect(bx + 10, wallY + 6, 44, 10);
+    // Stone balustrade post finial
+    ctx.fillStyle = rgbaCss(terraceRim, 0.55);
+    ctx.fillRect(bx - 2, wallY - 5, 6, 5);
   }
 
-  // Timber columns & stone plinths across 4 evenly wrapping 128px pavilion bays
-  const bayWidth = 128;
-  for (let bay = 0; bay < 4; bay += 1) {
-    const px = bay * bayWidth + 16;
-    // Bamboo & foliage vignette in alternating bays
-    if (bay % 2 === 0) {
-      const bx = px + 68;
-      ctx.strokeStyle = rgbaCss(scaleRgb(mixRgb(accent, pillarRgb, 0.5), 0.55), 0.72);
-      ctx.lineWidth = 2.5;
-      for (let stalk = 0; stalk < 3; stalk += 1) {
-        const sx = bx + (stalk - 1) * 11;
-        const topX = sx + (stalk - 1) * 6;
-        ctx.beginPath();
-        ctx.moveTo(sx, wallY);
-        ctx.lineTo(topX, 42 + stalk * 10);
-        ctx.stroke();
-        ctx.fillStyle = rgbaCss(mixRgb(accent, [74, 222, 128], 0.3), 0.45);
-        ctx.beginPath();
-        ctx.ellipse(topX + 5, 58 + stalk * 9, 8, 2.5, -0.35, 0, Math.PI * 2);
-        ctx.ellipse(topX - 6, 72 + stalk * 8, 7, 2.5, 0.35, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
+  // Open-vista mountain courtyard rhythm (per 512px):
+  // 1) Gnarled cliffside pine on left (x = 92)
+  drawGnarledPine(ctx, 92, wallY, scaleRgb(timberDark, 0.72), roofTrim);
 
-    // Plinth & lacquered pillar
-    ctx.fillStyle = rgbaCss(terraceRim, 0.65);
-    ctx.fillRect(px - 3, wallY - 6, 16, 6);
-    ctx.fillStyle = rgbaCss(timberDark, 0.96);
-    ctx.fillRect(px, 34, 10, wallY - 40);
-    // Warm left-side HD-2D rim highlight
-    ctx.fillStyle = rgbaCss(timberLit, 0.5);
-    ctx.fillRect(px, 34, 2, wallY - 40);
+  // 2) Weathered stone lantern (x = 204)
+  drawStoneLantern(ctx, 204, wallY, scaleRgb(terraceWall, 1.15), accent);
 
-    // Bracket capital (dougong)
+  // 3) Ornate single-bay curved-eave Wuxia Paifang archway (centered at x = 356)
+  const archCx = 356;
+  const halfSpan = 64;
+  const colTop = 44;
+  for (const side of [-1, 1]) {
+    const px = archCx + side * halfSpan;
+    // Stone plinth
+    ctx.fillStyle = rgbaCss(terraceRim, 0.6);
+    ctx.fillRect(px - 7, wallY - 7, 14, 7);
+    // Lacquered timber column
+    ctx.fillStyle = rgbaCss(timberDark, 0.98);
+    ctx.fillRect(px - 4.5, colTop, 9, wallY - colTop - 7);
+    ctx.fillStyle = rgbaCss(timberLit, 0.42);
+    ctx.fillRect(px - 4.5, colTop, 2, wallY - colTop - 7);
+    // Dougong bracket
     ctx.fillStyle = rgbaCss(roofBody, 0.98);
-    ctx.fillRect(px - 7, 30, 24, 6);
+    ctx.fillRect(px - 10, colTop - 4, 20, 6);
   }
 
-  // Sweeping upturned Chinese eaves lintel & ceramic tiled roof band
-  ctx.fillStyle = rgbaCss(timberDark, 0.96);
-  ctx.fillRect(0, 26, w, 7);
-  ctx.fillStyle = rgbaCss(roofBody, 0.98);
-  ctx.fillRect(0, 12, w, 15);
-  for (let tx = 0; tx < w; tx += 16) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-    ctx.fillRect(tx, 12, 2, 15);
-    ctx.fillStyle = rgbaCss(roofTrim, 0.45);
-    ctx.fillRect(tx + 2, 10, 12, 2);
-  }
-  ctx.fillStyle = rgbaCss(roofTrim, 0.72);
-  ctx.fillRect(0, 25, w, 2);
+  // Carved horizontal lintel beam + central plaque
+  ctx.fillStyle = rgbaCss(timberDark, 0.98);
+  ctx.fillRect(archCx - halfSpan - 12, colTop + 4, halfSpan * 2 + 24, 9);
+  ctx.fillStyle = rgbaCss(roofTrim, 0.52);
+  ctx.fillRect(archCx - halfSpan - 12, colTop + 4, halfSpan * 2 + 24, 1.5);
+  // Central lacquered inscription plaque
+  ctx.fillStyle = '#18110e';
+  ctx.fillRect(archCx - 20, colTop - 2, 40, 14);
+  ctx.strokeStyle = rgbaCss(roofTrim, 0.75);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(archCx - 20, colTop - 2, 40, 14);
 
-  // Sweeping roof corner flares at pavilion bays
-  for (let bay = 0; bay < 4; bay += 1) {
-    const eaveX = bay * bayWidth + 21;
-    ctx.fillStyle = rgbaCss(roofBody, 0.98);
+  // Sweeping double-tiered upturned paifang gable roof
+  ctx.fillStyle = rgbaCss(roofBody, 0.99);
+  ctx.beginPath();
+  ctx.moveTo(archCx - halfSpan - 34, colTop - 2);
+  ctx.quadraticCurveTo(archCx - halfSpan * 0.5, colTop - 8, archCx, colTop - 22);
+  ctx.quadraticCurveTo(archCx + halfSpan * 0.5, colTop - 8, archCx + halfSpan + 34, colTop - 2);
+  ctx.lineTo(archCx + halfSpan + 22, colTop + 5);
+  ctx.lineTo(archCx - halfSpan - 22, colTop + 5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Upper crown gable
+  ctx.beginPath();
+  ctx.moveTo(archCx - 48, colTop - 16);
+  ctx.quadraticCurveTo(archCx, colTop - 32, archCx + 48, colTop - 16);
+  ctx.lineTo(archCx + 38, colTop - 10);
+  ctx.lineTo(archCx - 38, colTop - 10);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = rgbaCss(roofTrim, 0.58);
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(archCx - halfSpan - 32, colTop - 2);
+  ctx.quadraticCurveTo(archCx, colTop - 21, archCx + halfSpan + 32, colTop - 2);
+  ctx.stroke();
+
+  // Two glowing hanging paper lanterns beneath the paifang eaves
+  drawGlowingPaperLantern(ctx, archCx - 34, colTop + 13, 18, accent);
+  drawGlowingPaperLantern(ctx, archCx + 34, colTop + 13, 18, accent);
+
+  // 4) Delicate ink-wash bamboo cluster on right edge (x = 468)
+  ctx.strokeStyle = rgbaCss(scaleRgb(timberDark, 0.85), 0.72);
+  ctx.lineWidth = 2;
+  for (let s = 0; s < 3; s += 1) {
+    const sx = 456 + s * 13;
+    const lean = (s - 1) * 8;
     ctx.beginPath();
-    ctx.moveTo(eaveX - 24, 26);
-    ctx.quadraticCurveTo(eaveX, 18, eaveX + 24, 26);
-    ctx.lineTo(eaveX + 18, 30);
-    ctx.lineTo(eaveX - 18, 30);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // Warm glowing hanging paper lanterns in all 4 bays
-  for (let bay = 0; bay < 4; bay += 1) {
-    const lx = bay * bayWidth + 68;
-    const drop = 16 + (bay % 2) * 6;
-    drawGlowingPaperLantern(ctx, lx, 32, drop, accent);
+    ctx.moveTo(sx, wallY);
+    ctx.quadraticCurveTo(sx + lean * 0.4, wallY - 52, sx + lean, wallY - 104 + s * 10);
+    ctx.stroke();
+    // Pointed bamboo leaf blades
+    ctx.fillStyle = rgbaCss(scaleRgb(mixRgb(accent, timberDark, 0.65), 0.85), 0.62);
+    for (let k = 0; k < 3; k += 1) {
+      const ly = wallY - 68 - k * 14 + s * 6;
+      const lx = sx + lean * (0.55 + k * 0.14);
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      ctx.quadraticCurveTo(lx + 11, ly - 5, lx + 18, ly - 2);
+      ctx.quadraticCurveTo(lx + 10, ly + 1, lx, ly);
+      ctx.fill();
+    }
   }
 };
 
@@ -471,69 +592,81 @@ const paintHd2dFloorCanvas = (
   const floorTop = hexIntToRgb(biome.floorTopHex);
   const floorBody = hexIntToRgb(biome.floorBodyHex);
   const accent = parseAccentRgb(biome.accentHex);
+  const rng = mulberry32(hashTextSeed(`${biome.id}_floor`));
 
-  // Carved stone balustrade curb lip at Y=0..14
-  const curbHighlight = mixRgb(floorTop, [255, 248, 228], 0.34);
-  ctx.fillStyle = rgbaCss(floorTop, 1);
-  ctx.fillRect(0, 0, w, 12);
-  ctx.fillStyle = rgbaCss(curbHighlight, 0.9);
-  ctx.fillRect(0, 0, w, 2.5);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  // Weathered carved stone promenade curb at Y=0..10
+  const curbHighlight = mixRgb(floorTop, [238, 224, 196], 0.16);
+  ctx.fillStyle = rgbaCss(scaleRgb(floorTop, 0.62), 1);
+  ctx.fillRect(0, 0, w, 10);
+  ctx.fillStyle = rgbaCss(curbHighlight, 0.42);
+  ctx.fillRect(0, 0, w, 2);
+  ctx.fillStyle = 'rgba(10, 8, 6, 0.35)';
   for (let cx = 0; cx < w; cx += 32) {
-    ctx.fillRect(cx, 0, 2, 12);
+    ctx.fillRect(cx, 0, 2, 10);
   }
 
-  // Deep promenade gradient receding toward bottom edge
-  const walkGrad = ctx.createLinearGradient(0, 12, 0, h);
-  walkGrad.addColorStop(0, rgbaCss(mixRgb(floorBody, floorTop, 0.22), 1));
-  walkGrad.addColorStop(0.45, rgbaCss(floorBody, 1));
-  walkGrad.addColorStop(1, rgbaCss(scaleRgb(floorBody, 0.48), 1));
+  // Deep warm sumi courtyard surface receding into dark shadow
+  const walkGrad = ctx.createLinearGradient(0, 10, 0, h);
+  walkGrad.addColorStop(0, rgbaCss(mixRgb(floorBody, floorTop, 0.16), 1));
+  walkGrad.addColorStop(0.32, rgbaCss(scaleRgb(floorBody, 0.78), 1));
+  walkGrad.addColorStop(0.7, rgbaCss(scaleRgb(floorBody, 0.42), 1));
+  walkGrad.addColorStop(1, '#0b0908');
   ctx.fillStyle = walkGrad;
-  ctx.fillRect(0, 12, w, h - 12);
+  ctx.fillRect(0, 10, w, h - 10);
 
-  // Cast shadow right underneath curb lip for 3D diorama separation
-  const lipShadow = ctx.createLinearGradient(0, 12, 0, 26);
-  lipShadow.addColorStop(0, 'rgba(3, 5, 14, 0.62)');
-  lipShadow.addColorStop(1, 'rgba(3, 5, 14, 0)');
+  // Cast shadow right underneath curb lip
+  const lipShadow = ctx.createLinearGradient(0, 10, 0, 26);
+  lipShadow.addColorStop(0, 'rgba(8, 6, 5, 0.65)');
+  lipShadow.addColorStop(1, 'rgba(8, 6, 5, 0)');
   ctx.fillStyle = lipShadow;
-  ctx.fillRect(0, 12, w, 14);
+  ctx.fillRect(0, 10, w, 16);
 
-  // Perspective-foreshortened stone courses
-  const rows = [14, 24, 38, 56, 79, 108, 144, 184, h];
-  const stoneWarmEdge = mixRgb(floorTop, [255, 245, 220], 0.22);
+  // Irregular hand-laid flagstone slabs with subtle organic tonal variation
+  const rows = [12, 24, 40, 62, 92, 134, 184, h];
+  const stoneWarmEdge = mixRgb(floorTop, [238, 224, 196], 0.18);
   for (let r = 0; r < rows.length - 1; r += 1) {
-    const y0 = rows[r] ?? 14;
+    const y0 = rows[r] ?? 12;
     const y1 = rows[r + 1] ?? h;
     const rowH = y1 - y0;
-    const rowMidFade = 1 - (r / (rows.length - 1)) * 0.45;
-
-    // Horizontal mortar crease & warm top specular highlight
-    ctx.fillStyle = 'rgba(4, 6, 14, 0.45)';
-    ctx.fillRect(0, y0, w, 1.5);
-    ctx.fillStyle = rgbaCss(stoneWarmEdge, 0.2 * rowMidFade);
-    ctx.fillRect(0, y0 + 2, w, 1);
-
-    // Alternating staggered vertical joints cleanly wrapping modulo 256
+    const rowFade = Math.max(0.12, 1 - (r / (rows.length - 1)) * 0.75);
     const offset = r % 2 === 0 ? 0 : 32;
     const segW = 64;
+
     for (let sx = offset; sx < w; sx += segW) {
-      ctx.fillStyle = 'rgba(4, 6, 14, 0.36)';
-      ctx.fillRect(sx, y0, 2, rowH);
-      ctx.fillStyle = rgbaCss(stoneWarmEdge, 0.1 * rowMidFade);
-      ctx.fillRect((sx + 2) % w, y0 + 2, 1, Math.max(2, rowH - 3));
+      const shadeDelta = (rng() - 0.5) * 0.08;
+      if (shadeDelta > 0) {
+        ctx.fillStyle = `rgba(238, 224, 196, ${(shadeDelta * rowFade).toFixed(3)})`;
+      } else {
+        ctx.fillStyle = `rgba(8, 6, 5, ${(Math.abs(shadeDelta) * 1.6 * rowFade).toFixed(3)})`;
+      }
+      ctx.fillRect(sx + 2, y0 + 2, segW - 3, Math.max(2, rowH - 3));
+
+      // Subtle vertical mortar joint
+      ctx.fillStyle = `rgba(8, 6, 5, ${(0.38 * rowFade).toFixed(2)})`;
+      ctx.fillRect(sx, y0, 1.5, rowH);
     }
+
+    // Horizontal mortar seam + faint top edge catchlight
+    ctx.fillStyle = `rgba(8, 6, 5, ${(0.44 * rowFade).toFixed(2)})`;
+    ctx.fillRect(0, y0, w, 1.5);
+    ctx.fillStyle = rgbaCss(stoneWarmEdge, 0.14 * rowFade);
+    ctx.fillRect(0, y0 + 2, w, 1);
   }
 
-  // Reflected warm lantern light pools on wet/ancient stone terrace
-  for (const poolX of [64, 192]) {
-    const pool = ctx.createRadialGradient(poolX, 46, 4, poolX, 46, 56);
-    pool.addColorStop(0, 'rgba(255, 212, 128, 0.16)');
-    pool.addColorStop(0.5, rgbaCss(accent, 0.08));
-    pool.addColorStop(1, 'rgba(255, 200, 110, 0)');
-    ctx.fillStyle = pool;
-    ctx.beginPath();
-    ctx.ellipse(poolX, 46, 56, 22, 0, 0, Math.PI * 2);
-    ctx.fill();
+  // Subtle elongated lantern sheen near upper promenade (never circular yellow blobs)
+  const sheen = ctx.createLinearGradient(0, 12, 0, 56);
+  sheen.addColorStop(0, rgbaCss(accent, 0.09));
+  sheen.addColorStop(0.4, 'rgba(228, 192, 118, 0.05)');
+  sheen.addColorStop(1, 'rgba(228, 192, 118, 0)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(0, 12, w, 44);
+
+  // Scattered fallen plum petals / leaves on stone
+  for (let i = 0; i < 9; i += 1) {
+    const px = Math.round(rng() * w);
+    const py = 16 + Math.round(rng() * 88);
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(176, 68, 56, 0.36)' : 'rgba(212, 178, 108, 0.28)';
+    ctx.fillRect(px, py, 3, 1.5);
   }
 };
 
@@ -841,9 +974,9 @@ export class DungeonScene extends Scene {
   private ensureHd2dSharedTextures(): void {
     this.ensureCanvasTexture('hd2d_shadow', 64, 24, (ctx, w, h) => {
       const grad = ctx.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w * 0.48);
-      grad.addColorStop(0, 'rgba(3, 5, 14, 0.72)');
-      grad.addColorStop(0.55, 'rgba(5, 8, 20, 0.36)');
-      grad.addColorStop(1, 'rgba(5, 8, 20, 0)');
+      grad.addColorStop(0, 'rgba(11, 9, 7, 0.72)');
+      grad.addColorStop(0.55, 'rgba(11, 9, 7, 0.36)');
+      grad.addColorStop(1, 'rgba(11, 9, 7, 0)');
       ctx.save();
       ctx.translate(w / 2, h / 2);
       ctx.scale(1, 0.38);
@@ -868,14 +1001,14 @@ export class DungeonScene extends Scene {
     this.ensureCanvasTexture('hd2d_vignette', 512, 512, (ctx, w, h) => {
       // Top & bottom tilt-shift DoF soft darkening bands
       const topBlur = ctx.createLinearGradient(0, 0, 0, h * 0.16);
-      topBlur.addColorStop(0, 'rgba(4, 6, 16, 0.52)');
-      topBlur.addColorStop(1, 'rgba(4, 6, 16, 0)');
+      topBlur.addColorStop(0, 'rgba(10, 8, 6, 0.52)');
+      topBlur.addColorStop(1, 'rgba(10, 8, 6, 0)');
       ctx.fillStyle = topBlur;
       ctx.fillRect(0, 0, w, h * 0.16);
 
       const botBlur = ctx.createLinearGradient(0, h * 0.85, 0, h);
-      botBlur.addColorStop(0, 'rgba(3, 5, 12, 0)');
-      botBlur.addColorStop(1, 'rgba(3, 5, 12, 0.58)');
+      botBlur.addColorStop(0, 'rgba(10, 8, 6, 0)');
+      botBlur.addColorStop(1, 'rgba(10, 8, 6, 0.58)');
       ctx.fillStyle = botBlur;
       ctx.fillRect(0, h * 0.85, w, h * 0.15);
 
@@ -888,9 +1021,9 @@ export class DungeonScene extends Scene {
         h * 0.5,
         w * 0.72
       );
-      cornerGrad.addColorStop(0, 'rgba(4, 6, 14, 0)');
-      cornerGrad.addColorStop(0.68, 'rgba(4, 6, 14, 0.16)');
-      cornerGrad.addColorStop(1, 'rgba(2, 4, 12, 0.54)');
+      cornerGrad.addColorStop(0, 'rgba(10, 8, 6, 0)');
+      cornerGrad.addColorStop(0.68, 'rgba(10, 8, 6, 0.16)');
+      cornerGrad.addColorStop(1, 'rgba(10, 8, 6, 0.54)');
       ctx.fillStyle = cornerGrad;
       ctx.fillRect(0, 0, w, h);
     });
@@ -1040,11 +1173,11 @@ export class DungeonScene extends Scene {
     this.heroOverheadGfx = this.add.graphics().setDepth(9);
     this.heroHpText = this.add
       .text(this.heroX, this.groundY - 88, '', {
-        fontFamily: 'monospace',
+        fontFamily: 'Georgia, "Times New Roman", serif',
         fontSize: '9px',
         fontStyle: 'bold',
-        color: '#f8fafc',
-        stroke: '#000000',
+        color: '#ede3cf',
+        stroke: '#0d0a08',
         strokeThickness: 3,
       })
       .setOrigin(0.5)
@@ -1413,7 +1546,7 @@ export class DungeonScene extends Scene {
     this.totalWavesOnFloor = floorNum <= 1 ? 1 : 2;
     this.phase = 'walking';
     this.walkTimer = 0.9;
-    this.spawnFloatingText(this.scale.width / 2, this.groundY - 140, `FLOOR ${floorNum}`, '#fde047', 26);
+    this.spawnFloatingText(this.scale.width / 2, this.groundY - 140, `FLOOR ${floorNum}`, '#ecd492', 26);
     this.emitHud();
   }
 
@@ -1431,7 +1564,7 @@ export class DungeonScene extends Scene {
       : isMountHuaSummit
         ? `BOSS FLOOR (F${this.floor}): DUAL MASTERS`
         : `MINI-BOSS: ${getMiniBossForFloor(baseBiomeId, this.floor, runSeed).name}`;
-    this.spawnFloatingText(this.scale.width / 2, this.groundY - 150, label, '#f97316', 22);
+    this.spawnFloatingText(this.scale.width / 2, this.groundY - 150, label, '#d9534f', 22);
     soundFX.playBossRoar();
     this.emitHud();
   }
@@ -1616,16 +1749,22 @@ export class DungeonScene extends Scene {
       const sprite = this.add.image(x, y, textureKey).setTint(tint).setDepth(6);
       if (isElite) sprite.setScale(1.3);
 
-      const hpBg = this.add.rectangle(x, y - 42, 46, 6, 0x0f172a).setVisible(isElite).setDepth(8);
+      const hpBg = this.add
+        .rectangle(x, y - 42, 46, 6, 0x120e0c)
+        .setStrokeStyle(1, 0x0d0a08, 0.92)
+        .setVisible(isElite)
+        .setDepth(8);
       const hpFill = this.add
-        .rectangle(x, y - 42, 46, 6, isElite ? 0xa855f7 : 0xef4444)
+        .rectangle(x, y - 42, 46, 6, isElite ? 0x9d68a8 : 0xb8352a)
         .setVisible(isElite)
         .setDepth(9);
       const nameText = this.add
         .text(x, y - 54, isElite ? `Elite ${mobName}` : mobName, {
+          fontFamily: 'Georgia, "Times New Roman", serif',
           fontSize: '10px',
-          color: isElite ? '#e9d5ff' : '#cbd5e1',
-          stroke: '#000000',
+          fontStyle: isElite ? 'bold' : 'normal',
+          color: isElite ? '#e6d8be' : '#d8ccb8',
+          stroke: '#0d0a08',
           strokeThickness: 3,
         })
         .setOrigin(0.5)
@@ -1633,11 +1772,11 @@ export class DungeonScene extends Scene {
         .setDepth(9);
       const statusBadge = this.add
         .text(x + 27, y - 42, '', {
-          fontFamily: 'monospace',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
           fontSize: '10px',
           fontStyle: 'bold',
-          color: '#38bdf8',
-          stroke: '#000000',
+          color: '#7da6c7',
+          stroke: '#0d0a08',
           strokeThickness: 3,
         })
         .setOrigin(0, 0.5)
@@ -1739,14 +1878,19 @@ export class DungeonScene extends Scene {
       .setScale(isEndBoss ? 1.65 : 1.35, isEndBoss ? 1.2 : 1.05)
       .setDepth(4.1);
     const sprite = this.add.image(x, y, key).setTint(tint).setScale(scale).setDepth(6);
-    const hpBg = this.add.rectangle(x, y - barOffset, 96, 8, 0x0f172a).setVisible(false).setDepth(8);
-    const hpFill = this.add.rectangle(x, y - barOffset, 96, 8, 0xf97316).setVisible(false).setDepth(9);
+    const hpBg = this.add
+      .rectangle(x, y - barOffset, 96, 8, 0x120e0c)
+      .setStrokeStyle(1, 0x0d0a08, 0.92)
+      .setVisible(false)
+      .setDepth(8);
+    const hpFill = this.add.rectangle(x, y - barOffset, 96, 8, 0xc23b2f).setVisible(false).setDepth(9);
     const nameText = this.add
       .text(x, y - barOffset - 14, name, {
+        fontFamily: 'Georgia, "Times New Roman", serif',
         fontSize: '12px',
         fontStyle: 'bold',
-        color: '#fde047',
-        stroke: '#000000',
+        color: '#ecd492',
+        stroke: '#0d0a08',
         strokeThickness: 4,
       })
       .setOrigin(0.5)
@@ -1754,11 +1898,11 @@ export class DungeonScene extends Scene {
       .setDepth(9);
     const statusBadge = this.add
       .text(x, y - barOffset, '', {
-        fontFamily: 'monospace',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         fontSize: '11px',
         fontStyle: 'bold',
-        color: '#38bdf8',
-        stroke: '#000000',
+        color: '#7da6c7',
+        stroke: '#0d0a08',
         strokeThickness: 3,
       })
       .setOrigin(0.5)
@@ -1957,33 +2101,50 @@ export class DungeonScene extends Scene {
         const barY = Math.round(hy - 50);
         const maxHp = Math.max(1, this.stats.maxHp);
         const hpRatio = Math.max(0, Math.min(1, this.heroHp / maxHp));
-        const hpColor = hpRatio > 0.5 ? 0x22c55e : hpRatio > 0.25 ? 0xf59e0b : 0xef4444;
+        const hpColor = hpRatio > 0.5 ? 0x5fa882 : hpRatio > 0.25 ? 0xd49b38 : 0xc23b2f;
 
-        // HP bar track + fill
-        this.heroOverheadGfx.fillStyle(0x0a0d1c, 0.85);
-        this.heroOverheadGfx.fillRect(barX - 1, barY - 1, barW + 2, hpH + 2);
+        // Outer sumi lacquer border + recessed dark rosewood track
+        this.heroOverheadGfx.fillStyle(0x0d0a08, 0.94);
+        this.heroOverheadGfx.fillRect(barX - 2, barY - 2, barW + 4, hpH + 4);
+        this.heroOverheadGfx.fillStyle(0x1b1411, 0.92);
+        this.heroOverheadGfx.fillRect(barX, barY, barW, hpH);
+        // Subtle 1px antique brass top & side bevel rim around the HP bar
+        this.heroOverheadGfx.fillStyle(0xc49f54, 0.65);
+        this.heroOverheadGfx.fillRect(barX - 1, barY - 1, barW + 2, 1);
+        this.heroOverheadGfx.fillRect(barX - 1, barY, 1, hpH);
+        this.heroOverheadGfx.fillRect(barX + barW, barY, 1, hpH);
+        // Bottom lacquer shadow rim for crisp bevel
+        this.heroOverheadGfx.fillStyle(0x2e2119, 0.85);
+        this.heroOverheadGfx.fillRect(barX - 1, barY + hpH, barW + 2, 1);
+
         if (hpRatio > 0) {
+          const fillW = Math.round(barW * hpRatio);
           this.heroOverheadGfx.fillStyle(hpColor, 1);
-          this.heroOverheadGfx.fillRect(barX, barY, Math.round(barW * hpRatio), hpH);
+          this.heroOverheadGfx.fillRect(barX, barY, fillW, hpH);
+          // Subtle 1px upper specular highlight on pigment fill
+          this.heroOverheadGfx.fillStyle(0xf5ecd8, 0.2);
+          this.heroOverheadGfx.fillRect(barX, barY, fillW, 1);
         }
 
         // Shield overlay strip on top edge of HP bar when active
         if (this.heroShield > 0) {
           const shieldRatio = Math.max(0, Math.min(1, this.heroShield / maxHp));
-          this.heroOverheadGfx.fillStyle(0x38bdf8, 0.95);
+          this.heroOverheadGfx.fillStyle(0x6a96bd, 0.95);
           this.heroOverheadGfx.fillRect(barX, barY, Math.max(2, Math.round(barW * shieldRatio)), 2);
         }
 
         // Qi micro-bar tucked directly below HP bar
-        const qiY = barY + hpH + 2;
+        const qiY = barY + hpH + 3;
         const qiRatio =
           this.ultimateStocks >= this.maxUltimateStocks
             ? 1
             : Math.max(0, Math.min(1, this.ultimateGauge / 100));
-        this.heroOverheadGfx.fillStyle(0x0a0d1c, 0.8);
+        this.heroOverheadGfx.fillStyle(0x0d0a08, 0.9);
         this.heroOverheadGfx.fillRect(barX - 1, qiY - 1, barW + 2, qiH + 2);
+        this.heroOverheadGfx.fillStyle(0x1b1411, 0.9);
+        this.heroOverheadGfx.fillRect(barX, qiY, barW, qiH);
         if (qiRatio > 0) {
-          this.heroOverheadGfx.fillStyle(this.ultimateStocks > 0 ? 0xfde047 : 0xd97706, 1);
+          this.heroOverheadGfx.fillStyle(this.ultimateStocks > 0 ? 0xecd492 : 0xc8a254, 1);
           this.heroOverheadGfx.fillRect(barX, qiY, Math.round(barW * qiRatio), qiH);
         }
 
@@ -1994,7 +2155,7 @@ export class DungeonScene extends Scene {
           if (this.heroHpText.text !== label) {
             this.heroHpText.setText(label);
           }
-          this.heroHpText.setPosition(hx, barY - 8);
+          this.heroHpText.setPosition(hx, barY - 9);
         }
       }
     }
@@ -2375,18 +2536,18 @@ export class DungeonScene extends Scene {
     e.flawTimer = duration;
     if (!e.flawRing) {
       e.flawRing = this.add
-        .circle(e.sprite.x, e.sprite.y, e.isBoss ? 34 : 24, 0xfef08a, 0.14)
-        .setStrokeStyle(3, 0xef4444)
+        .circle(e.sprite.x, e.sprite.y, e.isBoss ? 34 : 24, 0xecd492, 0.14)
+        .setStrokeStyle(3, 0xc23b2f)
         .setDepth(11);
     }
     if (!e.flawText) {
       e.flawText = this.add
         .text(e.sprite.x, barY - 26, 'FLAW!', {
-          fontFamily: 'monospace',
+          fontFamily: 'Georgia, "Times New Roman", serif',
           fontSize: '11px',
           fontStyle: 'bold',
-          color: '#fef08a',
-          stroke: '#7f1d1d',
+          color: '#ecd492',
+          stroke: '#5e1714',
           strokeThickness: 4,
         })
         .setOrigin(0.5)
@@ -3471,7 +3632,7 @@ export class DungeonScene extends Scene {
         enemy.sprite.x + (this.rng() - 0.5) * 16,
         enemy.sprite.y - 24,
         `${finalDmg}`,
-        '#e2e8f0',
+        '#e8dfd0',
         11,
         0.78,
         false
@@ -3555,7 +3716,7 @@ export class DungeonScene extends Scene {
         : 0;
     if (!enemy.isBoss && execThreshold > 0 && enemy.hp > 0 && enemy.hp / enemy.maxHp <= execThreshold) {
       enemy.hp = 0;
-      this.spawnFloatingText(enemy.sprite.x, enemy.sprite.y - 40, 'EXECUTE!', '#ef4444', 15);
+      this.spawnFloatingText(enemy.sprite.x, enemy.sprite.y - 40, 'EXECUTE!', '#d9534f', 15);
     }
 
     if (enemy.hp <= 0) {
@@ -3749,7 +3910,7 @@ export class DungeonScene extends Scene {
             .setStrokeStyle(3.5, 0xef4444, 0.95)
             .setDepth(10.5);
           soundFX.playBossTelegraph();
-          this.spawnFloatingText(e.sprite.x, e.sprite.y - 78, 'HEAVY STRIKE!', '#f87171', 15);
+          this.spawnFloatingText(e.sprite.x, e.sprite.y - 78, 'HEAVY STRIKE!', '#d9534f', 15);
         }
       }
     }
@@ -3855,7 +4016,7 @@ export class DungeonScene extends Scene {
       if (parts.length > 0) {
         e.statusBadge
           .setText(parts.join(' '))
-          .setColor(e.hitShield > 0 ? '#38bdf8' : '#fbbf24')
+          .setColor(e.hitShield > 0 ? '#7da6c7' : '#d49b38')
           .setPosition(e.isBoss ? e.sprite.x : e.sprite.x + 27, barY)
           .setVisible(true);
       } else {
@@ -4012,7 +4173,7 @@ export class DungeonScene extends Scene {
     if (dmg > 0) {
       this.heroHp = Math.max(0, this.heroHp - dmg);
       soundFX.playHit();
-      this.spawnFloatingText(this.heroX, this.groundY - 68, `-${dmg}`, '#f87171', 15);
+      this.spawnFloatingText(this.heroX, this.groundY - 68, `-${dmg}`, '#d9534f', 15);
       if (
         this.heroHp > 0 &&
         !this.coldJadeFreezeUsed &&
@@ -4069,7 +4230,7 @@ export class DungeonScene extends Scene {
     }
 
     if (showText && actual > 0) {
-      this.spawnFloatingText(this.heroX, this.groundY - 76, `+${actual}`, '#4ade80', 13);
+      this.spawnFloatingText(this.heroX, this.groundY - 76, `+${actual}`, '#6eb88d', 13);
     }
   }
 
@@ -4933,10 +5094,10 @@ export class DungeonScene extends Scene {
     finalDmg: number
   ): { text: string; color: string; size: number; stroke: string } {
     if (labelTag === 'ULTIMATE') {
-      return { text: `ULTIMATE CRIT! ${finalDmg}`, color: '#fde047', size: 16, stroke: '#000000' };
+      return { text: `ULTIMATE CRIT! ${finalDmg}`, color: '#ecd492', size: 16, stroke: '#120e0c' };
     }
     if (labelTag === 'SHATTER') {
-      return { text: `MERIDIAN SHATTER! ${finalDmg}`, color: '#fde047', size: 18, stroke: '#991b1b' };
+      return { text: `MERIDIAN SHATTER! ${finalDmg}`, color: '#ecd492', size: 18, stroke: '#7a1c17' };
     }
     const callouts: readonly string[] = [
       'MERIDIAN PIERCE!',
@@ -4948,7 +5109,7 @@ export class DungeonScene extends Scene {
       'HEAVEN CRIT!',
     ];
     const phrase = callouts[Math.floor(this.rng() * callouts.length)] ?? 'CRITICAL STRIKE!';
-    return { text: `${phrase} ${finalDmg}`, color: '#fde047', size: 15, stroke: '#000000' };
+    return { text: `${phrase} ${finalDmg}`, color: '#ecd492', size: 15, stroke: '#120e0c' };
   }
 
   private addUltimateGauge(amount: number): void {
@@ -4966,7 +5127,7 @@ export class DungeonScene extends Scene {
         this.heroX + 20,
         this.groundY - 112,
         `ULTIMATE READY (${this.ultimateStocks}/${this.maxUltimateStocks}) [R]`,
-        '#fde047',
+        '#ecd492',
         15
       );
     }
@@ -5108,7 +5269,7 @@ export class DungeonScene extends Scene {
         onComplete: () => taijiSeal.destroy(),
       });
       this.cameras.main.shake(100, 0.005);
-      this.spawnFloatingText(this.heroX + 35, this.groundY - 102, 'TAIJI PALM BREAK!', '#fef08a', 16);
+      this.spawnFloatingText(this.heroX + 35, this.groundY - 102, 'TAIJI PALM BREAK!', '#ecd492', 16);
       const dmg = Math.max(
         1,
         Math.round(this.stats.atk * 2.1 * this.stats.allDamageMult * this.stats.critDmg)
@@ -5126,7 +5287,7 @@ export class DungeonScene extends Scene {
 
     this.spawnQiShockwaveRing(this.heroX + 25, this.groundY - 30, 0xfde047, 175, 280);
     this.cameras.main.shake(110, 0.006);
-    this.spawnFloatingText(this.heroX + 40, this.groundY - 110, 'DANTIAN UNLEASHED!', '#fde047', 16);
+    this.spawnFloatingText(this.heroX + 40, this.groundY - 110, 'DANTIAN UNLEASHED!', '#ecd492', 16);
     for (const slot of loadout.actives) {
       this.castWuxiaActiveArt(slot.id, true);
     }
@@ -5171,7 +5332,7 @@ export class DungeonScene extends Scene {
       this.cameras.main.shake(120, 0.007);
       soundFX.playPerfectDodge();
       this.spawnHeroAfterimage(0xfde047);
-      this.spawnFloatingText(this.heroX + 28, this.groundY - 110, 'PERFECT DODGE!', '#fde047', 18);
+      this.spawnFloatingText(this.heroX + 28, this.groundY - 110, 'PERFECT DODGE!', '#ecd492', 18);
       this.spawnSlashVfx(perfectBoss.sprite.x, perfectBoss.sprite.y, 0xfde047, 1.75);
 
       const counterDmg = Math.max(
@@ -5184,7 +5345,7 @@ export class DungeonScene extends Scene {
       }
     } else {
       soundFX.playSwing();
-      this.spawnFloatingText(this.heroX + 20, this.groundY - 96, 'DASH!', '#38bdf8', 15);
+      this.spawnFloatingText(this.heroX + 20, this.groundY - 96, 'DASH!', '#ede3cf', 15);
     }
 
     // Defuse volatile hazards within 140px of hero
@@ -5193,7 +5354,7 @@ export class DungeonScene extends Scene {
       if (!h) continue;
       if (Math.abs(h.sprite.x - this.heroX) <= 140) {
         this.spawnHitSpark(h.sprite.x, h.sprite.y, false, 0x38bdf8);
-        this.spawnFloatingText(h.sprite.x, h.sprite.y - 26, 'DEFUSED!', '#38bdf8', 14);
+        this.spawnFloatingText(h.sprite.x, h.sprite.y - 26, 'DEFUSED!', '#ede3cf', 14);
         h.sprite.destroy();
         h.ring.destroy();
         this.hazards.splice(i, 1);
@@ -5206,7 +5367,7 @@ export class DungeonScene extends Scene {
       if (!ep) continue;
       if (Math.abs(ep.sprite.x - this.heroX) <= 160) {
         this.spawnHitSpark(ep.sprite.x, ep.sprite.y, false, 0x38bdf8);
-        this.spawnFloatingText(ep.sprite.x, ep.sprite.y - 22, 'DEFLECTED!', '#67e8f9', 13);
+        this.spawnFloatingText(ep.sprite.x, ep.sprite.y - 22, 'DEFLECTED!', '#ede3cf', 13);
         ep.sprite.destroy();
         ep.glow.destroy();
         this.enemyProjectiles.splice(i, 1);
@@ -5278,30 +5439,38 @@ export class DungeonScene extends Scene {
     }
   }
 
-  private spawnRelicAcquisitionBanner(title: string, subtitle: string, borderHex = 0xfde047): void {
+  private spawnRelicAcquisitionBanner(title: string, subtitle: string, borderHex = 0xc49f54): void {
     const w = this.scale.width || 1024;
+    const plaqueW = Math.min(430, w - 40);
+    const plaqueH = 54;
     const container = this.add.container(w / 2, 74).setDepth(26).setScale(0.7).setAlpha(0);
+    const shadow = this.add.rectangle(0, 3, plaqueW + 4, plaqueH + 4, 0x090706, 0.52);
     const bg = this.add
-      .rectangle(0, 0, Math.min(430, w - 40), 52, 0x0f172a, 0.92)
-      .setStrokeStyle(2, borderHex, 1);
+      .rectangle(0, 0, plaqueW, plaqueH, 0x16110e, 0.96)
+      .setStrokeStyle(2, borderHex, 0.9);
+    const innerRim = this.add
+      .rectangle(0, 0, plaqueW - 20, plaqueH - 10, 0x1c1511, 0.28)
+      .setStrokeStyle(1, 0xc49f54, 0.38);
+    const leftCap = this.add.rectangle(-plaqueW / 2 + 6, 0, 4, plaqueH - 14, 0x9e2a22, 0.92);
+    const rightCap = this.add.rectangle(plaqueW / 2 - 6, 0, 4, plaqueH - 14, 0x9e2a22, 0.92);
     const titleTxt = this.add
       .text(0, -10, title, {
-        fontFamily: 'monospace',
+        fontFamily: 'Georgia, "Times New Roman", serif',
         fontSize: '14px',
         fontStyle: 'bold',
-        color: '#fde047',
-        stroke: '#000000',
+        color: '#ecd492',
+        stroke: '#0d0a08',
         strokeThickness: 3,
       })
       .setOrigin(0.5);
     const subTxt = this.add
       .text(0, 10, subtitle, {
-        fontFamily: 'sans-serif',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         fontSize: '11px',
-        color: '#e2e8f0',
+        color: '#ede3cf',
       })
       .setOrigin(0.5);
-    container.add([bg, titleTxt, subTxt]);
+    container.add([shadow, bg, innerRim, leftCap, rightCap, titleTxt, subTxt]);
 
     this.tweens.add({
       targets: container,
@@ -5373,8 +5542,8 @@ export class DungeonScene extends Scene {
           this.spawnFloatingText(
             this.heroX + 20,
             this.groundY - 108,
-            'REWARD CHEST! +35 Gold • +4 Shards',
-            '#fde047',
+            'Relic Chest · +35g · +4s',
+            '#ecd492',
             15
           );
           this.spawnRelicAcquisitionBanner(
@@ -5385,7 +5554,7 @@ export class DungeonScene extends Scene {
                 : 'RELIC CHEST UNLOCKED',
             isCultLeaderFloor(this.floor)
               ? `Floor ${this.floor} Boss Trophy • Purify at Run End (+4 Shards)`
-              : `Floor ${this.floor} Gear Drop (35% Legendary chance) + 4 Shards`
+              : 'Relic Spoils · +4 Shards'
           );
         }
         l.sprite.destroy();
@@ -5402,7 +5571,7 @@ export class DungeonScene extends Scene {
     sizePx: number,
     alpha = 1,
     isCritical = sizePx >= 15,
-    strokeColor = '#000000'
+    strokeColor = '#120e0c'
   ): void {
     const maxFloatingTexts = 14;
     while (this.activeFloatingTexts.length >= maxFloatingTexts) {
@@ -5415,9 +5584,14 @@ export class DungeonScene extends Scene {
       }
     }
 
+    const isNumericOnly = /^[+-]?\d+$/.test(msg.trim());
+    const fontFamily = isNumericOnly
+      ? '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      : 'Georgia, "Times New Roman", serif';
+
     const txt = this.add
       .text(x, y, msg, {
-        fontFamily: 'monospace',
+        fontFamily,
         fontSize: `${sizePx}px`,
         fontStyle: 'bold',
         color,

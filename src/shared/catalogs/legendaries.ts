@@ -97,25 +97,25 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   // ======================== EXTERNAL MARTIAL RELICS (11) ========================
   {
     id: 'war_wep_ragnarok',
-    name: 'Dragon-Slaying Saber (屠龙刀)',
+    name: 'Dragon-Slaying Saber',
     classId: 'warrior',
     slot: 'weapon',
-    signatureText: 'Supreme Under Heaven, the Dragon Saber commands (号令天下，莫敢不从) — every 3rd strike unleashes a sweeping Nine-Yang flame wave.',
+    signatureText: 'Supreme Under Heaven, the Dragon Saber commands — every 3rd strike unleashes a sweeping Nine-Yang flame wave.',
     cursedName: 'Heavy Spirit Rebuke',
     cursedText: 'Swing healing effects are reduced by 50% for this run.',
   },
   {
     id: 'war_wep_worldbreaker',
-    name: 'Black-Iron Heavy Sword (玄铁重剑)',
+    name: 'Black-Iron Heavy Sword',
     classId: 'warrior',
     slot: 'weapon',
-    signatureText: 'Great skill requires no craft (重剑无锋，大巧不工) — sixty-four catties of meteoric dark iron: +150% Knockback; wall-slammed foes take 2x damage.',
+    signatureText: 'Great skill requires no craft — sixty-four catties of meteoric dark iron: +150% Knockback; wall-slammed foes take 2x damage.',
     cursedName: 'Leaden Iron Weight',
     cursedText: 'Attack Speed is slightly reduced by 10%.',
   },
   {
     id: 'war_wep_souldrinker',
-    name: 'Golden Serpent Sword (金蛇剑)',
+    name: 'Golden Serpent Sword',
     classId: 'warrior',
     slot: 'weapon',
     signatureText: 'Golden Serpent Lord Xia Xueyi’s serpentine blade — coils past enemy blocks and restores 3% Max HP per cultist defeated.',
@@ -124,7 +124,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'war_head_unbroken',
-    name: 'Dugu Sword-Intent Crown (独孤求败剑冠)',
+    name: 'Dugu Sword-Intent Crown',
     classId: 'warrior',
     slot: 'headgear',
     signatureText: 'The undefeated Sword Devil’s resolve: Gain +1% Attack for every 2% of missing HP.',
@@ -133,7 +133,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'war_head_berserker',
-    name: 'Blood-Blade Demon Monarch Crest (血刀老祖狂刀冠)',
+    name: 'Blood-Blade Demon Monarch Crest',
     classId: 'warrior',
     slot: 'headgear',
     signatureText: 'Blood Blade Grandmaster’s ruthless crest: automatically ignites Battle Frenzy at the start of every floor.',
@@ -142,7 +142,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'war_top_volcanic',
-    name: 'Nine-Yang Blazing Battle Robe (九阳炽阳战袍)',
+    name: 'Nine-Yang Blazing Battle Robe',
     classId: 'warrior',
     slot: 'top',
     signatureText: 'Woven with raw Nine-Yang inner heat: radiates searing solar Qi around you, damaging all nearby cultists.',
@@ -151,7 +151,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'war_top_titan',
-    name: 'Shaolin 72 Arts Kasaya (少林七十二绝技袈裟)',
+    name: 'Shaolin 72 Arts Kasaya',
     classId: 'warrior',
     slot: 'top',
     signatureText: 'Sacred Buddhist kasaya of the Bodhidharma Hall: converts 50% of your Armor rating into bonus Base Attack.',
@@ -160,7 +160,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'war_top_dragonscale',
-    name: 'Peach Blossom Soft Hedgehog Armor (桃花岛软猬甲)',
+    name: 'Peach Blossom Soft Hedgehog Armor',
     classId: 'warrior',
     slot: 'top',
     signatureText: 'Huang Rong’s gold-wire barbed hedgehog vest: reflects 120% of mitigated damage back to attackers.',
@@ -169,7 +169,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'war_cape_hundred',
-    name: 'Book of Wumu (武穆遗书军策)',
+    name: 'Book of Wumu',
     classId: 'warrior',
     slot: 'cape',
     signatureText: 'General Yue Fei’s legendary military treatise hidden inside the Dragon Saber: +2% Damage per floor cleared (up to +20%).',
@@ -178,7 +178,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'war_cape_crimson',
-    name: 'Beggar Sect Nine-Pocket Patchwork Mantle (丐帮九袋布衣氅)',
+    name: 'Beggar Sect Nine-Pocket Patchwork Mantle',
     classId: 'warrior',
     slot: 'cape',
     signatureText: 'The revered 9-pocket mantle of elder Beggar chiefs: all basic sect manuals drafted gain +50% increased stat effectiveness.',
@@ -187,7 +187,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'war_cape_aegis',
-    name: 'Mount Wudang Taiji Mantle (武当太极两仪披风)',
+    name: 'Mount Wudang Taiji Mantle',
     classId: 'warrior',
     slot: 'cape',
     signatureText: 'Zhang Sanfeng’s Yin-Yang deflection mantle: grants a regenerating spirit barrier equal to 25% Max HP every floor.',
@@ -198,16 +198,16 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   // ======================== PASSIVE SKILL RELICS (12) ========================
   {
     id: 'mage_wep_starlight',
-    name: 'Heaven-Reliant Sword (倚天剑)',
+    name: 'Heaven-Reliant Sword',
     classId: 'mage',
     slot: 'weapon',
-    signatureText: 'None dare contest under the heavens (谁与争锋) — twin sister to the Dragon-Slaying Saber: basic attacks loose 3 homing starlight sword bolts.',
+    signatureText: 'None dare contest under the heavens — twin sister to the Dragon-Slaying Saber: basic attacks loose 3 homing starlight sword bolts.',
     cursedName: 'Flickering Meridian',
     cursedText: 'Every 10th technique has a slight cast delay.',
   },
   {
     id: 'mage_wep_abyssal',
-    name: 'Dog-Beating Bamboo Staff (打狗棒)',
+    name: 'Dog-Beating Bamboo Staff',
     classId: 'mage',
     slot: 'weapon',
     signatureText: 'Sacred emerald bamboo staff of the Beggar Sect Chiefs: 20% chance on strike to summon an emerald vortex pulling cultists inward.',
@@ -216,7 +216,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'mage_wep_glacial',
-    name: 'Green-Jade Peach Blossom Flute (碧玉笛)',
+    name: 'Green-Jade Peach Blossom Flute',
     classId: 'mage',
     slot: 'weapon',
     signatureText: 'Eastern Heretic Huang Yaoshi’s jade flute: plays the Azure Tide Symphony — every note slows cultists and shatters AoE soundwaves on death.',
@@ -225,7 +225,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'mage_head_archmage',
-    name: 'Wudang Pure-Yang Daoist Crown (武当纯阳太极冠)',
+    name: 'Wudang Pure-Yang Daoist Crown',
     classId: 'mage',
     slot: 'headgear',
     signatureText: 'Zhang Sanfeng’s supreme Daoist crown: empowers all comprehended Passive Skills at +1 higher potency.',
@@ -234,7 +234,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'mage_head_chaos',
-    name: 'Carefree Sect Seven-Treasure Hairpin (逍遥派七宝玉簪)',
+    name: 'Carefree Sect Seven-Treasure Hairpin',
     classId: 'mage',
     slot: 'headgear',
     signatureText: 'Tianshan Child Elder’s immortal hairpin: casting a Martial Technique triggers a secondary spirit burst at 50% power.',
@@ -243,7 +243,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'mage_head_sparks',
-    name: 'Dali Six-Pulse Meridian Circlet (大理六脉神剑玉环)',
+    name: 'Dali Six-Pulse Meridian Circlet',
     classId: 'mage',
     slot: 'headgear',
     signatureText: 'Dali Duan royal clan’s Qi circlet: Six-Pulse sword arcs bounce +4 additional times across the chamber.',
@@ -252,7 +252,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'mage_top_frost',
-    name: 'Ancient Tomb Cold-Jade Silk (古墓千年寒玉冰丝袍)',
+    name: 'Ancient Tomb Cold-Jade Silk',
     classId: 'mage',
     slot: 'top',
     signatureText: 'Carved from the hundred-year Cold-Jade Bed: stuns & freezes cultist meridians chamber-wide for 2s when your HP drops below 30%.',
@@ -261,7 +261,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'mage_top_astral',
-    name: 'Mount Hua Violet-Mist Robe (华山紫霞神功道袍)',
+    name: 'Mount Hua Violet-Mist Robe',
     classId: 'mage',
     slot: 'top',
     signatureText: 'Revered Daoist vestment of Mount Hua’s Violet Mist Art: reduces all Martial Technique cooldowns by 30%.',
@@ -270,7 +270,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'mage_top_phoenix',
-    name: 'Golden Bell Arhat Kasaya (金钟罗汉金光袈裟)',
+    name: 'Golden Bell Arhat Kasaya',
     classId: 'mage',
     slot: 'top',
     signatureText: 'Sacred Buddhist kasaya of Mount Song: revive once per spire delve with 50% HP and a massive Nine-Yang solar nova.',
@@ -279,7 +279,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'mage_cape_tome',
-    name: 'Nine-Yin Sacred Sutra Scroll (九阴真经遗卷披风)',
+    name: 'Nine-Yin Sacred Sutra Scroll',
     classId: 'mage',
     slot: 'cape',
     signatureText: 'Daoist Huang Chang’s supreme immortal canon: summons 2 orbiting sutra talismans that strike nearby cultists continuously.',
@@ -288,7 +288,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'mage_cape_tempest',
-    name: 'Kunlun Iron-Lute Melody Mantle (昆仑三圣铁琴鹤氅)',
+    name: 'Kunlun Iron-Lute Melody Mantle',
     classId: 'mage',
     slot: 'cape',
     signatureText: 'He Zudao’s three-saint cloud mantle: every 10s, calls down a resonant falling-star palm barrage dealing massive AoE damage.',
@@ -297,7 +297,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'mage_cape_seraphim',
-    name: 'Lingbo Carefree Cloud Mantle (逍遥凌波御风仙氅)',
+    name: 'Lingbo Carefree Cloud Mantle',
     classId: 'mage',
     slot: 'cape',
     signatureText: 'Echoes of the Goddess of Luo River footwork: soar lightly on Lingbo Microsteps, dodging 35% of ground melee strikes.',
@@ -308,7 +308,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   // ======================== SHADOW & NIGHT-WALKER RELICS (11) ========================
   {
     id: 'thief_wep_shadowfang',
-    name: 'Gentleman & Lady Twin Swords (君子剑 & 淑女剑)',
+    name: 'Gentleman & Lady Twin Swords',
     classId: 'thief',
     slot: 'weapon',
     signatureText: 'Passionless Valley twin dark-steel magnetic blades: every critical hit spawns a Sword-Shadow afterimage mimic.',
@@ -317,7 +317,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'thief_wep_phantom',
-    name: 'Ice-Soul Silver Needles (冰魄银针)',
+    name: 'Ice-Soul Silver Needles',
     classId: 'thief',
     slot: 'weapon',
     signatureText: 'Red-Dust Fairy Li Mochou’s lethal silver needles — forged with freezing venom that pierces guard: strikes ignore 60% of Armor and inflict Bleed.',
@@ -326,7 +326,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'thief_head_eclipse',
-    name: 'Linghu Chong Wanderer Headband (令狐冲笑傲束发带)',
+    name: 'Linghu Chong Wanderer Headband',
     classId: 'thief',
     slot: 'headgear',
     signatureText: 'Mount Hua prodigy Linghu Chong’s carefree headband — reads every flaw in an instant: guaranteed 100% Critical Hit Chance for the first 4 seconds of every floor.',
@@ -335,7 +335,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'thief_head_bandana',
-    name: 'Ancient Tomb Jade-Bee Hood (古墓玉蜂针冠)',
+    name: 'Ancient Tomb Jade-Bee Hood',
     classId: 'thief',
     slot: 'headgear',
     signatureText: 'Ancient Tomb Sect’s prized Jade-Bee Needle crest: projectiles and needle waves pierce through up to 3 cultists in a line.',
@@ -344,7 +344,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'thief_head_fox',
-    name: 'Yang Guo Human-Skin Mask (杨过人皮面具)',
+    name: 'Yang Guo Human-Skin Mask',
     classId: 'thief',
     slot: 'headgear',
     signatureText: 'The Condor Hero’s uncanny disguise crafted by Cheng Ying: +30% Dodge Chance; evading an attack triggers an instant counter-slash.',
@@ -353,7 +353,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'thief_top_silentstep',
-    name: 'Lingbo Microsteps Silk Tunic (凌波微步罗袜天衣)',
+    name: 'Lingbo Microsteps Silk Tunic',
     classId: 'thief',
     slot: 'top',
     signatureText: 'Duan Yu’s effortless divine footwork: Shadow-Step Dash glides instantly between foes with brief invulnerability.',
@@ -362,7 +362,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'thief_top_shadowweave',
-    name: 'Golden Silk Impenetrable Vest (金丝宝甲软衣)',
+    name: 'Golden Silk Impenetrable Vest',
     classId: 'thief',
     slot: 'top',
     signatureText: 'Woven from thousands of spun gold threads impervious to all blades: increases Critical Hit Damage by +100%.',
@@ -371,7 +371,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'thief_top_goldvest',
-    name: 'Beggar Sect Thousand-Coin Brocade (丐帮九袋聚宝锦衣)',
+    name: 'Beggar Sect Thousand-Coin Brocade',
     classId: 'thief',
     slot: 'top',
     signatureText: 'Cultists drop +60% more Gold; gain +1% Damage per 1,000 Gold held.',
@@ -380,7 +380,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'thief_cape_afterimage',
-    name: 'Peach Blossom Mirage Cloak (桃花岛八卦遁影斗篷)',
+    name: 'Peach Blossom Mirage Cloak',
     classId: 'thief',
     slot: 'cape',
     signatureText: 'Huang Yaoshi’s illusion formation: leaves behind explosive thunder-powder decoys every time you dodge or dash.',
@@ -389,7 +389,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'thief_cape_crimsonmoon',
-    name: 'Blood-Blade Sect Red Lotus Scarf (血刀门嗜血红绸)',
+    name: 'Blood-Blade Sect Red Lotus Scarf',
     classId: 'thief',
     slot: 'cape',
     signatureText: 'Blood-Blade sect butcher scarf: executes normal cultists below 20% HP instantly.',
@@ -398,7 +398,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'thief_cape_batwing',
-    name: 'Green-Winged Bat King Mantle (青翼蝠王寒玉蝠氅)',
+    name: 'Green-Winged Bat King Mantle',
     classId: 'thief',
     slot: 'cape',
     signatureText: 'Ming Cult guardian Wei Yixiao’s icy wings: converts 15% of all Critical Damage dealt into vitality healing.',
@@ -409,7 +409,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   // ======================== CONDOR & SWORD SOVEREIGN RELICS (12) ========================
   {
     id: 'bow_wep_galeforce',
-    name: 'Genghis Khan Iron-Horn Warbow (成吉思汗铁胎巨弓)',
+    name: 'Genghis Khan Iron-Horn Warbow',
     classId: 'bowman',
     slot: 'weapon',
     signatureText: 'Guo Jing’s hundred-stone steppe warbow used to fell the twin condors: looses +2 additional projectiles in a spread on every attack.',
@@ -418,7 +418,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'bow_wep_worldtree',
-    name: 'Ancient Tomb Golden-Bell Silk Ribbon (古墓金铃白绸带)',
+    name: 'Ancient Tomb Golden-Bell Silk Ribbon',
     classId: 'bowman',
     slot: 'weapon',
     signatureText: 'Xiaolongnü’s white silk ribbon with silver bells: 25% chance on hit to seal cultist acupoints (root) and sprout healing spirit orbs.',
@@ -427,7 +427,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'bow_wep_thunderbird',
-    name: 'Golden Wheel Monk’s Five Dharma Wheels (金轮法王五轮法宝)',
+    name: 'Golden Wheel Monk’s Five Dharma Wheels',
     classId: 'bowman',
     slot: 'weapon',
     signatureText: 'Five whirling wheels of gold, silver, copper, iron, and lead: every 5th shot unleashes a piercing Five-Wheel thunder bolt.',
@@ -436,7 +436,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'bow_head_feathered',
-    name: 'Condor-Shooting Hero Plume Crest (射雕英雄白雕冠)',
+    name: 'Condor-Shooting Hero Plume Crest',
     classId: 'bowman',
     slot: 'headgear',
     signatureText: '+40% Attack Speed and +20% Range on all Martial Technique projectiles.',
@@ -445,7 +445,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'bow_head_beastmaster',
-    name: 'Divine Condor Companion Crest (神雕大侠剑冢雕冠)',
+    name: 'Divine Condor Companion Crest',
     classId: 'bowman',
     slot: 'headgear',
     signatureText: 'Yang Guo’s loyal giant Condor crest: summons a second spectral Wolf guardian alongside your Condor.',
@@ -454,7 +454,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'bow_head_hawkeye',
-    name: 'Hundred-Pace Yang-Leaf Visor (百步穿杨神射镜)',
+    name: 'Hundred-Pace Yang-Leaf Visor',
     classId: 'bowman',
     slot: 'headgear',
     signatureText: 'Master archer Yang Youji’s leaf-piercing focus: Damage increases by up to +80% based on distance to the cultist.',
@@ -463,7 +463,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'bow_top_apexpredator',
-    name: 'Zhongnan Mountain Divine Condor Tunic (终南山神雕羽衣)',
+    name: 'Zhongnan Mountain Divine Condor Tunic',
     classId: 'bowman',
     slot: 'top',
     signatureText: 'Woven from molted feathers of Dugu Qiubai’s Divine Condor: your companions inherit 100% of your Crit Rate and Crit DMG.',
@@ -472,7 +472,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'bow_top_windrunner',
-    name: 'Willow-Gliding Wind-Riding Tunic (随风拂柳踏燕飞烟衣)',
+    name: 'Willow-Gliding Wind-Riding Tunic',
     classId: 'bowman',
     slot: 'top',
     signatureText: 'Every 3rd dodge unleashes a free volley of 5 homing spirit blades.',
@@ -481,7 +481,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'bow_top_camouflage',
-    name: 'Peach Blossom Misty Bamboo Cloak (桃花岛迷雾竹蓑)',
+    name: 'Peach Blossom Misty Bamboo Cloak',
     classId: 'bowman',
     slot: 'top',
     signatureText: 'Huang Yaoshi’s mist formation: cultists take 2 seconds longer to notice you when entering a floor.',
@@ -490,7 +490,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'bow_cape_endlesssky',
-    name: 'Nine-Heavens Condor Cloud Cloak (九天鹏抟垂云锦氅)',
+    name: 'Nine-Heavens Condor Cloud Cloak',
     classId: 'bowman',
     slot: 'cape',
     signatureText: 'On-hit technique & relic triggers have double the chance to activate.',
@@ -499,7 +499,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'bow_cape_goldenfalcon',
-    name: 'Steppe Golden Eagle Hunting Mantle (塞外金雕猎风大氅)',
+    name: 'Steppe Golden Eagle Hunting Mantle',
     classId: 'bowman',
     slot: 'cape',
     signatureText: 'Your Condor companion periodically drops Gold and vitality orbs mid-fight.',
@@ -508,7 +508,7 @@ export const LEGENDARY_CATALOG: readonly LegendaryDefinition[] = [
   },
   {
     id: 'bow_cape_sylvanspirit',
-    name: 'Passionless Valley Cold-Plum Mantle (绝情谷寒梅灵素斗篷)',
+    name: 'Passionless Valley Cold-Plum Mantle',
     classId: 'bowman',
     slot: 'cape',
     signatureText: 'All Esoteric Manuals appear 2x more frequently when comprehending.',

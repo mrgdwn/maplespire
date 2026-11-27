@@ -43,7 +43,9 @@ import {
   getDailyMasteryBounty,
   getDismantleShardValue,
   getLegionUpgradeCost,
+  getMiniBossLegendaryChance,
   getNextBanishSlotCost,
+  getRegularFloorRareChance,
   getSlotUpgradeCost,
   getUtcDateKey,
   hashString,
@@ -348,7 +350,9 @@ api.post('/run/complete', async (c) => {
         rawDrops.push(createGearItem(rng, classId, slot, 'rare', f, `f${f}`));
       } else if (rng() < 0.45) {
         const slot = slots[Math.floor(rng() * slots.length)] ?? 'weapon';
-        rawDrops.push(createGearItem(rng, classId, slot, 'normal', f, `f${f}`));
+        const tier: 'normal' | 'rare' =
+          rng() < getRegularFloorRareChance(f) ? 'rare' : 'normal';
+        rawDrops.push(createGearItem(rng, classId, slot, tier, f, `f${f}`));
       }
     }
 
@@ -392,7 +396,7 @@ api.post('/run/complete', async (c) => {
         !isCultLeaderFloor(f) &&
         (isRandomMiniBossFloor(f, dropSeed) || (f >= 25 && f % 10 === 5))
       ) {
-        if (rng() < 0.35) {
+        if (rng() < getMiniBossLegendaryChance(f)) {
           legendaryDrops.push(
             createLegendaryGearItem(rng, classId, rng() >= 0.65, `mb${f}`, f)
           );

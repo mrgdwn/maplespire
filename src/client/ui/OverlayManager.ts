@@ -25,6 +25,8 @@ import {
   refreshWuxiaDraftCard,
   rollWuxiaDraftCards,
   type WuxiaDraftOption,
+  type WuxiaLoadoutSummary,
+  type WuxiaSecretSynergy,
 } from '../../shared/catalogs/wuxia.ts';
 import {
   CLASS_CATALOG,
@@ -71,7 +73,9 @@ import {
   getDismantleShardValue,
   getLegionUpgradeCost,
   getLoginStreakStatus,
+  getMiniBossLegendaryChance,
   getNextBanishSlotCost,
+  getRegularFloorRareChance,
   getSlotUpgradeCost,
   getUtcDateKey,
   hashString,
@@ -87,7 +91,9 @@ import {
 } from '../../shared/utils.ts';
 import { renderHeroPaperdollCanvas } from '../fx/pixelArt.ts';
 import { soundFX } from '../fx/sound.ts';
-import { initAstryxRootAttributes, unmountAstryxRootsInside } from './AstryxWidgets.tsx';
+import { mountWuxiaVista, type VistaController } from '../fx/wuxiaVista.ts';
+import { createWuxiaIcon, slotToIconId, type WuxiaIconId } from './icons.ts';
+import { createRelicEmblem, createSkillEmblem } from './skillArt.ts';
 import {
   mountHdActionRow,
   mountHdBadge,
@@ -107,6 +113,104 @@ type CampTab = 'home' | 'roster' | 'buildings' | 'codex' | 'leaderboard';
 
 const LOCAL_PROFILE_KEY = 'wuxiaspire_local_profile_v2';
 const DISCOVERED_SYNERGIES_KEY = 'wuxiaspire_discovered_synergies_v1';
+const AUTO_DRAFT_MODE_KEY = 'wuxiaspire_auto_draft_v1';
+
+type AutoDraftMode = 'off' | 'when_full' | 'always';
+
+const loadAutoDraftMode = (): AutoDraftMode => {
+  try {
+    const raw = window.localStorage.getItem(AUTO_DRAFT_MODE_KEY);
+    if (raw === 'when_full' || raw === 'always' || raw === 'off') return raw;
+  } catch {
+    // Ignore storage errors
+  }
+  return 'off';
+};
+
+const saveAutoDraftMode = (mode: AutoDraftMode): void => {
+  try {
+    window.localStorage.setItem(AUTO_DRAFT_MODE_KEY, mode);
+  } catch {
+    // Ignore storage errors
+  }
+};
+
+const nextAutoDraftMode = (mode: AutoDraftMode): AutoDraftMode => {
+  if (mode === 'off') return 'when_full';
+  if (mode === 'when_full') return 'always';
+  return 'off';
+};
+
+const formatAutoDraftLabel = (mode: AutoDraftMode, compact: boolean = false): string => {
+  if (mode === 'when_full') return compact ? 'Auto: Full' : 'Auto-Draft: Full Slots';
+  if (mode === 'always') return compact ? 'Auto: ON' : 'Auto-Draft: Always';
+  return compact ? 'Auto: Off' : 'Auto-Draft: OFF';
+};
+
+const formatSynergyStatChips = (syn: WuxiaSecretSynergy): string[] => {
+  const chips: string[] = [
+    `${syn.powerMult.toFixed(2)}x ATK`,
+    `${syn.projectileCount}x Strike`,
+    `${(syn.cooldownMs / 1000).toFixed(2)}s CD`,
+  ];
+  const s = syn.bonusStats;
+  if (s.atkPct) chips.push(`+${Math.round(s.atkPct * 100)}% ATK`);
+  if (s.hpPct) chips.push(`+${Math.round(s.hpPct * 100)}% HP`);
+  if (s.speedPct) chips.push(`+${Math.round(s.speedPct * 100)}% SPD`);
+  if (s.armorFlat) chips.push(`+${s.armorFlat} ARM`);
+  if (s.critChance) chips.push(`+${Math.round(s.critChance * 100)}% Crit`);
+  if (s.critDamage) chips.push(`+${Math.round(s.critDamage * 100)}% Crit DMG`);
+  if (s.dodgeChance) chips.push(`+${Math.round(s.dodgeChance * 100)}% Dodge`);
+  if (s.cooldownReduction) chips.push(`+${Math.round(s.cooldownReduction * 100)}% CDR`);
+  if (s.lifesteal) chips.push(`+${Math.round(s.lifesteal * 100)}% Leech`);
+  if (s.goldBonusPct) chips.push(`+${Math.round(s.goldBonusPct * 100)}% Gold`);
+  if (s.shieldOnFloor) chips.push(`+${s.shieldOnFloor} Shield`);
+  return chips;
+};
+
+const pickSmartAutoDraft = (
+  cards: readonly WuxiaDraftOption[],
+  loadout: WuxiaLoadoutSummary
+): WuxiaDraftOption | null => {
+  if (cards.length === 0) return null;
+  const ownedActiveIds = new Set(loadout.actives.map((a) => a.id));
+  const ownedQiIds = new Set(loadout.innerQis.map((q) => q.id));
+
+  let best = cards[0]!;
+  let bestScore = -1;
+
+  for (const card of cards) {
+    let score = 0;
+    if (card.kind === 'synergy' || card.isSecretAwakening) {
+      score += 1000;
+    } else if (card.kind === 'active') {
+      const pairsOwnedQi = WUXIA_SECRET_SYNERGIES.some(
+        (syn) => syn.activeId === card.id && ownedQiIds.has(syn.innerQiId)
+      );
+      if (card.currentLevel > 0) {
+        score += 260 + (card.nextLevel === 3 ? 90 : card.nextLevel === 5 ? 70 : 20);
+      } else {
+        score += 160;
+      }
+      if (pairsOwnedQi) score += 320;
+    } else if (card.kind === 'inner_qi') {
+      const pairsOwnedActive = WUXIA_SECRET_SYNERGIES.some(
+        (syn) => syn.innerQiId === card.id && ownedActiveIds.has(syn.activeId)
+      );
+      score += card.currentLevel > 0 ? 210 : 130;
+      if (pairsOwnedActive) score += 340;
+    } else {
+      // Enlightenment scroll
+      score += 80;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = card;
+    }
+  }
+  return best;
+};
 
 const loadDiscoveredSynergies = (): Set<string> => {
   try {
@@ -139,6 +243,13 @@ const recordDiscoveredSynergy = (synergyId: string): boolean => {
   return true;
 };
 
+const GEAR_SLOT_LABELS: Record<GearSlot, string> = {
+  weapon: 'Weapon',
+  headgear: 'Crown',
+  top: 'Robe',
+  cape: 'Mantle',
+};
+
 const RELIC_LINEAGE_LABELS: Record<ClassId, string> = {
   warrior: 'External Relic',
   mage: 'Internal Relic',
@@ -165,10 +276,13 @@ export class OverlayManager {
   private lastHudBuffsKey: string = '';
   private activeModal: HTMLElement | null = null;
   private menuCleanup: (() => void) | null = null;
+  private draftKeyCleanup: (() => void) | null = null;
+  private campVista: VistaController | null = null;
   private codexDrawerOpen: boolean = false;
   private utilityMenuOpen: boolean = false;
   private bankedRerolls: number = 2;
   private isDraftMinimized: boolean = false;
+  private autoDraftMode: AutoDraftMode = loadAutoDraftMode();
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -286,7 +400,6 @@ export class OverlayManager {
   }
 
   public async initialize(): Promise<void> {
-    initAstryxRootAttributes();
     const cached = this.loadLocalProfile();
     if (cached) {
       this.state.profile = cached;
@@ -399,8 +512,11 @@ export class OverlayManager {
 
   private clearModal(): void {
     this.toggleCodexDrawer(false);
+    if (this.draftKeyCleanup) {
+      this.draftKeyCleanup();
+      this.draftKeyCleanup = null;
+    }
     if (this.activeModal) {
-      unmountAstryxRootsInside(this.activeModal);
       this.activeModal.remove();
       this.activeModal = null;
     }
@@ -732,6 +848,13 @@ export class OverlayManager {
     }
   }
 
+  private destroyCampVista(): void {
+    if (this.campVista) {
+      this.campVista.destroy();
+      this.campVista = null;
+    }
+  }
+
   private openCampTab(tab: CampTab): void {
     soundFX.playRouletteTick();
     this.activeTab = tab;
@@ -742,7 +865,7 @@ export class OverlayManager {
     this.mode = 'camp';
     this.clearModal();
     this.releaseMenuKeys();
-    unmountAstryxRootsInside(this.root);
+    this.destroyCampVista();
     this.root.innerHTML = '';
 
     const p = this.state.profile;
@@ -753,24 +876,43 @@ export class OverlayManager {
 
     const wrap = this.el('div', 'hd-camp');
     wrap.style.setProperty('--hd-accent', biome.accentHex);
-    wrap.appendChild(this.el('div', 'hd-scene'));
 
-    // Top status window: realm level + currencies + sound
-    const topbar = this.el('div', 'hd-topbar hd-win');
+    // Top status bar: realm level + currencies + login streak + sound
+    const topbar = this.el('div', 'hd-topbar hd-bar');
     topbar.appendChild(this.el('span', 'hd-topbar__lv', `Lv ${selProg.level}`));
     const purse = this.el('div', 'hd-purse');
-    const purseItems: readonly { label: string; value: number; cls: string }[] = [
-      { label: 'Gold', value: p.gold, cls: 'is-gold' },
-      { label: 'Shards', value: p.shards, cls: 'is-jade' },
-      { label: 'Cores', value: p.bossCores, cls: 'is-violet' },
+    const purseItems: readonly { label: string; value: number; cls: string; icon: WuxiaIconId }[] = [
+      { label: 'Gold', value: p.gold, cls: 'is-gold', icon: 'gold' },
+      { label: 'Shards', value: p.shards, cls: 'is-jade', icon: 'shard' },
+      { label: 'Cores', value: p.bossCores, cls: 'is-violet', icon: 'core' },
     ];
     for (const item of purseItems) {
       const cell = this.el('span', `hd-purse__item ${item.cls}`);
+      cell.appendChild(createWuxiaIcon(item.icon, 13, 'hd-purse__icon'));
       cell.appendChild(this.el('span', 'hd-purse__label', item.label));
       cell.appendChild(this.el('span', 'hd-purse__val', item.value.toLocaleString()));
       purse.appendChild(cell);
     }
     topbar.appendChild(purse);
+
+    const streakStatus = getLoginStreakStatus(p, daily.dateKey);
+    const loginBtn = this.el(
+      'button',
+      `topbar-login-btn ${streakStatus.canClaimToday ? 'is-claimable' : 'is-claimed'}`,
+      streakStatus.canClaimToday
+        ? `Login · Day ${streakStatus.nextStreak}`
+        : `Streak ${p.loginStreak.currentStreak}d`
+    );
+    loginBtn.type = 'button';
+    loginBtn.title = streakStatus.canClaimToday
+      ? `Claim Day ${streakStatus.nextStreak} Daily Login Reward`
+      : 'View 7-Day Login Cycle & Long-Streak Milestones';
+    loginBtn.addEventListener('click', () => {
+      soundFX.playRouletteTick();
+      this.openLoginStreakModal();
+    });
+    topbar.appendChild(loginBtn);
+
     const muteBtn = this.el('button', 'hd-icon-btn', soundFX.isMuted() ? 'Muted' : 'Audio');
     muteBtn.title = 'Toggle sound';
     muteBtn.addEventListener('click', () => {
@@ -789,7 +931,7 @@ export class OverlayManager {
         leaderboard: 'Leaderboard',
       };
       const screen = this.el('div', 'hd-screen');
-      const head = this.el('div', 'hd-screen__head hd-win');
+      const head = this.el('div', 'hd-screen__head hd-bar');
       const back = this.el('button', 'hd-back', '◀ Back');
       back.addEventListener('click', () => this.openCampTab('home'));
       head.appendChild(back);
@@ -821,6 +963,12 @@ export class OverlayManager {
   }
 
   private renderHomeScreen(wrap: HTMLElement, dailyCompleted: boolean, biomeName: string): void {
+    const vistaCanvas = document.createElement('canvas');
+    vistaCanvas.className = 'hd-camp__vista';
+    vistaCanvas.setAttribute('aria-hidden', 'true');
+    wrap.insertBefore(vistaCanvas, wrap.firstChild);
+    this.campVista = mountWuxiaVista(vistaCanvas, { showWanderer: false, pagodaSide: 'right' });
+
     const p = this.state.profile;
     const selProg = p.classes[p.selectedClass];
     const todayKey = this.state.daily.dateKey;
@@ -829,79 +977,36 @@ export class OverlayManager {
     const bountyDone = p.loginStreak.dailyBountyCompletedDate === todayKey;
     const chestsClaimedToday =
       p.loginStreak.dailyChestsDate === todayKey ? p.loginStreak.dailyChestsClaimed : [];
-    const streakStatus = getLoginStreakStatus(p, todayKey);
 
     const titleBlock = this.el('div', 'hd-title');
-    titleBlock.appendChild(this.el('h1', 'hd-title__main', 'WUXIA SPIRE'));
-    titleBlock.appendChild(this.el('div', 'hd-title__sub', 'Tower Roguelite'));
-
-    const loginActionRow = this.el('div', 'home-login-row');
-    if (streakStatus.canClaimToday) {
-      const claimLabel = streakStatus.isMilestone30
-        ? `Daily Login (Day ${streakStatus.nextStreak} · Relic Pick)`
-        : streakStatus.isMilestone21
-          ? `Daily Login (Day ${streakStatus.nextStreak} · Free Purify)`
-          : streakStatus.isMilestone14
-            ? `Daily Login (Day ${streakStatus.nextStreak} · 1-of-3 Relic)`
-            : streakStatus.nextCycleDay === 7
-              ? `Daily Login (Day ${streakStatus.nextStreak} · Legendary)`
-              : `Daily Login (Day ${streakStatus.nextStreak})`;
-      const loginBtn = this.el('button', 'home-login-btn is-claimable', claimLabel);
-      loginBtn.type = 'button';
-      loginBtn.addEventListener('click', () => {
-        soundFX.playRouletteTick();
-        this.openLoginStreakModal();
-      });
-      loginActionRow.appendChild(loginBtn);
-    } else {
-      const streakPill = this.el(
-        'button',
-        'home-login-btn is-claimed',
-        `Streak: ${p.loginStreak.currentStreak}d`
-      );
-      streakPill.type = 'button';
-      streakPill.title = 'View 7-Day Login Cycle & Long-Streak Milestones';
-      streakPill.addEventListener('click', () => {
-        soundFX.playRouletteTick();
-        this.openLoginStreakModal();
-      });
-      loginActionRow.appendChild(streakPill);
-    }
-    titleBlock.appendChild(loginActionRow);
+    const titleRow = this.el('div', 'hd-title__row');
+    const seal = this.el('span', 'wuxia-seal', '武');
+    seal.setAttribute('aria-hidden', 'true');
+    titleRow.appendChild(seal);
+    titleRow.appendChild(this.el('h1', 'hd-title__main', 'WUXIA SPIRE'));
+    titleBlock.appendChild(titleRow);
+    titleBlock.appendChild(this.el('div', 'hd-title__sub', 'Nine Heavens · Daily Spire'));
     wrap.appendChild(titleBlock);
 
-    // Compact Daily Spire Briefing Strip
-    const briefing = this.el('div', 'daily-briefing hd-win');
+    // Single-line Daily Spire Ribbon
+    const briefing = this.el('div', 'daily-briefing daily-briefing--slim hd-win');
 
-    const decreeRow = this.el('div', 'daily-briefing__row');
-    decreeRow.appendChild(this.el('span', 'daily-briefing__tag is-gold', 'Sect Decree'));
-    const decreeBody = this.el('div', 'daily-briefing__text');
-    decreeBody.appendChild(this.el('strong', 'daily-briefing__name', decree.name));
-    decreeBody.appendChild(this.el('span', 'daily-briefing__desc', ` — ${decree.summary}`));
-    decreeRow.appendChild(decreeBody);
-    briefing.appendChild(decreeRow);
+    const decreeSpan = this.el('span', 'daily-briefing__item daily-briefing__name', decree.name);
+    decreeSpan.title = `Sect Decree — ${decree.name}: ${decree.summary}`;
+    briefing.appendChild(decreeSpan);
 
-    const bountyRow = this.el('div', 'daily-briefing__row');
-    bountyRow.appendChild(this.el('span', 'daily-briefing__tag is-jade', 'Mastery Bounty'));
-    const bountyBody = this.el('div', 'daily-briefing__text');
-    bountyBody.appendChild(this.el('span', 'daily-briefing__desc', bounty.description));
-    bountyRow.appendChild(bountyBody);
-    const bountyMeta = this.el('div', 'daily-briefing__meta');
-    bountyMeta.appendChild(
-      this.el('span', 'daily-briefing__reward', `+${bounty.shardReward} Shards`)
+    briefing.appendChild(this.el('span', 'daily-briefing__sep', '·'));
+
+    const bountySpan = this.el(
+      'span',
+      `daily-briefing__item daily-briefing__status ${bountyDone ? 'is-done' : 'is-active'}`,
+      bountyDone ? 'Bounty: Done' : `Bounty: +${bounty.shardReward}s`
     );
-    bountyMeta.appendChild(
-      this.el(
-        'span',
-        `daily-briefing__status ${bountyDone ? 'is-done' : 'is-active'}`,
-        bountyDone ? 'Done' : 'Active'
-      )
-    );
-    bountyRow.appendChild(bountyMeta);
-    briefing.appendChild(bountyRow);
+    bountySpan.title = `Mastery Bounty: ${bounty.description} (+${bounty.shardReward} Shards)`;
+    briefing.appendChild(bountySpan);
 
-    const chestRow = this.el('div', 'daily-briefing__row daily-briefing__row--chests');
-    chestRow.appendChild(this.el('span', 'daily-briefing__tag', 'Daily Chests'));
+    briefing.appendChild(this.el('span', 'daily-briefing__sep', '·'));
+
     const chestPills = this.el('div', 'daily-chest-pills');
     for (const floor of DAILY_CHEST_FLOORS) {
       const claimed = chestsClaimedToday.includes(floor);
@@ -916,19 +1021,18 @@ export class OverlayManager {
         : `Reach Floor ${floor} in Daily Run: +${reward.gold}g, +${reward.shards} Shards${reward.legendaryDrop ? ', Pristine Legendary' : reward.rareDrop ? ', Rare Relic' : ''}`;
       chestPills.appendChild(pill);
     }
-    chestRow.appendChild(chestPills);
-    briefing.appendChild(chestRow);
+    briefing.appendChild(chestPills);
 
     wrap.appendChild(briefing);
 
     const heroStage = this.el('div', 'hd-hero');
     const heroCanvas = document.createElement('canvas');
-    heroCanvas.width = 92;
-    heroCanvas.height = 92;
+    heroCanvas.width = 96;
+    heroCanvas.height = 96;
     heroCanvas.className = 'hd-hero__sprite';
     renderHeroPaperdollCanvas(heroCanvas, p.selectedClass, selProg.equipped);
     heroStage.appendChild(heroCanvas);
-    heroStage.appendChild(this.el('div', 'hd-hero__shadow'));
+    heroStage.appendChild(this.el('div', 'hd-hero__plinth'));
     wrap.appendChild(heroStage);
 
     const discovered = loadDiscoveredSynergies().size;
@@ -988,13 +1092,6 @@ export class OverlayManager {
     const p = this.state.profile;
     const todayKey = getUtcDateKey();
     const status = getLoginStreakStatus(p, todayKey);
-
-    const slotLabels: Record<GearSlot, string> = {
-      weapon: 'Weapon',
-      headgear: 'Crown',
-      top: 'Robe',
-      cape: 'Mantle',
-    };
 
     const backdrop = this.el('div', 'modal-backdrop');
     const box = this.el('div', 'modal-box login-modal hd-win');
@@ -1147,10 +1244,7 @@ export class OverlayManager {
         const filterRow = this.el('div', 'login-slot-pills');
         const filterOpts: readonly { key: GearSlot | 'all'; label: string }[] = [
           { key: 'all', label: `All (${LEGENDARY_CATALOG.length})` },
-          { key: 'weapon', label: 'Weapon' },
-          { key: 'headgear', label: 'Crown' },
-          { key: 'top', label: 'Robe' },
-          { key: 'cape', label: 'Mantle' },
+          ...GEAR_SLOTS.map((slot) => ({ key: slot, label: GEAR_SLOT_LABELS[slot] })),
         ];
         for (const opt of filterOpts) {
           const btn = this.el(
@@ -1183,7 +1277,7 @@ export class OverlayManager {
           card.type = 'button';
           const topRow = this.el('div', 'login-relic-card__top');
           topRow.appendChild(this.el('strong', 'login-relic-card__name', leg.name));
-          topRow.appendChild(this.el('span', 'pill', slotLabels[leg.slot]));
+          topRow.appendChild(this.el('span', 'pill', GEAR_SLOT_LABELS[leg.slot]));
           card.appendChild(topRow);
           card.appendChild(this.el('div', 'login-relic-card__desc', leg.signatureText));
           card.addEventListener('click', () => {
@@ -1227,7 +1321,7 @@ export class OverlayManager {
           const btn = this.el(
             'button',
             `equip-filter-pill ${selectedSlot === slot ? 'is-active' : ''}`,
-            slotLabels[slot]
+            GEAR_SLOT_LABELS[slot]
           );
           btn.type = 'button';
           btn.addEventListener('click', () => {
@@ -1252,7 +1346,7 @@ export class OverlayManager {
           card.type = 'button';
           const topRow = this.el('div', 'login-relic-card__top');
           topRow.appendChild(this.el('strong', 'login-relic-card__name', leg.name));
-          topRow.appendChild(this.el('span', 'pill pill-gold', slotLabels[leg.slot]));
+          topRow.appendChild(this.el('span', 'pill pill-gold', GEAR_SLOT_LABELS[leg.slot]));
           card.appendChild(topRow);
           card.appendChild(this.el('div', 'login-relic-card__desc', leg.signatureText));
           card.addEventListener('click', () => {
@@ -1296,7 +1390,7 @@ export class OverlayManager {
           const btn = this.el(
             'button',
             `equip-filter-pill ${selectedSlot === slot ? 'is-active' : ''}`,
-            slotLabels[slot]
+            GEAR_SLOT_LABELS[slot]
           );
           btn.type = 'button';
           btn.addEventListener('click', () => {
@@ -1311,7 +1405,7 @@ export class OverlayManager {
         const claimBtn = this.el(
           'button',
           'btn btn-gold login-claim-btn',
-          `Claim Pristine ${slotLabels[selectedSlot]} Legendary`
+          `Claim Pristine ${GEAR_SLOT_LABELS[selectedSlot]} Legendary`
         );
         claimBtn.type = 'button';
         claimBtn.addEventListener('click', () => {
@@ -1356,12 +1450,6 @@ export class OverlayManager {
     const expPct = Math.max(0, Math.min(100, Math.round((selProg.exp / Math.max(1, nextExp)) * 100)));
     const stats = computeHeroCombatStats(p, selId, [], 0, 0);
 
-    const slotLabels: Record<GearSlot, string> = {
-      weapon: 'Weapon',
-      headgear: 'Crown',
-      top: 'Robe',
-      cape: 'Mantle',
-    };
     const slotCodes: Record<GearSlot, string> = {
       weapon: 'WEP',
       headgear: 'CRN',
@@ -1433,22 +1521,29 @@ export class OverlayManager {
 
       const tile = this.el('button', tileClasses);
       tile.type = 'button';
-      tile.title = `Filter ${slotLabels[slot]} relics${item ? ` & inspect ${getItemDisplayName(item)}` : ''}`;
+      tile.title = `Filter ${GEAR_SLOT_LABELS[slot]} relics${item ? ` & inspect ${getItemDisplayName(item)}` : ''}`;
 
       const topRow = this.el('div', 'equip-slot-tile__top');
-      topRow.appendChild(this.el('span', 'equip-slot-tile__slot', slotLabels[slot]));
+      const slotLabelWrap = this.el('span', 'equip-slot-tile__slot-wrap');
+      slotLabelWrap.appendChild(createWuxiaIcon(slotToIconId(slot), 13, 'equip-slot-tile__icon'));
+      slotLabelWrap.appendChild(this.el('span', 'equip-slot-tile__slot', GEAR_SLOT_LABELS[slot]));
+      topRow.appendChild(slotLabelWrap);
       if (slotLvl > 0) {
         topRow.appendChild(this.el('span', 'equip-slot-tile__temper', `+${slotLvl * 10}%`));
       }
       tile.appendChild(topRow);
 
-      const nameText = item ? getItemDisplayName(item) : 'Empty';
-      tile.appendChild(this.el('div', 'equip-slot-tile__name', nameText));
-
-      const pwrText = item ? `PWR ${item.baseStatBonus}` : 'EMPTY';
-      tile.appendChild(
-        this.el('div', `equip-slot-tile__pwr ${item ? '' : 'is-empty'}`, pwrText)
-      );
+      const nameText = item ? getItemDisplayName(item) : 'Unequipped';
+      if (item) {
+        const bodyRow = this.el('div', 'equip-slot-tile__body');
+        bodyRow.appendChild(createRelicEmblem(slot, item.tier, item.isCursed, nameText, 26));
+        bodyRow.appendChild(this.el('div', 'equip-slot-tile__name', nameText));
+        tile.appendChild(bodyRow);
+        tile.appendChild(this.el('div', 'equip-slot-tile__pwr', `PWR ${item.baseStatBonus}`));
+      } else {
+        tile.appendChild(this.el('div', 'equip-slot-tile__name', nameText));
+        tile.appendChild(this.el('div', 'equip-slot-tile__pwr is-empty', '—'));
+      }
 
       tile.addEventListener('click', () => {
         soundFX.playRouletteTick();
@@ -1531,17 +1626,17 @@ export class OverlayManager {
 
       const headRow = this.el('div', 'equip-inspector__head');
       headRow.appendChild(this.el('strong', 'equip-inspector__name', getItemDisplayName(item)));
-      const tierPillClass =
-        item.tier === 'legendary'
+      const tierPillClass = item.isCursed
+        ? 'pill pill-core'
+        : item.tier === 'legendary'
           ? 'pill pill-gold'
           : item.tier === 'rare'
             ? 'pill pill-shard'
             : 'pill';
-      headRow.appendChild(this.el('span', tierPillClass, item.tier.toUpperCase()));
-      headRow.appendChild(this.el('span', 'pill', slotLabels[item.slot]));
-      if (item.isCursed) {
-        headRow.appendChild(this.el('span', 'pill pill-core', 'CURSED'));
-      }
+      headRow.appendChild(
+        this.el('span', tierPillClass, item.isCursed ? 'CURSED' : item.tier.toUpperCase())
+      );
+      headRow.appendChild(this.el('span', 'pill', GEAR_SLOT_LABELS[item.slot]));
       infoCol.appendChild(headRow);
 
       const powerRow = this.el('div', 'equip-inspector__power');
@@ -1670,10 +1765,7 @@ export class OverlayManager {
 
     const filterOptions: readonly { key: GearSlot | 'all'; label: string }[] = [
       { key: 'all', label: 'All' },
-      { key: 'weapon', label: 'Weapon' },
-      { key: 'headgear', label: 'Crown' },
-      { key: 'top', label: 'Robe' },
-      { key: 'cape', label: 'Mantle' },
+      ...GEAR_SLOTS.map((slot) => ({ key: slot, label: GEAR_SLOT_LABELS[slot] })),
     ];
     for (const opt of filterOptions) {
       const isActive = this.equipSlotFilter === opt.key;
@@ -1733,7 +1825,7 @@ export class OverlayManager {
         title:
           p.inventory.length === 0
             ? 'Relic Bag Empty'
-            : `No ${this.equipSlotFilter === 'all' ? '' : `${slotLabels[this.equipSlotFilter]} `}Relics`,
+            : `No ${this.equipSlotFilter === 'all' ? '' : `${GEAR_SLOT_LABELS[this.equipSlotFilter]} `}Relics`,
         description:
           p.inventory.length === 0
             ? 'Ascend the Spire to recover Normal, Rare, and Legendary Sect Relics.'
@@ -1770,7 +1862,11 @@ export class OverlayManager {
         }
         tile.appendChild(top);
 
-        tile.appendChild(this.el('div', 'equip-tile__name', getItemDisplayName(item)));
+        const displayName = getItemDisplayName(item);
+        const bodyRow = this.el('div', 'equip-tile__body');
+        bodyRow.appendChild(createRelicEmblem(item.slot, item.tier, item.isCursed, displayName, 26));
+        bodyRow.appendChild(this.el('div', 'equip-tile__name', displayName));
+        tile.appendChild(bodyRow);
         tile.appendChild(this.el('div', 'equip-tile__pwr', `PWR ${item.baseStatBonus}`));
 
         tile.addEventListener('click', () => {
@@ -1795,11 +1891,11 @@ export class OverlayManager {
     const p = this.state.profile;
     const screen = this.el('div', 'upgrades-screen');
 
-    // ==================== SECTION 1: PERMANENT PASSIVE STATS (GOLD) ====================
+    // ==================== SECTION 1: MERIDIAN TEMPERING ====================
     const statsSection = this.el('section', 'upgrades-section');
     const statsHead = this.el('div', 'upgrades-section__head');
     statsHead.appendChild(
-      this.el('h2', 'upgrades-section__title', 'Permanent Passive Stats (Gold)')
+      this.el('h2', 'upgrades-section__title', 'Meridian Tempering')
     );
     statsHead.appendChild(
       this.el('span', 'upgrades-section__currency is-gold', `${p.gold.toLocaleString()}g`)
@@ -1808,54 +1904,63 @@ export class OverlayManager {
 
     const statDefs: readonly {
       key: LegionStatKey;
+      icon: WuxiaIconId;
       name: string;
       perLevel: string;
       formatTotal: (lvl: number) => string;
     }[] = [
       {
         key: 'atk',
+        icon: 'atk',
         name: 'Attack',
         perLevel: '+4%',
         formatTotal: (lvl) => `+${lvl * 4}% ATK`,
       },
       {
         key: 'hp',
+        icon: 'hp',
         name: 'Vitality',
         perLevel: '+5% HP',
         formatTotal: (lvl) => `+${lvl * 5}% HP`,
       },
       {
         key: 'armor',
+        icon: 'arm',
         name: 'Iron Body',
         perLevel: '+5 ARM',
         formatTotal: (lvl) => `+${lvl * 5} ARM`,
       },
       {
         key: 'critRate',
+        icon: 'crit',
         name: 'Precision',
         perLevel: '+1.5% Crit',
         formatTotal: (lvl) => `+${(lvl * 1.5).toFixed(1)}% Crit`,
       },
       {
         key: 'critDmg',
+        icon: 'critDmg',
         name: 'Lethality',
         perLevel: '+8% Crit DMG',
         formatTotal: (lvl) => `+${lvl * 8}% Crit DMG`,
       },
       {
         key: 'dodge',
+        icon: 'dodge',
         name: 'Qinggong',
         perLevel: '+1.5% Dodge',
         formatTotal: (lvl) => `+${(lvl * 1.5).toFixed(1)}% Dodge`,
       },
       {
         key: 'cdr',
+        icon: 'haste',
         name: 'Qi Flow',
         perLevel: '+2% Haste',
         formatTotal: (lvl) => `+${lvl * 2}% Haste`,
       },
       {
         key: 'gold',
+        icon: 'fortune',
         name: 'Fortune',
         perLevel: '+6% Gold',
         formatTotal: (lvl) => `+${lvl * 6}% Gold`,
@@ -1870,7 +1975,10 @@ export class OverlayManager {
 
       const card = this.el('div', `upgrade-card ${canAfford ? 'is-affordable' : ''}`);
       const topRow = this.el('div', 'upgrade-card__top');
-      topRow.appendChild(this.el('strong', 'upgrade-card__name', st.name));
+      const nameWrap = this.el('span', 'upgrade-card__title-wrap');
+      nameWrap.appendChild(createWuxiaIcon(st.icon, 14, 'upgrade-card__icon'));
+      nameWrap.appendChild(this.el('strong', 'upgrade-card__name', st.name));
+      topRow.appendChild(nameWrap);
       topRow.appendChild(this.el('span', 'upgrade-card__lvl', `Lv.${lvl}`));
       card.appendChild(topRow);
 
@@ -1893,17 +2001,17 @@ export class OverlayManager {
     statsSection.appendChild(statsGrid);
     screen.appendChild(statsSection);
 
-    // ==================== SECTION 2: GEAR SLOT TEMPERING (SPIRIT SHARDS) ====================
+    // ==================== SECTION 2: RELIC FORGING ====================
     const temperSection = this.el('section', 'upgrades-section');
     const temperHead = this.el('div', 'upgrades-section__head');
     temperHead.appendChild(
-      this.el('h2', 'upgrades-section__title', 'Gear Slot Tempering (Spirit Shards)')
+      this.el('h2', 'upgrades-section__title', 'Relic Forging')
     );
 
     const autoToggle = this.el(
       'button',
       `upgrades-toggle ${p.autoDismantleNormal ? 'is-on' : ''}`,
-      `Auto-Dismantle Normals: ${p.autoDismantleNormal ? 'ON' : 'OFF'}`
+      `Auto-Salvage Normals: ${p.autoDismantleNormal ? 'On' : 'Off'}`
     );
     autoToggle.type = 'button';
     autoToggle.title = 'Automatically dismantle Normal gear drops into Spirit Shards after runs';
@@ -1914,12 +2022,6 @@ export class OverlayManager {
     temperHead.appendChild(autoToggle);
     temperSection.appendChild(temperHead);
 
-    const slotLabels: Record<GearSlot, string> = {
-      weapon: 'Weapon',
-      headgear: 'Crown',
-      top: 'Robe',
-      cape: 'Mantle',
-    };
     const clsProg = p.classes[p.selectedClass];
     const temperGrid = this.el('div', 'upgrades-slot-grid');
     for (const slot of GEAR_SLOTS) {
@@ -1932,7 +2034,10 @@ export class OverlayManager {
         `upgrade-card upgrade-card--slot ${canAfford ? 'is-affordable' : ''}`
       );
       const topRow = this.el('div', 'upgrade-card__top');
-      topRow.appendChild(this.el('strong', 'upgrade-card__name', slotLabels[slot]));
+      const nameWrap = this.el('span', 'upgrade-card__title-wrap');
+      nameWrap.appendChild(createWuxiaIcon(slotToIconId(slot), 14, 'upgrade-card__icon'));
+      nameWrap.appendChild(this.el('strong', 'upgrade-card__name', GEAR_SLOT_LABELS[slot]));
+      topRow.appendChild(nameWrap);
       topRow.appendChild(this.el('span', 'upgrade-card__lvl', `Lv.${lvl}`));
       card.appendChild(topRow);
 
@@ -2082,27 +2187,60 @@ export class OverlayManager {
     container.appendChild(filterRow);
 
     if (this.codexFilter === 'synergies') {
+      const sortedSynergies = [...WUXIA_SECRET_SYNERGIES].sort((a, b) => {
+        const aKnown = discovered.has(a.id) ? 1 : 0;
+        const bKnown = discovered.has(b.id) ? 1 : 0;
+        return bKnown - aKnown;
+      });
       const grid = this.el('div', 'grid-2');
-      for (const syn of WUXIA_SECRET_SYNERGIES) {
+      for (const syn of sortedSynergies) {
         const isKnown = discovered.has(syn.id);
-        const card = this.el('div', `draft-card ${isKnown ? 'tier-prismatic' : 'tier-cursed'}`);
+        const card = this.el('div', `codex-entry ${isKnown ? 'is-known' : 'is-locked'}`);
+        const topRow = this.el('div', 'codex-entry__top');
+        topRow.appendChild(createSkillEmblem(syn.id, 40, { isLocked: !isKnown }));
+
+        const infoCol = this.el('div', 'codex-entry__info');
+        const head = this.el('div', 'codex-entry__head');
         if (isKnown) {
           const art = getWuxiaActiveArtById(syn.activeId);
           const qi = getWuxiaInnerQiById(syn.innerQiId);
-          card.appendChild(this.el('span', 'tier-badge', 'SYNERGY'));
-          card.appendChild(this.el('strong', '', syn.name));
-          card.appendChild(
-            this.el(
-              'div',
-              'muted',
-              `${art ? art.name : syn.activeId} + ${qi ? qi.name : syn.innerQiId}`
-            )
-          );
-          card.appendChild(this.el('div', 'muted', syn.description));
+          head.appendChild(this.el('strong', 'codex-entry__title', syn.name));
+          head.appendChild(this.el('span', 'tier-badge hd-tag--jade', 'AWAKENED'));
+          infoCol.appendChild(head);
+
+          // Permanent Recipe Strip showing exact Active + Inner Qi pair with mini icons
+          const recipeRow = this.el('div', 'codex-recipe');
+          const artPill = this.el('span', 'codex-recipe__item');
+          artPill.appendChild(createSkillEmblem(syn.activeId, 18));
+          artPill.appendChild(this.el('span', '', `${art ? art.shortName : syn.activeId} Lv.3+`));
+          recipeRow.appendChild(artPill);
+          recipeRow.appendChild(this.el('span', 'codex-recipe__plus', '+'));
+          const qiPill = this.el('span', 'codex-recipe__item');
+          qiPill.appendChild(createSkillEmblem(syn.innerQiId, 18));
+          qiPill.appendChild(this.el('span', '', qi ? qi.shortName : syn.innerQiId));
+          recipeRow.appendChild(qiPill);
+          infoCol.appendChild(recipeRow);
+
+          topRow.appendChild(infoCol);
+          card.appendChild(topRow);
+
+          // Permanent Effect Description & Combat Stat Chips
+          card.appendChild(this.el('div', 'codex-entry__desc', syn.description));
+          const statRow = this.el('div', 'codex-stat-chips');
+          for (const chipText of formatSynergyStatChips(syn)) {
+            statRow.appendChild(this.el('span', 'codex-stat-chip', chipText));
+          }
+          card.appendChild(statRow);
         } else {
-          card.appendChild(this.el('span', 'tier-badge', 'LOCKED'));
-          card.appendChild(this.el('strong', '', 'Undiscovered Synergy'));
-          card.appendChild(this.el('div', 'muted', `"${syn.riddleHint}"`));
+          const titleWrap = this.el('span', 'codex-entry__title-wrap');
+          titleWrap.appendChild(createWuxiaIcon('lock', 13, 'codex-entry__lock-icon'));
+          titleWrap.appendChild(this.el('strong', 'codex-entry__title', 'Undiscovered Synergy'));
+          head.appendChild(titleWrap);
+          head.appendChild(this.el('span', 'tier-badge', 'SEALED'));
+          infoCol.appendChild(head);
+          infoCol.appendChild(this.el('div', 'codex-entry__riddle', `"${syn.riddleHint}"`));
+          topRow.appendChild(infoCol);
+          card.appendChild(topRow);
         }
         grid.appendChild(card);
       }
@@ -2111,31 +2249,36 @@ export class OverlayManager {
     }
 
     if (this.codexFilter === 'manuals') {
-      container.appendChild(this.el('strong', '', 'Active Skills'));
+      container.appendChild(this.el('div', 'codex-group-title', 'Active Martial Arts'));
       const activeGrid = this.el('div', 'grid-3');
-      activeGrid.style.marginTop = '6px';
       for (const art of WUXIA_ACTIVE_ARTS) {
-        const card = this.el('div', 'draft-card tier-gold');
-        card.appendChild(this.el('span', 'tier-badge', art.sectOrigin));
-        card.appendChild(this.el('strong', '', art.name));
-        card.appendChild(this.el('div', 'muted', `Lv.1: ${art.levelDescriptions[0]}`));
-        card.appendChild(this.el('div', 'muted', `Lv.5: ${art.levelDescriptions[4]}`));
+        const card = this.el('div', 'codex-entry is-active-art');
+        const topRow = this.el('div', 'codex-entry__top');
+        topRow.appendChild(createSkillEmblem(art.id, 38));
+        const infoCol = this.el('div', 'codex-entry__info');
+        infoCol.appendChild(this.el('strong', 'codex-entry__title', art.name));
+        infoCol.appendChild(this.el('span', 'codex-entry__origin', art.sectOrigin));
+        topRow.appendChild(infoCol);
+        card.appendChild(topRow);
+        card.appendChild(this.el('div', 'codex-entry__desc', `Lv.1: ${art.levelDescriptions[0]}`));
+        card.appendChild(this.el('div', 'codex-entry__desc', `Lv.5: ${art.levelDescriptions[4]}`));
         activeGrid.appendChild(card);
       }
       container.appendChild(activeGrid);
 
-      const qiHeading = this.el('strong', '', 'Passive Skills');
-      qiHeading.style.display = 'block';
-      qiHeading.style.marginTop = '12px';
-      container.appendChild(qiHeading);
-      const qiGrid = this.el('div', 'grid-4');
-      qiGrid.style.marginTop = '6px';
+      container.appendChild(this.el('div', 'codex-group-title', 'Inner Qi Manuals'));
+      const qiGrid = this.el('div', 'grid-3');
       for (const qi of WUXIA_INNER_QI) {
-        const card = this.el('div', 'draft-card tier-silver');
-        card.appendChild(this.el('span', 'tier-badge', qi.sectOrigin));
-        card.appendChild(this.el('strong', '', qi.name));
-        card.appendChild(this.el('div', 'muted', `Lv.1: ${qi.levelDescriptions[0]}`));
-        card.appendChild(this.el('div', 'muted', `Lv.5: ${qi.levelDescriptions[4]}`));
+        const card = this.el('div', 'codex-entry is-inner-qi');
+        const topRow = this.el('div', 'codex-entry__top');
+        topRow.appendChild(createSkillEmblem(qi.id, 36));
+        const infoCol = this.el('div', 'codex-entry__info');
+        infoCol.appendChild(this.el('strong', 'codex-entry__title', qi.name));
+        infoCol.appendChild(this.el('span', 'codex-entry__origin', qi.sectOrigin));
+        topRow.appendChild(infoCol);
+        card.appendChild(topRow);
+        card.appendChild(this.el('div', 'codex-entry__desc', `Lv.1: ${qi.levelDescriptions[0]}`));
+        card.appendChild(this.el('div', 'codex-entry__desc', `Lv.5: ${qi.levelDescriptions[4]}`));
         qiGrid.appendChild(card);
       }
       container.appendChild(qiGrid);
@@ -2146,10 +2289,15 @@ export class OverlayManager {
     const grid = this.el('div', 'grid-2');
     for (const item of items) {
       const card = this.el('div', 'gear-item tier-legendary');
+      const topRow = this.el('div', 'codex-entry__top');
+      topRow.appendChild(createRelicEmblem(item.slot, 'legendary', false, item.name, 36));
+      const infoCol = this.el('div', 'codex-entry__info');
       const row = this.el('div', 'row-between');
       row.appendChild(this.el('strong', '', item.name));
-      row.appendChild(this.el('span', 'pill', item.slot.toUpperCase()));
-      card.appendChild(row);
+      row.appendChild(this.el('span', 'pill', GEAR_SLOT_LABELS[item.slot]));
+      infoCol.appendChild(row);
+      topRow.appendChild(infoCol);
+      card.appendChild(topRow);
       card.appendChild(this.el('div', 'muted', `Pristine: ${item.signatureText}`));
       card.appendChild(this.el('div', 'muted', `Cursed (${item.cursedName}): ${item.cursedText}`));
       grid.appendChild(card);
@@ -2274,7 +2422,7 @@ export class OverlayManager {
   }
 
   private renderDungeonHudShell(): void {
-    unmountAstryxRootsInside(this.root);
+    this.destroyCampVista();
     this.root.innerHTML = '';
     this.lastHudBuffsKey = '';
     this.codexDrawerOpen = false;
@@ -2361,6 +2509,24 @@ export class OverlayManager {
     });
     popover.appendChild(autoBtn);
 
+    const autoDraftBtn = this.el(
+      'button',
+      `hud-utility-item${this.autoDraftMode !== 'off' ? ' hud-utility-item--on' : ''}`,
+      formatAutoDraftLabel(this.autoDraftMode)
+    );
+    autoDraftBtn.id = 'hud-auto-draft-btn';
+    autoDraftBtn.setAttribute('type', 'button');
+    autoDraftBtn.setAttribute('role', 'menuitem');
+    autoDraftBtn.title = 'Automatically select skills during fast runs (Off / When Slots Full / Always)';
+    autoDraftBtn.addEventListener('click', () => {
+      this.autoDraftMode = nextAutoDraftMode(this.autoDraftMode);
+      saveAutoDraftMode(this.autoDraftMode);
+      autoDraftBtn.textContent = formatAutoDraftLabel(this.autoDraftMode);
+      autoDraftBtn.classList.toggle('hud-utility-item--on', this.autoDraftMode !== 'off');
+      soundFX.playRouletteTick();
+    });
+    popover.appendChild(autoDraftBtn);
+
     const muteBtn = this.el(
       'button',
       'hud-utility-item',
@@ -2405,8 +2571,8 @@ export class OverlayManager {
     const skillBtn = this.el('button', 'hud-medallion hud-medallion--tech hidden');
     skillBtn.id = 'hud-skill-btn';
     skillBtn.setAttribute('type', 'button');
-    skillBtn.appendChild(this.el('span', 'hud-medallion-key', 'Q'));
-    skillBtn.appendChild(this.el('span', 'hud-medallion-touch', 'Tech'));
+    skillBtn.appendChild(this.el('span', 'hud-medallion-keycap', 'Q'));
+    skillBtn.appendChild(createWuxiaIcon('strike', 18, 'hud-medallion-icon'));
     skillBtn.appendChild(this.el('span', 'hud-medallion-sub', 'RDY'));
     skillBtn.addEventListener('click', () => {
       this.bridge?.triggerActiveSkill();
@@ -2415,8 +2581,8 @@ export class OverlayManager {
     const potBtn = this.el('button', 'hud-medallion hud-medallion--pot');
     potBtn.id = 'hud-pot-btn';
     potBtn.setAttribute('type', 'button');
-    potBtn.appendChild(this.el('span', 'hud-medallion-key', 'W'));
-    potBtn.appendChild(this.el('span', 'hud-medallion-touch', 'Heal'));
+    potBtn.appendChild(this.el('span', 'hud-medallion-keycap', 'W'));
+    potBtn.appendChild(createWuxiaIcon('gourd', 18, 'hud-medallion-icon'));
     potBtn.appendChild(this.el('span', 'hud-medallion-sub', '×1'));
     potBtn.addEventListener('click', () => {
       this.bridge?.triggerPotion();
@@ -2425,8 +2591,8 @@ export class OverlayManager {
     const dashBtn = this.el('button', 'hud-medallion hud-medallion--dash');
     dashBtn.id = 'hud-dash-btn';
     dashBtn.setAttribute('type', 'button');
-    dashBtn.appendChild(this.el('span', 'hud-medallion-key', '␣'));
-    dashBtn.appendChild(this.el('span', 'hud-medallion-touch', 'Dash'));
+    dashBtn.appendChild(this.el('span', 'hud-medallion-keycap', 'SPC'));
+    dashBtn.appendChild(createWuxiaIcon('dash', 18, 'hud-medallion-icon'));
     dashBtn.appendChild(this.el('span', 'hud-medallion-sub', 'RDY'));
     dashBtn.addEventListener('click', () => {
       this.bridge?.triggerDash();
@@ -2436,8 +2602,8 @@ export class OverlayManager {
     ultBtn.id = 'hud-ult-btn';
     ultBtn.setAttribute('type', 'button');
     ultBtn.disabled = true;
-    ultBtn.appendChild(this.el('span', 'hud-medallion-key', 'R'));
-    ultBtn.appendChild(this.el('span', 'hud-medallion-touch', 'Ult'));
+    ultBtn.appendChild(this.el('span', 'hud-medallion-keycap', 'R'));
+    ultBtn.appendChild(createWuxiaIcon('ultimate', 18, 'hud-medallion-icon'));
     ultBtn.appendChild(this.el('span', 'hud-medallion-sub', '0%'));
     ultBtn.addEventListener('click', () => {
       this.bridge?.triggerUltimateSkill();
@@ -2544,8 +2710,8 @@ export class OverlayManager {
         ? 'hud-medallion hud-medallion--ult hud-medallion--ready'
         : 'hud-medallion hud-medallion--ult';
       ultBtn.replaceChildren(
-        this.el('span', 'hud-medallion-key', 'R'),
-        this.el('span', 'hud-medallion-touch', 'Ult'),
+        this.el('span', 'hud-medallion-keycap', 'R'),
+        createWuxiaIcon('ultimate', 18, 'hud-medallion-icon'),
         this.el('span', 'hud-medallion-sub', hasStock ? 'MAX' : `${hud.ultimateGauge}%`)
       );
       ultBtn.title = `${hud.ultimateName}: ${hud.ultimateStocks}/${hud.maxUltimateStocks} stored (${hud.ultimateGauge}%)`;
@@ -2560,8 +2726,8 @@ export class OverlayManager {
         : 'hud-medallion hud-medallion--tech';
       skillBtn.classList.toggle('hidden', hud.autoSkill);
       skillBtn.replaceChildren(
-        this.el('span', 'hud-medallion-key', 'Q'),
-        this.el('span', 'hud-medallion-touch', 'Tech'),
+        this.el('span', 'hud-medallion-keycap', 'Q'),
+        createWuxiaIcon('strike', 18, 'hud-medallion-icon'),
         this.el(
           'span',
           'hud-medallion-sub',
@@ -2577,8 +2743,8 @@ export class OverlayManager {
         ? 'hud-medallion hud-medallion--dash hud-medallion--ready'
         : 'hud-medallion hud-medallion--dash';
       dashBtn.replaceChildren(
-        this.el('span', 'hud-medallion-key', '␣'),
-        this.el('span', 'hud-medallion-touch', 'Dash'),
+        this.el('span', 'hud-medallion-keycap', 'SPC'),
+        createWuxiaIcon('dash', 18, 'hud-medallion-icon'),
         this.el(
           'span',
           'hud-medallion-sub',
@@ -2595,8 +2761,8 @@ export class OverlayManager {
         ? 'hud-medallion hud-medallion--pot hud-medallion--ready'
         : 'hud-medallion hud-medallion--pot';
       potBtn.replaceChildren(
-        this.el('span', 'hud-medallion-key', 'W'),
-        this.el('span', 'hud-medallion-touch', 'Heal'),
+        this.el('span', 'hud-medallion-keycap', 'W'),
+        createWuxiaIcon('gourd', 18, 'hud-medallion-icon'),
         this.el(
           'span',
           'hud-medallion-sub',
@@ -2635,7 +2801,10 @@ export class OverlayManager {
             if (!syn) continue;
             const card = this.el('div', 'codex-card codex-card--prismatic');
             const head = this.el('div', 'codex-card-head');
-            head.appendChild(this.el('span', 'codex-card-name', syn.name));
+            const nameWrap = this.el('span', 'codex-card-title-wrap');
+            nameWrap.appendChild(createSkillEmblem(syn.id, 24));
+            nameWrap.appendChild(this.el('span', 'codex-card-name', syn.name));
+            head.appendChild(nameWrap);
             head.appendChild(this.el('span', 'tier-badge tier-prismatic', 'AWAKENED'));
             card.appendChild(head);
             card.appendChild(this.el('div', 'codex-card-desc', syn.description));
@@ -2659,7 +2828,10 @@ export class OverlayManager {
             const syn = getActiveAwakenedSynergy(art.id, loadout.awakenedSynergies);
             const card = this.el('div', `codex-card ${syn ? 'codex-card--prismatic' : ''}`);
             const head = this.el('div', 'codex-card-head');
-            head.appendChild(this.el('span', 'codex-card-name', art.name));
+            const nameWrap = this.el('span', 'codex-card-title-wrap');
+            nameWrap.appendChild(createSkillEmblem(syn ? syn.id : art.id, 24));
+            nameWrap.appendChild(this.el('span', 'codex-card-name', art.name));
+            head.appendChild(nameWrap);
             head.appendChild(
               this.el(
                 'span',
@@ -2690,7 +2862,10 @@ export class OverlayManager {
             if (!qi) continue;
             const card = this.el('div', 'codex-card');
             const head = this.el('div', 'codex-card-head');
-            head.appendChild(this.el('span', 'codex-card-name', qi.name));
+            const nameWrap = this.el('span', 'codex-card-title-wrap');
+            nameWrap.appendChild(createSkillEmblem(qi.id, 24));
+            nameWrap.appendChild(this.el('span', 'codex-card-name', qi.name));
+            head.appendChild(nameWrap);
             head.appendChild(
               this.el(
                 'span',
@@ -2769,6 +2944,33 @@ export class OverlayManager {
     this.bankedRerolls += 1;
     this.isDraftMinimized = false;
 
+    const slotsFull =
+      loadout.actives.length >= loadout.maxActiveSlots &&
+      loadout.innerQis.length >= loadout.maxInnerQiSlots;
+    const shouldAutoPick =
+      this.autoDraftMode === 'always' || (this.autoDraftMode === 'when_full' && slotsFull);
+
+    if (shouldAutoPick && cards.length > 0) {
+      const chosen = pickSmartAutoDraft(cards, loadout);
+      if (chosen) {
+        soundFX.playDraft();
+        if (chosen.kind === 'synergy') {
+          const newlyDiscovered = recordDiscoveredSynergy(chosen.id);
+          this.showToastSafe(
+            newlyDiscovered
+              ? `Auto-Awakened New Synergy: ${chosen.name}`
+              : `Auto-Awakened: ${chosen.name}`
+          );
+        } else {
+          const lvlLabel =
+            chosen.kind === 'enlightenment' ? '' : ` Lv.${chosen.nextLevel}`;
+          this.showToastSafe(`Auto-Draft: ${chosen.name}${lvlLabel}`);
+        }
+        this.bridge?.resumeAfterDraft(chosen.id);
+        return;
+      }
+    }
+
     const backdrop = this.el('div', 'modal-backdrop');
     const box = this.el('div', 'modal-box');
 
@@ -2796,7 +2998,7 @@ export class OverlayManager {
       toggleMinimize();
     });
 
-    // Slim Draft Header: Floor + Active/Passive slots on left, Rerolls / Skip / Minimize on right
+    // Slim Draft Header: Floor + Active/Passive slots on left, Auto-Draft / Rerolls / Skip / Minimize on right
     const actionRow = this.el('div', 'draft-header-actions');
     const slimHeader = this.el(
       'div',
@@ -2806,6 +3008,28 @@ export class OverlayManager {
     actionRow.appendChild(slimHeader);
 
     const rightActions = this.el('div', 'row-gap-2');
+    const autoDraftToggle = this.el(
+      'button',
+      `btn btn-sm ${this.autoDraftMode !== 'off' ? 'btn-green' : 'btn-ghost'}`,
+      formatAutoDraftLabel(this.autoDraftMode, true)
+    );
+    autoDraftToggle.setAttribute('type', 'button');
+    autoDraftToggle.title =
+      'Cycle Auto-Draft mode: Off -> Full Slots (auto-pick once slots are full) -> Always';
+    autoDraftToggle.addEventListener('click', () => {
+      this.autoDraftMode = nextAutoDraftMode(this.autoDraftMode);
+      saveAutoDraftMode(this.autoDraftMode);
+      autoDraftToggle.textContent = formatAutoDraftLabel(this.autoDraftMode, true);
+      autoDraftToggle.className = `btn btn-sm ${this.autoDraftMode !== 'off' ? 'btn-green' : 'btn-ghost'}`;
+      const hudAutoBtn = document.getElementById('hud-auto-draft-btn');
+      if (hudAutoBtn) {
+        hudAutoBtn.textContent = formatAutoDraftLabel(this.autoDraftMode);
+        hudAutoBtn.classList.toggle('hud-utility-item--on', this.autoDraftMode !== 'off');
+      }
+      soundFX.playRouletteTick();
+      this.showToastSafe(formatAutoDraftLabel(this.autoDraftMode));
+    });
+
     const rollBadge = this.el(
       'span',
       'tier-badge tier-gold',
@@ -2827,6 +3051,7 @@ export class OverlayManager {
     minBtn.title = 'Collapse skill draft to view your hero, arena, and Codex';
     minBtn.addEventListener('click', toggleMinimize);
 
+    rightActions.appendChild(autoDraftToggle);
     rightActions.appendChild(rollBadge);
     rightActions.appendChild(skipBtn);
     rightActions.appendChild(minBtn);
@@ -2861,9 +3086,42 @@ export class OverlayManager {
     this.root.appendChild(backdrop);
     this.activeModal = backdrop;
 
+    const selectCardByOption = (cardDef: WuxiaDraftOption): void => {
+      soundFX.playDraft();
+      if (cardDef.kind === 'synergy') {
+        const newlyDiscovered = recordDiscoveredSynergy(cardDef.id);
+        if (newlyDiscovered) {
+          this.showToastSafe(`New Synergy Recorded: ${cardDef.name}`);
+        }
+      }
+      this.clearModal();
+      this.bridge?.resumeAfterDraft(cardDef.id);
+    };
+
+    // Hotkey 1-3 selection (with 220ms anti-misclick settle delay)
+    const openedAtMs = performance.now();
+    const onDraftKeyDown = (event: KeyboardEvent): void => {
+      if (this.isDraftMinimized || !backdrop.isConnected) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+      if (performance.now() - openedAtMs < 220) return;
+
+      const idx =
+        event.key === '1' ? 0 : event.key === '2' ? 1 : event.key === '3' ? 2 : -1;
+      if (idx >= 0 && idx < cards.length) {
+        const chosen = cards[idx];
+        if (chosen) {
+          event.preventDefault();
+          selectCardByOption(chosen);
+        }
+      }
+    };
+    window.addEventListener('keydown', onDraftKeyDown);
+    this.draftKeyCleanup = () => window.removeEventListener('keydown', onDraftKeyDown);
+
     const renderCards = (): void => {
       updateHeader();
-      unmountAstryxRootsInside(grid);
       grid.innerHTML = '';
 
       cards.forEach((cardDef, idx) => {
@@ -2886,19 +3144,9 @@ export class OverlayManager {
         );
         card.setAttribute('role', 'button');
         card.setAttribute('tabindex', '0');
-        card.setAttribute('aria-label', `${cardDef.name}: ${cardDef.description}`);
+        card.setAttribute('aria-label', `[${idx + 1}] ${cardDef.name}: ${cardDef.description}`);
 
-        const selectCard = (): void => {
-          soundFX.playDraft();
-          if (cardDef.kind === 'synergy') {
-            const newlyDiscovered = recordDiscoveredSynergy(cardDef.id);
-            if (newlyDiscovered) {
-              this.showToastSafe(`New Synergy Recorded: ${cardDef.name}`);
-            }
-          }
-          this.clearModal();
-          this.bridge?.resumeAfterDraft(cardDef.id);
-        };
+        const selectCard = (): void => selectCardByOption(cardDef);
 
         card.addEventListener('click', selectCard);
         card.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -2912,24 +3160,31 @@ export class OverlayManager {
         const cardTop = this.el('div', 'draft-card-body');
 
         const cardHead = this.el('div', 'draft-card-head');
+        const headLeft = this.el('span', 'draft-card-head__left');
+        headLeft.appendChild(this.el('span', 'draft-hotkey-cap', String(idx + 1)));
         const badgeHost = this.el('span', 'astryx-inline-slot');
         mountHdBadge(badgeHost, {
           label: cardDef.badge,
           tier: astryxTier,
         });
-        cardHead.appendChild(badgeHost);
+        headLeft.appendChild(badgeHost);
+        cardHead.appendChild(headLeft);
         if (isSynergyCard) {
           cardHead.appendChild(this.el('span', 'draft-synergy-tag', 'SYNERGY'));
         }
         cardTop.appendChild(cardHead);
 
-        cardTop.appendChild(this.el('strong', 'draft-card-title', cardDef.name));
-
+        const titleRow = this.el('div', 'draft-card-hero');
+        titleRow.appendChild(createSkillEmblem(cardDef.id, 40));
+        const titleMeta = this.el('div', 'draft-card-hero__meta');
+        titleMeta.appendChild(this.el('strong', 'draft-card-title', cardDef.name));
         if (cardDef.kind === 'active' || cardDef.kind === 'inner_qi') {
-          cardTop.appendChild(
+          titleMeta.appendChild(
             this.renderLevelPips(cardDef.currentLevel, cardDef.maxLevel, cardDef.nextLevel)
           );
         }
+        titleRow.appendChild(titleMeta);
+        cardTop.appendChild(titleRow);
 
         const descEl = this.el('div', 'muted draft-card-desc');
         descEl.appendChild(this.buildHighlightedText(cardDef.description));
@@ -2958,10 +3213,10 @@ export class OverlayManager {
 
         const footer = this.el('div', 'draft-card-footer');
         const actionHint = cardDef.isSecretAwakening
-          ? 'Click to Awaken'
+          ? `[${idx + 1}] Awaken`
           : cardDef.currentLevel > 0 && cardDef.kind !== 'enlightenment'
-            ? `Click to Upgrade Lv.${cardDef.nextLevel}`
-            : 'Click to Learn';
+            ? `[${idx + 1}] Upgrade Lv.${cardDef.nextLevel}`
+            : `[${idx + 1}] Learn`;
         footer.appendChild(this.el('span', 'draft-card-hint', actionHint));
 
         const rerollBtn = this.el(
@@ -3116,15 +3371,6 @@ export class OverlayManager {
     const backdrop = this.el('div', 'modal-backdrop');
     const box = this.el('div', 'modal-box');
     const bannerHost = this.el('div', 'astryx-block-slot');
-    const clearedFloors =
-      payload.outcome === 'died' ? Math.max(0, payload.floorReached - 1) : payload.floorReached;
-    const bossCount = Math.max(1, Math.floor(clearedFloors / 10));
-    const slotLabels: Record<GearSlot, string> = {
-      weapon: 'Weapon',
-      headgear: 'Crown',
-      top: 'Robe',
-      cape: 'Mantle',
-    };
 
     const classRelics = LEGENDARY_CATALOG.filter((item) => item.classId === payload.classId);
     const relicPool = classRelics.length > 0 ? classRelics : LEGENDARY_CATALOG;
@@ -3133,8 +3379,8 @@ export class OverlayManager {
 
     mountHdBanner(bannerHost, {
       status: 'warning',
-      title: 'Altar of Fate — Legendary Purification',
-      description: `You defeated ${bossCount} Boss${bossCount > 1 ? 'es' : ''}! Guaranteed Legendary Drop (${getRelicLineageLabel(payload.classId)}). Inspect the revealed relic below, then claim it safely or risk purification for Pristine.`,
+      title: 'Altar of Fate',
+      description: 'Keep Cursed, or risk 50/50 Purification.',
       badgeText: 'LEGENDARY',
       badgeTier: 'gold',
     });
@@ -3148,7 +3394,7 @@ export class OverlayManager {
       const previewSlot = this.el(
         'span',
         'altar-relic-preview__slot',
-        `${slotLabels[revealedRelic.slot]} • ${getRelicLineageLabel(revealedRelic.classId)}`
+        `${GEAR_SLOT_LABELS[revealedRelic.slot]} • ${getRelicLineageLabel(revealedRelic.classId)}`
       );
       previewHead.appendChild(previewTitle);
       previewHead.appendChild(previewSlot);
@@ -3268,7 +3514,9 @@ export class OverlayManager {
         rawDrops.push(createGearItem(rng, payload.classId, slot, 'rare', f, `f${f}`));
       } else if (rng() < 0.45) {
         const slot = slots[Math.floor(rng() * slots.length)] ?? 'weapon';
-        rawDrops.push(createGearItem(rng, payload.classId, slot, 'normal', f, `f${f}`));
+        const tier: 'normal' | 'rare' =
+          rng() < getRegularFloorRareChance(f) ? 'rare' : 'normal';
+        rawDrops.push(createGearItem(rng, payload.classId, slot, tier, f, `f${f}`));
       }
     }
 
@@ -3303,7 +3551,7 @@ export class OverlayManager {
         !isCultLeaderFloor(f) &&
         (isRandomMiniBossFloor(f, dropSeed) || (f >= 25 && f % 10 === 5))
       ) {
-        if (rng() < 0.35) {
+        if (rng() < getMiniBossLegendaryChance(f)) {
           legendaryDrops.push(
             createLegendaryGearItem(rng, payload.classId, rng() >= 0.65, `mb${f}`, f)
           );
@@ -3493,7 +3741,6 @@ export class OverlayManager {
           ? 'success'
           : 'warning',
       title: titleStr,
-      description: '100% of Gold, Shards, Cores, and Gear are banked in Camp.',
       badgeText: summary.playerRank ? `Rank #${summary.playerRank}` : `FLOOR ${payload.floorReached}`,
       badgeTier: payload.outcome === 'cleared' ? 'gold' : payload.outcome === 'extracted' ? 'prismatic' : 'silver',
     });
@@ -3510,41 +3757,54 @@ export class OverlayManager {
         .map((s) => s.name)
         .join(' • ');
       box.appendChild(
-        this.el('div', 'card', `Synergies Discovered This Run: ${synNames}`)
+        this.el('div', 'card', `Synergies: ${synNames}`)
       );
     }
 
-    box.appendChild(
-      this.el(
-        'div',
-        'card',
-        `Banked: Gold ${summary.goldBanked} • Shards ${summary.shardsBanked} • Cores ${summary.coresBanked} • +${summary.expGained} EXP (Lv.${summary.newLevel}${summary.leveledUp ? ' Level Up!' : ''})${summary.bountyApplied ? ' [2x Bounty]' : ''}${summary.restedApplied ? ' [2x Rested]' : ''}${summary.playerRank ? ` • Daily Rank #${summary.playerRank}` : ''}`
-      )
-    );
+    const ledger = this.el('div', 'summary-ledger');
+    const expNote = summary.leveledUp
+      ? `Lv.${summary.newLevel} Up`
+      : `Lv.${summary.newLevel}`;
+    const ledgerCells: readonly { label: string; value: string; cls: string; note?: string }[] = [
+      { label: 'Gold', value: summary.goldBanked.toLocaleString(), cls: 'is-gold' },
+      { label: 'Shards', value: summary.shardsBanked.toLocaleString(), cls: 'is-jade' },
+      { label: 'Boss Cores', value: summary.coresBanked.toLocaleString(), cls: 'is-violet' },
+      { label: 'EXP', value: `+${summary.expGained.toLocaleString()}`, cls: '', note: expNote },
+    ];
+    for (const cellDef of ledgerCells) {
+      const cell = this.el('div', `summary-ledger__cell ${cellDef.cls}`.trim());
+      cell.appendChild(this.el('span', 'summary-ledger__label', cellDef.label));
+      cell.appendChild(this.el('span', 'summary-ledger__val', cellDef.value));
+      if (cellDef.note) {
+        cell.appendChild(this.el('span', 'summary-ledger__note', cellDef.note));
+      }
+      ledger.appendChild(cell);
+    }
+    box.appendChild(ledger);
 
     const ritualParts: string[] = [];
+    if (summary.bountyApplied) {
+      ritualParts.push('2x Bounty');
+    }
+    if (summary.restedApplied) {
+      ritualParts.push('2x Rested');
+    }
     if (summary.dailyChestsUnlocked && summary.dailyChestsUnlocked.length > 0) {
       ritualParts.push(
-        `Daily Chests Claimed: ${summary.dailyChestsUnlocked.map((f) => `F${f}`).join(', ')}`
+        `Daily Chests: ${summary.dailyChestsUnlocked.map((f) => `F${f}`).join(', ')}`
       );
     }
     if (summary.dailyBountyCompleted) {
-      ritualParts.push(`Daily Mastery Bounty Completed (+${summary.dailyBountyShards ?? 0} Shards)`);
+      ritualParts.push(`Mastery Bounty (+${summary.dailyBountyShards ?? 0} Shards)`);
     }
     if (ritualParts.length > 0) {
-      box.appendChild(this.el('div', 'card', ritualParts.join(' • ')));
+      box.appendChild(this.el('div', 'card', ritualParts.join(' · ')));
     }
 
     const nonLegDrops = summary.drops.filter((d) => d.id !== summary.legendaryDrop?.id);
     const totalNewDrops = (summary.legendaryDrop ? 1 : 0) + nonLegDrops.length;
 
     if (totalNewDrops > 0) {
-      const slotLabels: Record<GearSlot, string> = {
-        weapon: 'Weapon',
-        headgear: 'Headpiece',
-        top: 'Armor',
-        cape: 'Cape',
-      };
       const tierPriority: Record<GearItem['tier'], number> = {
         legendary: 0,
         rare: 1,
@@ -3615,7 +3875,7 @@ export class OverlayManager {
           this.el(
             'div',
             'muted',
-            `${slotLabels[item.slot]} • +${item.baseStatBonus} Power${deltaTxt}`
+            `${GEAR_SLOT_LABELS[item.slot]} • +${item.baseStatBonus} Power${deltaTxt}`
           )
         );
         card.appendChild(this.el('div', 'muted', item.affixText));
@@ -3693,7 +3953,7 @@ export class OverlayManager {
             ? 'Copied Summary'
             : shareState === 'posting'
               ? 'Sharing Build...'
-              : 'Share Build to Reddit Comments';
+              : 'Share Build';
       mountHdActionRow(actions, [
         {
           label: shareLabel,

@@ -23,18 +23,18 @@ export type GearVisualStyle = {
 };
 
 const TIER_COLORS: Record<'normal' | 'rare' | 'legendary', { hex: number; css: string }> = {
-  normal: { hex: 0xcbd5e1, css: '#cbd5e1' },
-  rare: { hex: 0x38bdf8, css: '#38bdf8' },
-  legendary: { hex: 0xfbbf24, css: '#fbbf24' },
+  normal: { hex: 0xc9beab, css: '#c9beab' },
+  rare: { hex: 0x6a96bd, css: '#6a96bd' },
+  legendary: { hex: 0xdfc073, css: '#dfc073' },
 };
 
-const CURSED_COLOR = { hex: 0xc084fc, css: '#c084fc' };
+const CURSED_COLOR = { hex: 0xa67aa8, css: '#a67aa8' };
 
 const ELEMENT_COLORS: Record<ElementId, { hex: number; css: string }> = {
-  fire: { hex: 0xf97316, css: '#f97316' },
-  ice: { hex: 0x67e8f9, css: '#67e8f9' },
-  lightning: { hex: 0xfde047, css: '#fde047' },
-  dark: { hex: 0xa855f7, css: '#a855f7' },
+  fire: { hex: 0xd46b34, css: '#d46b34' },
+  ice: { hex: 0x7ab4c7, css: '#7ab4c7' },
+  lightning: { hex: 0xdfc073, css: '#dfc073' },
+  dark: { hex: 0x9b6fa3, css: '#9b6fa3' },
 };
 
 const resolveItemColor = (
@@ -127,9 +127,9 @@ const drawGridToContext = (
     return Boolean(ch && ch !== '.' && palette[ch]);
   };
 
-  // HD-2D silhouette outer border pass
+  // Sumi-ink silhouette outer border pass
   if (hd2dStyle && pixelSize >= 3) {
-    ctx.fillStyle = borderCss ?? '#070a12';
+    ctx.fillStyle = borderCss ?? '#0e0a08';
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         if (!isFilled(r, c)) continue;
@@ -156,10 +156,10 @@ const drawGridToContext = (
     }
   }
 
-  // HD-2D top-left sunlit rim light & bottom contact bevel shading
+  // Subtle warm lantern rim light & grounded ink bottom shade
   if (hd2dStyle && pixelSize >= 3) {
-    const rimTop = rimCss ?? 'rgba(255, 250, 215, 0.34)';
-    const rimLeft = rimCss ?? 'rgba(255, 250, 215, 0.22)';
+    const rimTop = rimCss ?? 'rgba(248, 232, 194, 0.28)';
+    const rimLeft = rimCss ?? 'rgba(248, 232, 194, 0.16)';
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         if (!isFilled(r, c)) continue;
@@ -174,7 +174,7 @@ const drawGridToContext = (
           ctx.fillRect(x, y, 1, pixelSize);
         }
         if (!isFilled(r + 1, c)) {
-          ctx.fillStyle = 'rgba(6, 10, 22, 0.34)';
+          ctx.fillStyle = 'rgba(12, 8, 6, 0.38)';
           ctx.fillRect(x, y + pixelSize - 1, pixelSize, 1);
         }
       }
@@ -204,278 +204,375 @@ const drawPixelGrid = (
   tex.refresh();
 };
 
-// Chibi 14x14 Wuxia martial artist sprites (topknot, crossed hanfu robe, sash, martial boots)
+// High-craft 20x20 Wuxia martial artist sprites (centered topknot bun + hairpin, flowing ribbon, crossed hanfu robe, sash, martial stance)
 const WARRIOR_GRID: PixelGrid = [
-  '.....PPPP.....',
-  '....HHHHHH....',
-  '...HHHHHHHH...',
-  '..HHSSSSSSHH..',
-  '..HSSESSSESH..',
-  '...SSSSSSSS...',
-  '..AAAWAWAAAA..',
-  '.AAAAWAAWAAAA.',
-  '..AAWWWWWWAA..',
-  '..AAAAAAAAAA..',
-  '...BBB..BBB...',
-  '...KK....KK...',
-  '..KKK....KKK..',
-  '..............',
+  '........HHHH........',
+  '.......HPPPHH.......',
+  '.....hHHHHHHHH......',
+  '....hhHHHHHHHHH.....',
+  '...h..HSSSSSSH......',
+  '......HSSESSEH......',
+  '......HSSSSSSH......',
+  '.......sSSSSs.......',
+  '.....AAAWWWAAA......',
+  '....AAaAAWAAaAA.....',
+  '...AAaAAAWAAaAAA....',
+  '...AaAAAAWAAaAAs....',
+  '....aAWWWWWWWaa.....',
+  '....AAaaWGGaaAA.....',
+  '....AAaAAWAAaAA.....',
+  '.....aBB.W.BBa......',
+  '.....BBB...BBB......',
+  '.....KK.....KK......',
+  '....KKk.....KKk.....',
+  '....................',
 ];
 
 const MAGE_GRID: PixelGrid = [
-  '....PPPPPP....',
-  '....HHHHHH....',
-  '...HHHHHHHH...',
-  '..HHSSSSSSHH..',
-  '..HSSESSSESH..',
-  '...SSSSSSSS...',
-  '..RRRRWRWRRR..',
-  '.RRRRRWRWRRRR.',
-  '..RRWWWWWWWR..',
-  '..RRRRRRRRRR..',
-  '...RRRRRRRR...',
-  '...KK....KK...',
-  '..KKK....KKK..',
-  '..............',
+  '........HHHH........',
+  '......PPPHPPP.......',
+  '.....hHHHHHHHH......',
+  '....hhHHHHHHHHH.....',
+  '...h..HSSSSSSH......',
+  '......HSSESSEH......',
+  '......HSSSSSSH......',
+  '.......sSSSSs.......',
+  '.....RRRWWWRRR......',
+  '....RRrRRWRRrRR.....',
+  '...RRrRRRWRRrRRR....',
+  '...RrRRRRWRRrRRs....',
+  '....rRWWWWWWWrr.....',
+  '....RRrrWGGrrRR.....',
+  '....RRrRRWRRrRR.....',
+  '....rRRRRWRRRRr.....',
+  '.....rRR...RRr......',
+  '.....KK.....KK......',
+  '....KKk.....KKk.....',
+  '....................',
 ];
 
 const THIEF_GRID: PixelGrid = [
-  '.....PPPP.....',
-  '....HHHHHH....',
-  '...HHHHHHHH...',
-  '..HHSSSSSSHH..',
-  '..HSSESSSESH..',
-  '..HHMMMMMMHH..',
-  '..DDDAWADDDD..',
-  '.DDDDWAAWDDDD.',
-  '..DDWWWWWWDD..',
-  '..DDDDDDDDDD..',
-  '...DD....DD...',
-  '...KK....KK...',
-  '..KKK....KKK..',
-  '..............',
+  '........HHHH........',
+  '.......HPPPHH.......',
+  '.....hHHHHHHHH......',
+  '....hhHHHHHHHHH.....',
+  '...h..HSSSSSSH......',
+  '......HSSESSEH......',
+  '......HMMMMMMH......',
+  '.......MMMMMM.......',
+  '.....DDDWWWDDD......',
+  '....DDdDDWDDdDD.....',
+  '...DDdDDDWDDdDDD....',
+  '...DdDDDDWDDdDDs....',
+  '....dDWWWWWWWdd.....',
+  '....DDddWGGddDD.....',
+  '.....DdDDWDDdD......',
+  '.....dBB...BBd......',
+  '.....BBB...BBB......',
+  '.....KK.....KK......',
+  '....KKk.....KKk.....',
+  '....................',
 ];
 
 const BOWMAN_GRID: PixelGrid = [
-  '.....PPPP.....',
-  '....GGGGGG....',
-  '...GGGGGGGG...',
-  '..GGSSSSSSGG..',
-  '..GSSESSSESG..',
-  '...SSSSSSSS...',
-  '..GGGWGWGGGG..',
-  '.GGGGWGWGGGGG.',
-  '..GGWWWWWWGG..',
-  '..GGGGGGGGGG..',
-  '...BB....BB...',
-  '...KK....KK...',
-  '..KKK....KKK..',
-  '..............',
+  '........GGGG........',
+  '.......GPPPPG.......',
+  '.....hGGGGGGGG......',
+  '....hhGGGGGGGGG.....',
+  '...h..GSSSSSSG......',
+  '......GSSESSEG......',
+  '......GSSSSSSG......',
+  '.......sSSSSs.......',
+  '.....GGGWWWGGG......',
+  '....GGgGGWGGgGG.....',
+  '...GGgGGGWGGgGGG....',
+  '...GgGGGGWGGgGGs....',
+  '....gGWWWWWWWgg.....',
+  '....GGggWGGggGG.....',
+  '.....GgGGWGGgG......',
+  '.....gBB...BBg......',
+  '.....BBB...BBB......',
+  '.....KK.....KK......',
+  '....KKk.....KKk.....',
+  '....................',
 ];
 
 const HERO_GRIDS: Record<ClassId, { grid: PixelGrid; palette: Palette }> = {
   warrior: {
     grid: WARRIOR_GRID,
     palette: {
-      P: '#fbbf24',
-      H: '#1e293b',
-      S: '#fed7aa',
-      E: '#111827',
-      A: '#991b1b',
-      W: '#fde047',
-      B: '#475569',
-      K: '#0f172a',
+      P: '#dfc073',
+      H: '#1e1917',
+      h: '#332924',
+      S: '#f0cfa6',
+      s: '#cfa176',
+      E: '#14100e',
+      A: '#9e2a22',
+      a: '#6e1b16',
+      W: '#dfc073',
+      G: '#b88e44',
+      B: '#2d2622',
+      K: '#1a1512',
+      k: '#362c26',
     },
   },
   mage: {
     grid: MAGE_GRID,
     palette: {
-      P: '#38bdf8',
-      H: '#0f172a',
-      S: '#fed7aa',
-      E: '#111827',
-      R: '#1d4ed8',
-      W: '#fef08a',
-      K: '#1e1b4b',
+      P: '#7ba7c9',
+      H: '#191618',
+      h: '#2d272b',
+      S: '#f0cfa6',
+      s: '#cfa176',
+      E: '#14100e',
+      R: '#2e4e6e',
+      r: '#1d334a',
+      W: '#e8d8b0',
+      G: '#c8a254',
+      K: '#1a1518',
+      k: '#302830',
     },
   },
   thief: {
     grid: THIEF_GRID,
     palette: {
-      P: '#c084fc',
-      H: '#09090b',
-      S: '#fed7aa',
-      E: '#f43f5e',
-      M: '#1e1b4b',
-      D: '#312e81',
-      A: '#6366f1',
-      W: '#e9d5ff',
-      K: '#09090b',
+      P: '#a67aa8',
+      H: '#161316',
+      h: '#2a222b',
+      S: '#f0cfa6',
+      s: '#cfa176',
+      E: '#c2463c',
+      M: '#261e29',
+      D: '#3c2e45',
+      d: '#241a2b',
+      W: '#d8c4dd',
+      G: '#9e2a22',
+      B: '#211b24',
+      K: '#141016',
+      k: '#2c2430',
     },
   },
   bowman: {
     grid: BOWMAN_GRID,
     palette: {
-      P: '#6ee7b7',
-      G: '#111827',
-      S: '#fed7aa',
-      E: '#111827',
-      W: '#fde047',
-      B: '#065f46',
-      K: '#1e293b',
+      P: '#79b394',
+      G: '#253c32',
+      g: '#172720',
+      h: '#365246',
+      S: '#f0cfa6',
+      s: '#cfa176',
+      E: '#14100e',
+      W: '#dfc073',
+      B: '#1e2c26',
+      K: '#171412',
+      k: '#2f2924',
     },
   },
 };
 
-// Layered Gear Paperdoll Grids (white/silver shaded so tinting works in both Phaser and <canvas>)
+// Layered 20x20 Gear Paperdoll Grids (white/silver shaded so tinting works in both Phaser and <canvas>)
 const GEAR_CAPE_GRID: PixelGrid = [
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '..............',
-  '.TTT..........',
-  'TTTMM.........',
-  'TTMMM.........',
-  'TTMMMS........',
-  'TTMMMS........',
-  '.TMSSS........',
-  '.TSSS.........',
-  '..............',
-  '..............',
+  '....................',
+  '....................',
+  '....................',
+  '....................',
+  '....................',
+  '....................',
+  '....................',
+  '...TTT..............',
+  '..TTTMM.............',
+  '.TTMMMM.............',
+  '.TTMMMMS............',
+  'TTMMMMS.............',
+  'TTMMMMS.............',
+  '.TMMMSS.............',
+  '.TMMSS..............',
+  '..TMSS..............',
+  '..TSS...............',
+  '....................',
+  '....................',
+  '....................',
 ];
 
 const GEAR_HEAD_GRIDS: Record<ClassId, PixelGrid> = {
   warrior: [
-    '..TT......TT..',
-    '..TTMMMMMMTT..',
-    '..MMMMMMMMMM..',
-    '.MMTT....TTMM.',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
+    '......TT....TT......',
+    '.....TTTMMMMTTT.....',
+    '....MMMMMMMMMMMM....',
+    '....MMTT....TTMM....',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
   ],
   mage: [
-    '......MM......',
-    '.....MMMM.....',
-    '....MMTTMM....',
-    '..MMMMMMMMMM..',
-    '.TTTTTTTTTTTT.',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
+    '........MMMM........',
+    '.......MMMMMM.......',
+    '......MMTTTTMM......',
+    '....MMMMMMMMMMMM....',
+    '...TTTTTTTTTTTTTT...',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
   ],
   thief: [
-    '...MMMMMMMM...',
-    '..MMMMMMMMMM..',
-    '..MM......MM..',
-    '..............',
-    '..TTTTTTTTTT..',
-    '...SSSSSSSS...',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
+    '.....MMMMMMMMMM.....',
+    '....MMMMMMMMMMMM....',
+    '....MM........MM....',
+    '....................',
+    '....TTTTTTTTTTTT....',
+    '.....SSSSSSSSSS.....',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
   ],
   bowman: [
-    '..........TT..',
-    '...MMMMMMMMT..',
-    '..MMMMMMMMMM..',
-    '.TTTTTTTTTTTT.',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
+    '.............TT.....',
+    '.....MMMMMMMMTT.....',
+    '....MMMMMMMMMMMM....',
+    '...TTTTTTTTTTTTTT...',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
   ],
 };
 
 const GEAR_TOP_GRIDS: Record<ClassId, PixelGrid> = {
   warrior: [
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '.TTMMMMMMMMTT.',
-    '.MMTMTTTTMTMM.',
-    '..MMMMMMMMMM..',
-    '..SSSTTTTSSS..',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....TTMMMMMMMMTT....',
+    '...MMTMTTTTTTMTMM...',
+    '...MMMMMMMMMMMMMM...',
+    '....MMMMMMMMMMMM....',
+    '....SSSTTTTTTSSS....',
+    '.....SSSSSSSSSS.....',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
   ],
   mage: [
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..TTMMMMMMTT..',
-    '.MMMTTTTTTMMM.',
-    '.MMSSSSSSSSMM.',
-    '..TTTTTTTTTT..',
-    '..SSSSSSSSSS..',
-    '..............',
-    '..............',
-    '..............',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....TTMMMMMMMMTT....',
+    '...MMMTTTTTTTTMMM...',
+    '...MMSSSSSSSSSSMM...',
+    '....TTTTTTTTTTTT....',
+    '....SSSSSSSSSSSS....',
+    '.....SSSSSSSSSS.....',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
   ],
   thief: [
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..MMMMMMMMMM..',
-    '.MMTMMMMMMTMM.',
-    '..MMTTTTTTMM..',
-    '...SSSSSSSS...',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....MMMMMMMMMMMM....',
+    '...MMTMMMMMMMMTMM...',
+    '....MMTTTTTTTTMM....',
+    '.....SSSSSSSSSS.....',
+    '.....SSSSSSSSSS.....',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
   ],
   bowman: [
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..TTMMMMMMTT..',
-    '.MMTTTTTTTTMM.',
-    '..MMMMMMMMMM..',
-    '..SSSSSSSSSS..',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
-    '..............',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....TTMMMMMMMMTT....',
+    '...MMTTTTTTTTTTMM...',
+    '...MMMMMMMMMMMMMM...',
+    '....SSSSSSSSSSSS....',
+    '.....SSSSSSSSSS.....',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
   ],
 };
 
@@ -619,50 +716,68 @@ const RUNE_BOOK_GRID: PixelGrid = [
   '.BBBBBB.',
 ];
 
-// Wuxia Cultist Mobs & Sect Bosses (humanoid, facing left toward hero)
+// Wuxia Cultist Mobs (16x18 humanoid sect disciples facing left toward hero, pixelSize 3 -> 48x54)
 const MOB_SLIME_GRID: PixelGrid = [
-  'W...MMMM....',
-  'W..MMMMMM...',
-  'W.MMKKKKMM..',
-  'W.MKEKKEKM..',
-  'W..MMMMMM...',
-  'WWMMMMMMMM..',
-  '.MMDDDDDDMM.',
-  '.MMMWWWWMMM.',
-  '..MMMMMMMM..',
-  '..MMDDDDMM..',
-  '..KK....KK..',
-  '.KKK....KKK.',
+  'W.....MMMMMM....',
+  'W....MMMMMMMM...',
+  'W...MMKKKKKKMM..',
+  'W...MKEKKKEKMM..',
+  'W....MKKKKKKM...',
+  'WW...MMMMMMMM...',
+  'WW..MMDDDDDDMM..',
+  '.K.MMMDDDDDDMMM.',
+  '...MMMWWWWWWWMM.',
+  '...MMMMMMMMMMMM.',
+  '....MMDDDDDDMM..',
+  '....MMMMMMMMMM..',
+  '....MMDDDDDDMM..',
+  '.....MM....MM...',
+  '.....KK....KK...',
+  '....KKK....KKK..',
+  '................',
+  '................',
 ];
 
 const MOB_MUSH_GRID: PixelGrid = [
-  '....CCCC....',
-  '..CCCCCCCC..',
-  '.CCWCCCCWCC.',
-  'CCCCCCCCCCCC',
-  '..KKKKKKKK..',
-  '..KEKKEKK...',
-  '.WMMMMMMMM..',
-  'W.MDDDDDDMM.',
-  '..MMMMMMMMW.',
-  '..MMDDDDMM..',
-  '..KK....KK..',
-  '.KKK....KKK.',
+  '......CCCCCC....',
+  '....CCCCCCCCCC..',
+  '..CCCWCCCCCCWCCC',
+  '.CCCCCCCCCCCCCCC',
+  '....KKKKKKKKKK..',
+  '....KEKKKEKKKK..',
+  '....KKKKKKKKKK..',
+  '..W.MMMMMMMMMM..',
+  '.W..MMDDDDDDMM..',
+  'W..MMMDDDDDDMMM.',
+  '....MMWWWWWWMMW.',
+  '....MMMMMMMMMM..',
+  '....MMDDDDDDMM..',
+  '.....MM....MM...',
+  '.....KK....KK...',
+  '....KKK....KKK..',
+  '................',
+  '................',
 ];
 
 const MOB_HORNED_GRID: PixelGrid = [
-  'W...KKKKK...',
-  'WW.KWWWWWK..',
-  'WW.KKEKKEK..',
-  'W.MMMMMMMMM.',
-  'K.MMDDDDDMM.',
-  'KMDDDDDDDDMM',
-  'K..MMWWWMM..',
-  'K..MMMMMMM..',
-  'K..MMDDDMM..',
-  'K...KK.KK...',
-  'K...KK.KK...',
-  '...KKK.KKK..',
+  'W.....KKKKKK....',
+  'WW...KWWWWWWK...',
+  'WW...KKEKKEKK...',
+  'WW...KKKKKKKK...',
+  'W...MMMMMMMMMM..',
+  'K..MMMDDDDDDMMM.',
+  'K.MMDDDDDDDDDDMM',
+  'K...MMWWWWWWMM..',
+  'K...MMMMMMMMMM..',
+  'K...MMDDDDDDMM..',
+  'K...MMMMMMMMMM..',
+  'K....MMDDDDMM...',
+  'K....KK....KK...',
+  'K....KK....KK...',
+  '....KKK....KKK..',
+  '................',
+  '................',
+  '................',
 ];
 
 // Cult Hall Master Mini-Boss variants (humanoid, facing left)
@@ -778,24 +893,27 @@ export const renderHeroPaperdollCanvas = (
   ctx.imageSmoothingEnabled = false;
 
   const style = getGearVisualStyle(classId, equipped);
-  const pixelSize = Math.max(2, Math.floor(Math.min(w, h) / 18));
-  const heroOffsetX = Math.round((w - 14 * pixelSize) / 2) - Math.round(pixelSize * 1.2);
-  const heroOffsetY = Math.round((h - 14 * pixelSize) / 2);
+  const heroCfg = HERO_GRIDS[classId];
+  const cols = heroCfg.grid[0]?.length ?? 20;
+  const rows = heroCfg.grid.length || 20;
+  const pixelSize = Math.max(2, Math.floor(Math.min(w / (cols + 4), h / (rows + 4))));
+  const heroOffsetX = Math.round((w - cols * pixelSize) / 2);
+  const heroOffsetY = Math.round((h - rows * pixelSize) / 2);
 
-  // Subtle HD-2D ground contact shadow + atmospheric backlight
-  const shadowCx = heroOffsetX + 7 * pixelSize;
-  const shadowCy = heroOffsetY + 13 * pixelSize;
-  const shGrad = ctx.createRadialGradient(shadowCx, shadowCy, 2, shadowCx, shadowCy, pixelSize * 5.2);
-  shGrad.addColorStop(0, 'rgba(3, 6, 14, 0.65)');
+  // Warm grounded contact shadow + subtle lantern backlight
+  const shadowCx = heroOffsetX + Math.round(cols * 0.5) * pixelSize;
+  const shadowCy = heroOffsetY + (rows - 1) * pixelSize;
+  const shGrad = ctx.createRadialGradient(shadowCx, shadowCy, 2, shadowCx, shadowCy, pixelSize * 6.5);
+  shGrad.addColorStop(0, 'rgba(10, 7, 5, 0.72)');
   shGrad.addColorStop(1, 'transparent');
   ctx.fillStyle = shGrad;
   ctx.fillRect(0, 0, w, h);
 
   if (style.weaponGlowCss) {
-    const cx = heroOffsetX + 12 * pixelSize;
-    const cy = heroOffsetY + 7 * pixelSize;
-    const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, pixelSize * 5);
-    grad.addColorStop(0, `${style.weaponGlowCss}66`);
+    const cx = heroOffsetX + Math.round(cols * 0.78) * pixelSize;
+    const cy = heroOffsetY + Math.round(rows * 0.5) * pixelSize;
+    const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, pixelSize * 6);
+    grad.addColorStop(0, `${style.weaponGlowCss}55`);
     grad.addColorStop(1, 'transparent');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
@@ -807,7 +925,6 @@ export const renderHeroPaperdollCanvas = (
   }
 
   // 2. Base character sprite
-  const heroCfg = HERO_GRIDS[classId];
   drawGridToContext(ctx, heroCfg.grid, heroCfg.palette, pixelSize, heroOffsetX, heroOffsetY, null);
 
   // 3. Equipped Armor Top
@@ -839,9 +956,9 @@ export const renderHeroPaperdollCanvas = (
   // 5. Held Weapon in right hand
   if (style.hasWeapon) {
     const wepGrid = GEAR_WEAPON_GRIDS[classId];
-    const wepPixel = Math.max(2, Math.round(pixelSize * 0.78));
-    const wepX = heroOffsetX + 10 * pixelSize;
-    const wepY = heroOffsetY + 2 * pixelSize;
+    const wepPixel = Math.max(2, Math.round(pixelSize * 0.85));
+    const wepX = heroOffsetX + Math.round(cols * 0.68) * pixelSize;
+    const wepY = heroOffsetY + Math.round(rows * 0.16) * pixelSize;
     drawGridToContext(ctx, wepGrid, GEAR_SHADE_PALETTE, wepPixel, wepX, wepY, style.weaponCss);
   }
 };
@@ -1035,15 +1152,15 @@ const ASCENDED_HALO_STELLAR_GRID: PixelGrid = [
 ];
 
 export const registerPixelTextures = (scene: Phaser.Scene): void => {
-  // Base heroes (pixelSize 4 -> 56x56)
+  // Base heroes (20x20 at pixelSize 3 -> 60x60)
   for (const classId of CLASS_IDS) {
     const cfg = HERO_GRIDS[classId];
-    drawPixelGrid(scene, `hero_${classId}`, cfg.grid, cfg.palette, 4);
-    drawPixelGrid(scene, `gear_head_${classId}`, GEAR_HEAD_GRIDS[classId], GEAR_SHADE_PALETTE, 4);
-    drawPixelGrid(scene, `gear_top_${classId}`, GEAR_TOP_GRIDS[classId], GEAR_SHADE_PALETTE, 4);
+    drawPixelGrid(scene, `hero_${classId}`, cfg.grid, cfg.palette, 3);
+    drawPixelGrid(scene, `gear_head_${classId}`, GEAR_HEAD_GRIDS[classId], GEAR_SHADE_PALETTE, 3);
+    drawPixelGrid(scene, `gear_top_${classId}`, GEAR_TOP_GRIDS[classId], GEAR_SHADE_PALETTE, 3);
     drawPixelGrid(scene, `gear_wep_${classId}`, GEAR_WEAPON_GRIDS[classId], GEAR_SHADE_PALETTE, 3);
   }
-  drawPixelGrid(scene, 'gear_cape', GEAR_CAPE_GRID, GEAR_SHADE_PALETTE, 4);
+  drawPixelGrid(scene, 'gear_cape', GEAR_CAPE_GRID, GEAR_SHADE_PALETTE, 3);
 
   // Combat VFX sprites
   drawPixelGrid(
@@ -1084,27 +1201,27 @@ export const registerPixelTextures = (scene: Phaser.Scene): void => {
     3
   );
 
-  // Sect Cultist mobs (white-tinted base so per-sect tint colors robes vividly)
+  // Sect Cultist mobs (16x18 at pixelSize 3 -> 48x54, white-tinted base for sect robes)
   drawPixelGrid(
     scene,
     'mob_0',
     MOB_SLIME_GRID,
-    { K: '#0f172a', M: '#ffffff', D: '#cbd5e1', W: '#f8fafc', E: '#fef08a' },
-    4
+    { K: '#14100e', M: '#ffffff', D: '#c4b8a6', W: '#f0e6d2', E: '#ecd492' },
+    3
   );
   drawPixelGrid(
     scene,
     'mob_1',
     MOB_MUSH_GRID,
-    { K: '#0f172a', C: '#fef3c7', W: '#fde68a', M: '#ffffff', D: '#cbd5e1', E: '#fef08a' },
-    4
+    { K: '#14100e', C: '#e6d8be', W: '#d6be8a', M: '#ffffff', D: '#c4b8a6', E: '#ecd492' },
+    3
   );
   drawPixelGrid(
     scene,
     'mob_2',
     MOB_HORNED_GRID,
-    { K: '#0f172a', M: '#ffffff', D: '#cbd5e1', W: '#f8fafc', E: '#ef4444' },
-    4
+    { K: '#14100e', M: '#ffffff', D: '#c4b8a6', W: '#f0e6d2', E: '#c23b2f' },
+    3
   );
 
   // Sect Hall Master Mini-Boss variants & Supreme Cult Leader

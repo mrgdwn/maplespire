@@ -25,7 +25,7 @@ export const startWuxiaSpire = (): void => {
   const config: Phaser.Types.Core.GameConfig = {
     type: AUTO,
     parent: 'game-container',
-    backgroundColor: '#0b101b',
+    backgroundColor: '#0d0b0a',
     pixelArt: true,
     scale: {
       mode: Phaser.Scale.RESIZE,

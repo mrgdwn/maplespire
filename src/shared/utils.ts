@@ -149,66 +149,66 @@ const NORMAL_FALLBACK_NAMES: Record<GearSlot, string> = {
 
 const CLASS_WEAPON_NAMES: Record<ClassId, readonly string[]> = {
   warrior: [
-    'Black-Iron Broadsword (玄铁阔剑)',
-    'Yanling Willow-Leaf Saber (雁翎刀)',
-    'Mount Song Ring-Pommel Dao (厚背环刀)',
-    'Tiger-Head Crescent Blade (虎头月牙刀)',
-    'Heavy Steel Falchion (厚背重砍刀)',
-    'Dragon-Pattern Greatsword (龙纹大剑)',
+    'Black-Iron Broadsword',
+    'Yanling Willow-Leaf Saber',
+    'Mount Song Ring-Pommel Dao',
+    'Tiger-Head Crescent Blade',
+    'Heavy Steel Falchion',
+    'Dragon-Pattern Greatsword',
   ],
   mage: [
-    'Green-Bamboo Staff (青竹仗)',
-    'Mount Wudang Peachwood Sword (武当桃木剑)',
-    'Cold-Jade Melody Flute (寒玉长笛)',
-    'Seven-Star Bronze Sword (七星古铜剑)',
-    'Daoist Pure-Yang Whisk (纯阳拂尘)',
-    'Ancient Tomb Iron-Lute (古墓铁琴)',
+    'Green-Bamboo Staff',
+    'Mount Wudang Peachwood Sword',
+    'Cold-Jade Melody Flute',
+    'Seven-Star Bronze Sword',
+    'Daoist Pure-Yang Whisk',
+    'Ancient Tomb Iron-Lute',
   ],
   thief: [
-    'Willow-Leaf Twin Daggers (柳叶双刃)',
-    'Iron-Ribbed Scholar Fan (铁骨折扇)',
-    'Cicada-Wing Shadow Blade (蝉翼短剑)',
-    'Cold-Iron Stabbing Awl (透骨寒铁锥)',
-    'Meteor Flying Darts (流星飞镖)',
-    'Fish-Intestine Concealed Dagger (鱼肠短匕)',
+    'Willow-Leaf Twin Daggers',
+    'Iron-Ribbed Scholar Fan',
+    'Cicada-Wing Shadow Blade',
+    'Cold-Iron Stabbing Awl',
+    'Meteor Flying Darts',
+    'Fish-Intestine Concealed Dagger',
   ],
   bowman: [
-    'Black-Horn Steppe Recurve Bow (黑角复合弓)',
-    'Mulberry-Wood Heavy Bow (落月桑木弓)',
-    'Thousand-Needle Sleeve Launcher (袖里千针筒)',
-    'Flying Feather Short Warbow (飞羽战弓)',
-    'Iron-Bodkin Heavy Crossbow (穿云铁矢弩)',
-    'Whistling-Wind Steppe Longbow (鸣镝长弓)',
+    'Black-Horn Steppe Recurve Bow',
+    'Mulberry-Wood Heavy Bow',
+    'Thousand-Needle Sleeve Launcher',
+    'Flying Feather Short Warbow',
+    'Iron-Bodkin Heavy Crossbow',
+    'Whistling-Wind Steppe Longbow',
   ],
 };
 
 const HEADGEAR_NAMES: readonly string[] = [
-  'Bamboo Weaver Hat (竹编斗笠)',
-  'Daoist Pure-Yang Topknot Cap (纯阳巾)',
-  'Beggar Coarse Linen Bandana (丐帮粗葛巾)',
-  'Ancient Tomb White-Jade Hairpin (古墓白玉簪)',
-  'Mount Hua Scholar Crest (华山文生巾)',
-  'Iron-Plate Martial Headband (青铜护额带)',
-  'Cloud-Mist Concealment Veil (青纱遮面帽)',
+  'Bamboo Weaver Hat',
+  'Daoist Pure-Yang Topknot Cap',
+  'Beggar Coarse Linen Bandana',
+  'Ancient Tomb White-Jade Hairpin',
+  'Mount Hua Scholar Crest',
+  'Iron-Plate Martial Headband',
+  'Cloud-Mist Concealment Veil',
 ];
 
 const TOP_NAMES: readonly string[] = [
-  'Wandering Disciple Indigo Robe (青布直裰)',
-  'Daoist Eight-Trigram Vestment (太极八卦袍)',
-  'Shaolin Hundred-Patch Monk Robe (百衲袈裟)',
-  'Ancient Tomb Pure-White Silk Dress (素白轻纱长衫)',
-  'Iron-Ring Leather Armor (铁环护心甲)',
-  'Beggar Sect Patchwork Tunic (丐帮百结衣)',
-  'Imperial Brocade Uniform (飞鱼锦衣)',
+  'Wandering Disciple Indigo Robe',
+  'Daoist Eight-Trigram Vestment',
+  'Shaolin Hundred-Patch Monk Robe',
+  'Ancient Tomb Pure-White Silk Dress',
+  'Iron-Ring Leather Armor',
+  'Beggar Sect Patchwork Tunic',
+  'Imperial Brocade Uniform',
 ];
 
 const CAPE_NAMES: readonly string[] = [
-  'Wind-Torn Wanderer Cloak (破旧斗篷)',
-  'Autumn-River Azure Silk Mantle (秋水长风披)',
-  'Pine-Needle Weather Straw Cape (避雨蓑衣)',
-  'Northern Steppe Wolf-Fur Mantle (北地狼皮氅)',
-  'Night-Crow Stealth Silk Shroud (夜行隐风斗篷)',
-  'Golden-Thread Cloud Scarf (金丝青云披)',
+  'Wind-Torn Wanderer Cloak',
+  'Autumn-River Azure Silk Mantle',
+  'Pine-Needle Weather Straw Cape',
+  'Northern Steppe Wolf-Fur Mantle',
+  'Night-Crow Stealth Silk Shroud',
+  'Golden-Thread Cloud Scarf',
 ];
 
 const RARE_PREFIXES: readonly string[] = [
@@ -303,6 +303,19 @@ export const createGearItem = (
   };
 };
 
+export const getRegularFloorRareChance = (floor: number): number => {
+  if (floor >= 30) return 0.7;
+  if (floor >= 20) return 0.5;
+  if (floor >= 10) return 0.3;
+  return 0.15;
+};
+
+export const getMiniBossLegendaryChance = (floor: number): number => {
+  if (floor >= 40) return 0.35;
+  if (floor >= 20) return 0.25;
+  return 0.18;
+};
+
 export const createLegendaryGearItem = (
   rng: () => number,
   classId: ClassId,
@@ -311,8 +324,10 @@ export const createLegendaryGearItem = (
   floorLevel = 10
 ): GearItem => {
   const pool = getLegendariesForClass(classId);
-  const weapons = pool.filter((item) => item.slot === 'weapon');
-  const rollPool = weapons.length > 0 && rng() < 0.5 ? weapons : pool;
+  const slots: readonly GearSlot[] = ['weapon', 'headgear', 'top', 'cape'];
+  const pickedSlot = slots[Math.floor(rng() * slots.length)] ?? 'weapon';
+  const slotPool = pool.filter((item) => item.slot === pickedSlot);
+  const rollPool = slotPool.length > 0 ? slotPool : pool;
   const chosen = rollPool[Math.floor(rng() * rollPool.length)] ?? pool[0];
   if (!chosen) {
     throw new Error(`No legendaries defined for class ${classId}`);
