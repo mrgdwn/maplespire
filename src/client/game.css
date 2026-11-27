@@ -3642,20 +3642,30 @@ body {
   color: var(--hd-ivory);
 }
 
+.summary-ledger__cell.is-gold .summary-ledger__val,
 .summary-ledger__val.is-gold {
   color: var(--hd-gold-bright);
 }
 
+.summary-ledger__cell.is-jade .summary-ledger__val,
 .summary-ledger__val.is-jade {
   color: var(--hd-jade);
 }
 
+.summary-ledger__cell.is-azure .summary-ledger__val,
 .summary-ledger__val.is-azure {
   color: var(--hd-azure);
 }
 
+.summary-ledger__cell.is-violet .summary-ledger__val,
 .summary-ledger__val.is-violet {
   color: var(--hd-violet);
+}
+
+.summary-ledger__note {
+  font-size: 10px;
+  color: var(--hd-muted);
+  line-height: 1.2;
 }
 
 @media (max-width: 640px) {

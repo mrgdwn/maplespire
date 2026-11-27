@@ -25,6 +25,7 @@ import {
   calculateLeaderboardScore,
   claimLoginStreakReward,
   createInitialProfile,
+  createLegendaryGearItem,
   createSpecificLegendaryGearItem,
   evaluateDailyMasteryBounty,
   getDailyChallengeConfig,
@@ -32,6 +33,8 @@ import {
   getDailySectDecree,
   getDay14SlotLegendaryChoices,
   getLoginStreakStatus,
+  getMiniBossLegendaryChance,
+  getRegularFloorRareChance,
   getSlotUpgradeCost,
   mulberry32,
   parsePlayerProfile,
@@ -407,6 +410,37 @@ void describe('Wuxia Spire Shared Catalogs & Game Logic', async () => {
       const cost = getSlotUpgradeCost(lvl);
       assert.equal(cost.gold, 0);
       assert.equal(cost.shards, 10 + lvl * 6);
+    }
+  });
+
+  await it('scales floor rarity curves and distributes Legendary slots evenly across all 4 slots', () => {
+    assert.equal(getRegularFloorRareChance(2), 0.15);
+    assert.equal(getRegularFloorRareChance(10), 0.3);
+    assert.equal(getRegularFloorRareChance(20), 0.5);
+    assert.equal(getRegularFloorRareChance(30), 0.7);
+
+    assert.equal(getMiniBossLegendaryChance(6), 0.18);
+    assert.equal(getMiniBossLegendaryChance(20), 0.25);
+    assert.equal(getMiniBossLegendaryChance(40), 0.35);
+
+    const rng = mulberry32(424242);
+    const slotCounts = { weapon: 0, headgear: 0, top: 0, cape: 0 };
+    const sampleSize = 400;
+    for (let i = 0; i < sampleSize; i++) {
+      const item = createLegendaryGearItem(rng, 'warrior', false, `t${i}`, 20);
+      assert.equal(item.tier, 'legendary');
+      assert.equal(item.maxSockets, 0);
+      assert.deepEqual(item.sockets, []);
+      assert.ok(!/[\u4e00-\u9fff]/.test(item.name));
+      slotCounts[item.slot] += 1;
+    }
+
+    // Uniform 25% per slot (~100 each out of 400; verify each slot stays within [70, 130])
+    for (const slot of ['weapon', 'headgear', 'top', 'cape'] as const) {
+      assert.ok(
+        slotCounts[slot] >= 70 && slotCounts[slot] <= 130,
+        `Expected balanced slot count for ${slot}, got ${slotCounts[slot]}`
+      );
     }
   });
 });

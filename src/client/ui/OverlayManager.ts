@@ -175,6 +175,7 @@ const pickSmartAutoDraft = (
   if (cards.length === 0) return null;
   const ownedActiveIds = new Set(loadout.actives.map((a) => a.id));
   const ownedQiIds = new Set(loadout.innerQis.map((q) => q.id));
+  const awakened = new Set(loadout.awakenedSynergies);
 
   let best = cards[0]!;
   let bestScore = -1;
@@ -185,7 +186,7 @@ const pickSmartAutoDraft = (
       score += 1000;
     } else if (card.kind === 'active') {
       const pairsOwnedQi = WUXIA_SECRET_SYNERGIES.some(
-        (syn) => syn.activeId === card.id && ownedQiIds.has(syn.innerQiId)
+        (syn) => !awakened.has(syn.id) && syn.activeId === card.id && ownedQiIds.has(syn.innerQiId)
       );
       if (card.currentLevel > 0) {
         score += 260 + (card.nextLevel === 3 ? 90 : card.nextLevel === 5 ? 70 : 20);
@@ -195,7 +196,7 @@ const pickSmartAutoDraft = (
       if (pairsOwnedQi) score += 320;
     } else if (card.kind === 'inner_qi') {
       const pairsOwnedActive = WUXIA_SECRET_SYNERGIES.some(
-        (syn) => syn.innerQiId === card.id && ownedActiveIds.has(syn.activeId)
+        (syn) => !awakened.has(syn.id) && syn.innerQiId === card.id && ownedActiveIds.has(syn.activeId)
       );
       score += card.currentLevel > 0 ? 210 : 130;
       if (pairsOwnedActive) score += 340;
@@ -3101,7 +3102,14 @@ export class OverlayManager {
     // Hotkey 1-3 selection (with 220ms anti-misclick settle delay)
     const openedAtMs = performance.now();
     const onDraftKeyDown = (event: KeyboardEvent): void => {
-      if (this.isDraftMinimized || !backdrop.isConnected) return;
+      if (
+        this.isDraftMinimized ||
+        this.codexDrawerOpen ||
+        this.utilityMenuOpen ||
+        !backdrop.isConnected
+      ) {
+        return;
+      }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
@@ -3573,10 +3581,9 @@ export class OverlayManager {
     if (payload.mode === 'daily') {
       nextLoginStreak.dailyChestsDate = dateKey;
       for (const chestFloor of DAILY_CHEST_FLOORS) {
-        if (
-          clearedFloors >= chestFloor &&
-          !nextLoginStreak.dailyChestsClaimed.includes(chestFloor)
-        ) {
+        const reachedMilestone =
+          clearedFloors >= chestFloor || (chestFloor === 30 && payload.outcome === 'cleared');
+        if (reachedMilestone && !nextLoginStreak.dailyChestsClaimed.includes(chestFloor)) {
           nextLoginStreak.dailyChestsClaimed.push(chestFloor);
           dailyChestsUnlocked.push(chestFloor);
           const reward = getDailyChestRewards(chestFloor);
@@ -3585,12 +3592,12 @@ export class OverlayManager {
           if (reward.rareDrop) {
             const slot = slots[Math.floor(rng() * slots.length)] ?? 'weapon';
             keptDrops.unshift(
-              createGearItem(rng, payload.classId, slot, 'rare', chestFloor, `chest${chestFloor}`)
+              createGearItem(rng, payload.classId, slot, 'rare', chestFloor, `chest_f${chestFloor}`)
             );
           }
           if (reward.legendaryDrop) {
             legendaryDrops.push(
-              createLegendaryGearItem(rng, payload.classId, false, `chest${chestFloor}`, chestFloor)
+              createLegendaryGearItem(rng, payload.classId, false, `chest_f${chestFloor}`, chestFloor)
             );
           }
         }
