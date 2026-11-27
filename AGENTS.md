@@ -1,4 +1,4 @@
-You are writing a Devvit Web application (**Wuxia Spire**, app slug `maplespire`) that runs inside an iFrame on Reddit.com.
+You are writing a Devvit Web application (**Wuxia Spire**, app slug `wuxia-spire`) that runs inside an iFrame on Reddit.com.
 
 ## Tech Stack
 
@@ -55,7 +55,7 @@ You are writing a Devvit Web application (**Wuxia Spire**, app slug `maplespire`
 
 - Do NOT use Devvit Blocks or `@devvit/public-api` anywhere; this project is pure Devvit Web.
 - Whenever adding a new menu item, form, or trigger endpoint, register its corresponding mapping in `devvit.json`.
-- Keep `"name": "maplespire"` unchanged in `devvit.json` so it continues matching the registered Devvit app slug.
+- Keep `"name": "wuxia-spire"` unchanged in `devvit.json` so it continues matching the registered Devvit app slug.
 - Maintain pure **Wuxia martial-arts theming** throughout catalogs, UI copy, weapons, cult mobs, and sprites; do not introduce non-Wuxia fantasy classes, slime monsters, or elemental weapon sockets (`maxSockets: 0` and `sockets: []` must remain enforced on gear generation and `parseGearItem`).
 - Keep drop/reward logic consistent between `src/server/routes/api.ts` (`/api/run/complete`) and the local fallback (`applyRunCompleteLocally` in `src/client/ui/OverlayManager.ts`).
 

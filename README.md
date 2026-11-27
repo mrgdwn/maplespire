@@ -125,7 +125,7 @@ Realms rotate every 3 floors across **5 Wuxia Cult Sects** (`src/shared/catalogs
    ```bash
    npm run login
    ```
-3. Ensure `"name"` in `devvit.json` matches your registered Devvit app slug on [developers.reddit.com](https://developers.reddit.com/new) (currently `"maplespire"`).
+3. Ensure `"name"` in `devvit.json` matches your registered Devvit app slug on [developers.reddit.com](https://developers.reddit.com/new) (currently `"wuxia-spire"`).
 4. Start live playtesting on your test subreddit:
    ```bash
    npm run dev

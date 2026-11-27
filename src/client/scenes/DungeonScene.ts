@@ -2492,7 +2492,7 @@ export class DungeonScene extends Scene {
             for (const e of [...this.enemies]) {
               if (Math.abs(e.sprite.x - leadTarget.sprite.x) <= 185) {
                 this.spawnHitSpark(e.sprite.x, e.sprite.y, true, 0xc084fc);
-                this.damageEnemy(e, pillarDmg, true, 'TRIBULATION', true);
+                this.damageEnemy(e, pillarDmg, true, 'LION ROAR', true);
                 if (e.hp > 0) e.stunTimer = Math.max(e.stunTimer, 0.45);
               }
             }
