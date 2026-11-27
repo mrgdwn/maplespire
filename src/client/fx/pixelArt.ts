@@ -204,467 +204,1482 @@ const drawPixelGrid = (
   tex.refresh();
 };
 
-// High-craft 20x20 Wuxia martial artist sprites (centered topknot bun + hairpin, flowing ribbon, crossed hanfu robe, sash, martial stance)
-const WARRIOR_GRID: PixelGrid = [
-  '........HHHH........',
-  '.......HPPPHH.......',
-  '.....hHHHHHHHH......',
-  '....hhHHHHHHHHH.....',
-  '...h..HSSSSSSH......',
-  '......HSSESSEH......',
-  '......HSSSSSSH......',
-  '.......sSSSSs.......',
-  '.....AAAWWWAAA......',
-  '....AAaAAWAAaAA.....',
-  '...AAaAAAWAAaAAA....',
-  '...AaAAAAWAAaAAs....',
-  '....aAWWWWWWWaa.....',
-  '....AAaaWGGaaAA.....',
-  '....AAaAAWAAaAA.....',
-  '.....aBB.W.BBa......',
-  '.....BBB...BBB......',
-  '.....KK.....KK......',
-  '....KKk.....KKk.....',
-  '....................',
-];
+// ==================== SUMI-E INK-BRUSH PAINTERLY CHARACTER & GEAR ENGINE ====================
 
-const MAGE_GRID: PixelGrid = [
-  '........HHHH........',
-  '......PPPHPPP.......',
-  '.....hHHHHHHHH......',
-  '....hhHHHHHHHHH.....',
-  '...h..HSSSSSSH......',
-  '......HSSESSEH......',
-  '......HSSSSSSH......',
-  '.......sSSSSs.......',
-  '.....RRRWWWRRR......',
-  '....RRrRRWRRrRR.....',
-  '...RRrRRRWRRrRRR....',
-  '...RrRRRRWRRrRRs....',
-  '....rRWWWWWWWrr.....',
-  '....RRrrWGGrrRR.....',
-  '....RRrRRWRRrRR.....',
-  '....rRRRRWRRRRr.....',
-  '.....rRR...RRr......',
-  '.....KK.....KK......',
-  '....KKk.....KKk.....',
-  '....................',
-];
+type HeroPose = 'idle' | 'walk' | 'attack' | 'dash';
+type WuxiaWeaponKind = 'sword' | 'heavy_sword' | 'staff' | 'flute' | 'needles';
 
-const THIEF_GRID: PixelGrid = [
-  '........HHHH........',
-  '.......HPPPHH.......',
-  '.....hHHHHHHHH......',
-  '....hhHHHHHHHHH.....',
-  '...h..HSSSSSSH......',
-  '......HSSESSEH......',
-  '......HMMMMMMH......',
-  '.......MMMMMM.......',
-  '.....DDDWWWDDD......',
-  '....DDdDDWDDdDD.....',
-  '...DDdDDDWDDdDDD....',
-  '...DdDDDDWDDdDDs....',
-  '....dDWWWWWWWdd.....',
-  '....DDddWGGddDD.....',
-  '.....DdDDWDDdD......',
-  '.....dBB...BBd......',
-  '.....BBB...BBB......',
-  '.....KK.....KK......',
-  '....KKk.....KKk.....',
-  '....................',
-];
+type HeroSumiPalette = {
+  robeMain: string;
+  robeDark: string;
+  robeLight: string;
+  inner: string;
+  innerLight: string;
+  trim: string;
+  trimDark: string;
+  scarf: string;
+  scarfEdge: string;
+  hair: string;
+  hairHi: string;
+  eye: string;
+  eyeGlint: string;
+  boots: string;
+};
 
-const BOWMAN_GRID: PixelGrid = [
-  '........GGGG........',
-  '.......GPPPPG.......',
-  '.....hGGGGGGGG......',
-  '....hhGGGGGGGGG.....',
-  '...h..GSSSSSSG......',
-  '......GSSESSEG......',
-  '......GSSSSSSG......',
-  '.......sSSSSs.......',
-  '.....GGGWWWGGG......',
-  '....GGgGGWGGgGG.....',
-  '...GGgGGGWGGgGGG....',
-  '...GgGGGGWGGgGGs....',
-  '....gGWWWWWWWgg.....',
-  '....GGggWGGggGG.....',
-  '.....GgGGWGGgG......',
-  '.....gBB...BBg......',
-  '.....BBB...BBB......',
-  '.....KK.....KK......',
-  '....KKk.....KKk.....',
-  '....................',
-];
+const INK = '#0e0a08';
+const WARM_RIM = 'rgba(244, 224, 176, 0.42)';
+const WARM_RIM_SOFT = 'rgba(244, 224, 176, 0.24)';
 
-const HERO_GRIDS: Record<ClassId, { grid: PixelGrid; palette: Palette }> = {
+const HERO_SUMI_PALETTES: Record<ClassId, HeroSumiPalette> = {
   warrior: {
-    grid: WARRIOR_GRID,
-    palette: {
-      P: '#dfc073',
-      H: '#1e1917',
-      h: '#332924',
-      S: '#f0cfa6',
-      s: '#cfa176',
-      E: '#14100e',
-      A: '#9e2a22',
-      a: '#6e1b16',
-      W: '#dfc073',
-      G: '#b88e44',
-      B: '#2d2622',
-      K: '#1a1512',
-      k: '#362c26',
-    },
+    robeMain: '#a62c24',
+    robeDark: '#631712',
+    robeLight: '#d4483c',
+    inner: '#1c1715',
+    innerLight: '#332924',
+    trim: '#dfc073',
+    trimDark: '#9e7b36',
+    scarf: '#c23429',
+    scarfEdge: '#e8cb82',
+    hair: '#171210',
+    hairHi: '#382d27',
+    eye: '#14100e',
+    eyeGlint: '#f7e8c4',
+    boots: '#1a1411',
   },
   mage: {
-    grid: MAGE_GRID,
-    palette: {
-      P: '#7ba7c9',
-      H: '#191618',
-      h: '#2d272b',
-      S: '#f0cfa6',
-      s: '#cfa176',
-      E: '#14100e',
-      R: '#2e4e6e',
-      r: '#1d334a',
-      W: '#e8d8b0',
-      G: '#c8a254',
-      K: '#1a1518',
-      k: '#302830',
-    },
+    robeMain: '#2b4e6e',
+    robeDark: '#193047',
+    robeLight: '#4979a3',
+    inner: '#e8dbb9',
+    innerLight: '#f6edd5',
+    trim: '#7bc4b2',
+    trimDark: '#448071',
+    scarf: '#dfd0a8',
+    scarfEdge: '#80ccb9',
+    hair: '#17151b',
+    hairHi: '#342e3d',
+    eye: '#141218',
+    eyeGlint: '#c2f0e6',
+    boots: '#19171f',
   },
   thief: {
-    grid: THIEF_GRID,
-    palette: {
-      P: '#a67aa8',
-      H: '#161316',
-      h: '#2a222b',
-      S: '#f0cfa6',
-      s: '#cfa176',
-      E: '#c2463c',
-      M: '#261e29',
-      D: '#3c2e45',
-      d: '#241a2b',
-      W: '#d8c4dd',
-      G: '#9e2a22',
-      B: '#211b24',
-      K: '#141016',
-      k: '#2c2430',
-    },
+    robeMain: '#3c2b4a',
+    robeDark: '#21162b',
+    robeLight: '#5d4470',
+    inner: '#18121c',
+    innerLight: '#2f2438',
+    trim: '#b88abc',
+    trimDark: '#6b4570',
+    scarf: '#b82e26',
+    scarfEdge: '#e5584c',
+    hair: '#141017',
+    hairHi: '#312638',
+    eye: '#dc4438',
+    eyeGlint: '#ffe8ad',
+    boots: '#151019',
   },
   bowman: {
-    grid: BOWMAN_GRID,
-    palette: {
-      P: '#79b394',
-      G: '#253c32',
-      g: '#172720',
-      h: '#365246',
-      S: '#f0cfa6',
-      s: '#cfa176',
-      E: '#14100e',
-      W: '#dfc073',
-      B: '#1e2c26',
-      K: '#171412',
-      k: '#2f2924',
-    },
+    robeMain: '#274a3c',
+    robeDark: '#152b22',
+    robeLight: '#41755f',
+    inner: '#1e2b24',
+    innerLight: '#33473d',
+    trim: '#dbb86c',
+    trimDark: '#8f7238',
+    scarf: '#cca962',
+    scarfEdge: '#edd69a',
+    hair: '#181512',
+    hairHi: '#352d26',
+    eye: '#141210',
+    eyeGlint: '#e8f5c8',
+    boots: '#1a1612',
   },
 };
 
-// Layered 20x20 Gear Paperdoll Grids (white/silver shaded so tinting works in both Phaser and <canvas>)
-const GEAR_CAPE_GRID: PixelGrid = [
-  '....................',
-  '....................',
-  '....................',
-  '....................',
-  '....................',
-  '....................',
-  '....................',
-  '...TTT..............',
-  '..TTTMM.............',
-  '.TTMMMM.............',
-  '.TTMMMMS............',
-  'TTMMMMS.............',
-  'TTMMMMS.............',
-  '.TMMMSS.............',
-  '.TMMSS..............',
-  '..TMSS..............',
-  '..TSS...............',
-  '....................',
-  '....................',
-  '....................',
-];
-
-const GEAR_HEAD_GRIDS: Record<ClassId, PixelGrid> = {
-  warrior: [
-    '......TT....TT......',
-    '.....TTTMMMMTTT.....',
-    '....MMMMMMMMMMMM....',
-    '....MMTT....TTMM....',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-  ],
-  mage: [
-    '........MMMM........',
-    '.......MMMMMM.......',
-    '......MMTTTTMM......',
-    '....MMMMMMMMMMMM....',
-    '...TTTTTTTTTTTTTT...',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-  ],
-  thief: [
-    '.....MMMMMMMMMM.....',
-    '....MMMMMMMMMMMM....',
-    '....MM........MM....',
-    '....................',
-    '....TTTTTTTTTTTT....',
-    '.....SSSSSSSSSS.....',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-  ],
-  bowman: [
-    '.............TT.....',
-    '.....MMMMMMMMTT.....',
-    '....MMMMMMMMMMMM....',
-    '...TTTTTTTTTTTTTT...',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-  ],
+const registerCanvasTexture = (
+  scene: Phaser.Scene,
+  key: string,
+  width: number,
+  height: number,
+  draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void
+): void => {
+  if (scene.textures.exists(key)) return;
+  const tex = scene.textures.createCanvas(key, width, height);
+  if (!tex) return;
+  const ctx = tex.getContext();
+  ctx.clearRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  draw(ctx, width, height);
+  tex.refresh();
 };
 
-const GEAR_TOP_GRIDS: Record<ClassId, PixelGrid> = {
-  warrior: [
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....TTMMMMMMMMTT....',
-    '...MMTMTTTTTTMTMM...',
-    '...MMMMMMMMMMMMMM...',
-    '....MMMMMMMMMMMM....',
-    '....SSSTTTTTTSSS....',
-    '.....SSSSSSSSSS.....',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-  ],
-  mage: [
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....TTMMMMMMMMTT....',
-    '...MMMTTTTTTTTMMM...',
-    '...MMSSSSSSSSSSMM...',
-    '....TTTTTTTTTTTT....',
-    '....SSSSSSSSSSSS....',
-    '.....SSSSSSSSSS.....',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-  ],
-  thief: [
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....MMMMMMMMMMMM....',
-    '...MMTMMMMMMMMTMM...',
-    '....MMTTTTTTTTMM....',
-    '.....SSSSSSSSSS.....',
-    '.....SSSSSSSSSS.....',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-  ],
-  bowman: [
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....TTMMMMMMMMTT....',
-    '...MMTTTTTTTTTTMM...',
-    '...MMMMMMMMMMMMMM...',
-    '....SSSSSSSSSSSS....',
-    '.....SSSSSSSSSS.....',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-    '....................',
-  ],
+const fillStrokePath = (
+  ctx: CanvasRenderingContext2D,
+  fillStyle: string | CanvasGradient,
+  strokeWidth = 1.6,
+  strokeStyle = INK
+): void => {
+  ctx.fillStyle = fillStyle;
+  ctx.fill();
+  if (strokeWidth > 0) {
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = strokeWidth;
+    ctx.stroke();
+  }
 };
 
-// Held Wuxia Weapon Grids (12x12 white/silver shaded so tinting works in Phaser & <canvas>)
-const WEP_WUXIA_SWORD_GRID: PixelGrid = [
-  '..........TT',
-  '.........TTM',
-  '........TTMM',
-  '.......TTMM.',
-  '......TTMM..',
-  '.....TTMM...',
-  '....TTMM....',
-  '..SWTTM.....',
-  '...WWKS.....',
-  '..KKW.......',
-  '.WK.........',
-  '.W..........',
-];
-
-const WEP_WUXIA_STAFF_GRID: PixelGrid = [
-  '..........TT',
-  '.........TMT',
-  '........TMW.',
-  '.......TMT..',
-  '......TMW...',
-  '.....TMT....',
-  '....TMW.....',
-  '...TMT......',
-  '..TMW.......',
-  '.TMT........',
-  'TMT.........',
-  'TT..........',
-];
-
-const WEP_WUXIA_HEAVY_SWORD_GRID: PixelGrid = [
-  '.........TTT',
-  '........TTMM',
-  '.......TTTMM',
-  '......TTTMM.',
-  '.....TTTMM..',
-  '....TTTMM...',
-  '...TTTMM....',
-  '..SWWTM.....',
-  '...WWKS.....',
-  '..KKW.......',
-  '.KK.........',
-  '............',
-];
-
-const WEP_WUXIA_FLUTE_GRID: PixelGrid = [
-  '............',
-  '............',
-  '........TTTT',
-  '......TTTMMT',
-  '....TTTMMW..',
-  '..TTTMMW....',
-  '.TTMMW......',
-  '..KWW.......',
-  '...W........',
-  '...W........',
-  '............',
-  '............',
-];
-
-const WEP_WUXIA_NEEDLES_GRID: PixelGrid = [
-  '........TTT.',
-  '.......TM...',
-  '......TM..TT',
-  '.....KS..TM.',
-  '......K.TM..',
-  '.....K.KS..T',
-  '......KK.TM.',
-  '........TM..',
-  '.......KS...',
-  '............',
-  '............',
-  '............',
-];
-
-const GEAR_WEAPON_GRIDS: Record<ClassId, PixelGrid> = {
-  warrior: WEP_WUXIA_HEAVY_SWORD_GRID,
-  mage: WEP_WUXIA_FLUTE_GRID,
-  thief: WEP_WUXIA_NEEDLES_GRID,
-  bowman: WEP_WUXIA_SWORD_GRID,
+const parseCssRgb = (hex: string): [number, number, number] => {
+  const clean = hex.startsWith('#') ? hex.slice(1) : hex;
+  const n = Number.parseInt(clean, 16);
+  if (Number.isNaN(n)) return [255, 255, 255];
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
 
-const GEAR_SHADE_PALETTE: Palette = {
-  T: '#ffffff',
-  M: '#e2e8f0',
-  S: '#94a3b8',
-  W: '#fef08a',
-  K: '#475569',
+const drawTintedLayer = (
+  targetCtx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  tintCss: string,
+  destX: number,
+  destY: number,
+  destW: number,
+  destH: number,
+  paint: (ctx: CanvasRenderingContext2D) => void
+): void => {
+  const off = document.createElement('canvas');
+  off.width = w;
+  off.height = h;
+  const octx = off.getContext('2d');
+  if (!octx) return;
+  octx.imageSmoothingEnabled = true;
+  octx.lineJoin = 'round';
+  octx.lineCap = 'round';
+  paint(octx);
+
+  const img = octx.getImageData(0, 0, w, h);
+  const data = img.data;
+  const [tr, tg, tb] = parseCssRgb(tintCss);
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3] ?? 0;
+    if (a === 0) continue;
+    data[i] = Math.round(((data[i] ?? 0) * tr) / 255);
+    data[i + 1] = Math.round(((data[i + 1] ?? 0) * tg) / 255);
+    data[i + 2] = Math.round(((data[i + 2] ?? 0) * tb) / 255);
+  }
+  octx.putImageData(img, 0, 0);
+  targetCtx.drawImage(off, destX, destY, destW, destH);
+};
+
+// Paint a 64x68 Sumi-e ink-brush Wuxia Hero facing RIGHT (+X), feet grounded at y = 62
+const paintSumiHero = (
+  ctx: CanvasRenderingContext2D,
+  classId: ClassId,
+  pose: HeroPose = 'idle'
+): void => {
+  const p = HERO_SUMI_PALETTES[classId];
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  const isWalk = pose === 'walk';
+  const isAttack = pose === 'attack';
+  const isDash = pose === 'dash';
+
+  // Pose-driven kinematics (64x68 canvas, feet around y = 62)
+  const hipX = isDash ? 34 : isAttack ? 34 : isWalk ? 32 : 31;
+  const hipY = isDash ? 47 : isAttack ? 45 : 43;
+  const torsoShiftX = isDash ? 8 : isAttack ? 6 : isWalk ? 3 : 0;
+  const torsoShiftY = isDash ? 5 : isAttack ? 2 : 0;
+  const shoulderX = hipX + torsoShiftX;
+  const shoulderY = 27 + torsoShiftY;
+  const headX = shoulderX + (isDash ? 4 : isAttack ? 2.5 : isWalk ? 1.5 : 0.5);
+  const headY = 17 + torsoShiftY + (isDash ? 2 : 0);
+
+  // 0. Dash Qinggong wind-step trailing ink wisps
+  if (isDash) {
+    const wispYs = [22, 34, 46, 56];
+    for (let i = 0; i < wispYs.length; i++) {
+      const wy = wispYs[i] ?? 34;
+      const g = ctx.createLinearGradient(2, wy, shoulderX - 2, wy);
+      g.addColorStop(0, 'rgba(14, 10, 8, 0)');
+      g.addColorStop(0.5, i % 2 === 0 ? 'rgba(20, 15, 13, 0.55)' : 'rgba(232, 206, 148, 0.38)');
+      g.addColorStop(1, 'rgba(14, 10, 8, 0)');
+      ctx.strokeStyle = g;
+      ctx.lineWidth = i === 1 ? 2.4 : 1.5;
+      ctx.beginPath();
+      ctx.moveTo(2 + i * 2, wy + 2);
+      ctx.quadraticCurveTo(16, wy - 2, shoulderX - 4, wy);
+      ctx.stroke();
+    }
+  }
+
+  // 1. Billowing scarf / silk ribbon trailing left
+  ctx.beginPath();
+  if (isDash) {
+    ctx.moveTo(shoulderX - 3, shoulderY + 1);
+    ctx.quadraticCurveTo(18, shoulderY - 3, 3, shoulderY + 1);
+    ctx.quadraticCurveTo(17, shoulderY + 6, shoulderX - 4, shoulderY + 6);
+  } else if (isAttack) {
+    ctx.moveTo(shoulderX - 4, shoulderY + 1);
+    ctx.quadraticCurveTo(16, shoulderY - 6, 5, shoulderY + 4);
+    ctx.quadraticCurveTo(18, shoulderY + 5, shoulderX - 5, shoulderY + 7);
+  } else if (isWalk) {
+    ctx.moveTo(shoulderX - 3, shoulderY + 1);
+    ctx.quadraticCurveTo(15, shoulderY + 2, 6, shoulderY + 11);
+    ctx.quadraticCurveTo(18, shoulderY + 11, shoulderX - 4, shoulderY + 7);
+  } else {
+    ctx.moveTo(shoulderX - 3, shoulderY + 2);
+    ctx.quadraticCurveTo(16, shoulderY + 7, 10, shoulderY + 18);
+    ctx.quadraticCurveTo(19, shoulderY + 15, shoulderX - 4, shoulderY + 8);
+  }
+  ctx.closePath();
+  fillStrokePath(ctx, p.scarf, 1.4);
+
+  // Ribbon gold/bright edge accent
+  ctx.strokeStyle = p.scarfEdge;
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(shoulderX - 5, shoulderY + 3);
+  ctx.quadraticCurveTo(
+    16,
+    isDash ? shoulderY - 1 : isAttack ? shoulderY - 3 : shoulderY + 6,
+    isDash ? 6 : isAttack ? 8 : 12,
+    isDash ? shoulderY + 2 : isAttack ? shoulderY + 4 : shoulderY + 15
+  );
+  ctx.stroke();
+
+  // 2. Back leg & martial boot
+  const backFootX = isDash ? 12 : isAttack ? 18 : isWalk ? 20 : 25;
+  const backFootY = isDash ? 55 : 61;
+  ctx.beginPath();
+  ctx.moveTo(hipX - 4, hipY);
+  ctx.quadraticCurveTo((hipX + backFootX) * 0.5 - 2, (hipY + backFootY) * 0.5, backFootX - 3, backFootY - 3);
+  ctx.lineTo(backFootX + 5, backFootY - 2);
+  ctx.lineTo(backFootX + 6, backFootY + 1);
+  ctx.lineTo(backFootX - 4, backFootY + 1);
+  ctx.lineTo(hipX + 2, hipY + 3);
+  ctx.closePath();
+  fillStrokePath(ctx, p.boots, 1.5);
+
+  // 3. Back arm / sleeve
+  ctx.beginPath();
+  if (isAttack) {
+    // Counter-balance trailing arm back-left
+    ctx.moveTo(shoulderX - 5, shoulderY + 2);
+    ctx.quadraticCurveTo(shoulderX - 15, shoulderY + 7, shoulderX - 18, shoulderY + 14);
+    ctx.lineTo(shoulderX - 13, shoulderY + 16);
+    ctx.quadraticCurveTo(shoulderX - 9, shoulderY + 11, shoulderX - 2, shoulderY + 8);
+  } else if (isDash) {
+    ctx.moveTo(shoulderX - 5, shoulderY + 2);
+    ctx.lineTo(shoulderX - 19, shoulderY + 8);
+    ctx.lineTo(shoulderX - 16, shoulderY + 13);
+    ctx.lineTo(shoulderX - 3, shoulderY + 8);
+  } else {
+    ctx.moveTo(shoulderX - 5, shoulderY + 2);
+    ctx.quadraticCurveTo(shoulderX - 12, shoulderY + 9, shoulderX - 11, shoulderY + 16);
+    ctx.lineTo(shoulderX - 6, shoulderY + 16);
+    ctx.quadraticCurveTo(shoulderX - 6, shoulderY + 10, shoulderX - 2, shoulderY + 7);
+  }
+  ctx.closePath();
+  fillStrokePath(ctx, p.robeDark, 1.4);
+
+  // 4. Front leg & martial boot
+  const frontFootX = isDash ? 26 : isAttack ? 45 : isWalk ? 42 : 38;
+  const frontFootY = isDash ? 59 : 61;
+  ctx.beginPath();
+  ctx.moveTo(hipX + 1, hipY);
+  ctx.quadraticCurveTo(
+    (hipX + frontFootX) * 0.5 + 3,
+    (hipY + frontFootY) * 0.5 - 2,
+    frontFootX - 3,
+    frontFootY - 3
+  );
+  ctx.lineTo(frontFootX + 5, frontFootY - 2);
+  ctx.lineTo(frontFootX + 6, frontFootY + 1);
+  ctx.lineTo(frontFootX - 4, frontFootY + 1);
+  ctx.lineTo(hipX - 3, hipY + 3);
+  ctx.closePath();
+  fillStrokePath(ctx, p.boots, 1.5);
+
+  // 5. Lower layered hanfu robe skirt / hakama (sweeps dynamically with pose)
+  const skirtGrad = ctx.createLinearGradient(hipX - 14, hipY - 2, hipX + 14, 58);
+  skirtGrad.addColorStop(0, p.robeDark);
+  skirtGrad.addColorStop(0.55, p.robeMain);
+  skirtGrad.addColorStop(1, p.robeLight);
+
+  const hemLeftX = isDash ? 14 : isAttack ? 19 : isWalk ? 19 : 21;
+  const hemRightX = isDash ? 39 : isAttack ? 45 : isWalk ? 42 : 42;
+  const hemY = isDash ? 55 : classId === 'mage' ? 58 : 55;
+
+  ctx.beginPath();
+  ctx.moveTo(hipX - 7, hipY - 3);
+  ctx.quadraticCurveTo(hemLeftX + 2, (hipY + hemY) * 0.5, hemLeftX, hemY);
+  ctx.quadraticCurveTo(hipX - 1, hemY + 2.5, hipX + 1, hemY - 2);
+  ctx.quadraticCurveTo(hipX + 6, hemY + 2, hemRightX, hemY - 1);
+  ctx.quadraticCurveTo(hipX + 11, (hipY + hemY) * 0.5, hipX + 8, hipY - 3);
+  ctx.closePath();
+  fillStrokePath(ctx, skirtGrad, 1.6);
+
+  // Inner robe fold ink creases
+  ctx.strokeStyle = 'rgba(14, 10, 8, 0.45)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(hipX - 2, hipY + 1);
+  ctx.lineTo(hemLeftX + 7, hemY - 1);
+  ctx.moveTo(hipX + 3, hipY + 1);
+  ctx.lineTo(hemRightX - 7, hemY - 1);
+  ctx.stroke();
+
+  // 6. Upper torso crossed-collar hanfu (jiaoling youren)
+  const torsoGrad = ctx.createLinearGradient(shoulderX - 10, shoulderY, shoulderX + 11, hipY);
+  torsoGrad.addColorStop(0, p.robeDark);
+  torsoGrad.addColorStop(0.55, p.robeMain);
+  torsoGrad.addColorStop(1, p.robeLight);
+
+  ctx.beginPath();
+  ctx.moveTo(shoulderX - 8, shoulderY + 1);
+  ctx.quadraticCurveTo(shoulderX, shoulderY - 2, shoulderX + 9, shoulderY + 1);
+  ctx.lineTo(hipX + 8, hipY - 1);
+  ctx.lineTo(hipX - 7, hipY - 1);
+  ctx.closePath();
+  fillStrokePath(ctx, torsoGrad, 1.6);
+
+  // Crossed Y-collar inner lapel & trim
+  ctx.beginPath();
+  ctx.moveTo(shoulderX - 3, shoulderY);
+  ctx.lineTo(shoulderX + 3, shoulderY + 9);
+  ctx.lineTo(shoulderX + 6, shoulderY);
+  ctx.closePath();
+  fillStrokePath(ctx, p.inner, 1.1);
+
+  ctx.strokeStyle = p.trim;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(shoulderX - 4, shoulderY + 1);
+  ctx.lineTo(shoulderX + 4, shoulderY + 12);
+  ctx.moveTo(shoulderX + 5, shoulderY + 1);
+  ctx.lineTo(shoulderX + 1, shoulderY + 8);
+  ctx.stroke();
+
+  // Waist sash & hanging pendant tassel
+  ctx.beginPath();
+  ctx.roundRect(hipX - 8, hipY - 4, 16.5, 4.2, 1.5);
+  fillStrokePath(ctx, p.trim, 1.3);
+
+  ctx.beginPath();
+  ctx.moveTo(hipX + 1, hipY);
+  ctx.quadraticCurveTo(hipX - 1, hipY + 6, hipX - 3, hipY + 11);
+  ctx.lineTo(hipX + 2, hipY + 11);
+  ctx.quadraticCurveTo(hipX + 3, hipY + 5, hipX + 4, hipY);
+  ctx.closePath();
+  fillStrokePath(ctx, p.trimDark, 1.1);
+
+  // 7. Neck & Head (facing right 3/4 view)
+  ctx.beginPath();
+  ctx.ellipse(headX, headY, 6.4, 6.8, 0, 0, Math.PI * 2);
+  const skinGrad = ctx.createLinearGradient(headX - 5, headY - 4, headX + 6, headY + 5);
+  skinGrad.addColorStop(0, '#cfa074');
+  skinGrad.addColorStop(0.55, '#f0cfa6');
+  skinGrad.addColorStop(1, '#fae2c0');
+  fillStrokePath(ctx, skinGrad, 1.5);
+
+  // Thief face veil across lower face
+  if (classId === 'thief') {
+    ctx.beginPath();
+    ctx.moveTo(headX - 5.5, headY + 0.8);
+    ctx.quadraticCurveTo(headX + 1, headY - 0.5, headX + 6.2, headY + 0.8);
+    ctx.quadraticCurveTo(headX + 5, headY + 7.2, headX, headY + 7);
+    ctx.quadraticCurveTo(headX - 5, headY + 6.8, headX - 5.5, headY + 0.8);
+    ctx.closePath();
+    fillStrokePath(ctx, p.inner, 1.2);
+  }
+
+  // Expressive Wuxia eyes & angled ink brows (looking right)
+  const eyeY = headY - 0.2;
+  ctx.fillStyle = p.eye;
+  ctx.fillRect(headX + 0.3, eyeY - 0.8, 1.9, 2.0);
+  ctx.fillRect(headX + 3.6, eyeY - 0.8, 1.7, 2.0);
+  ctx.fillStyle = p.eyeGlint;
+  ctx.fillRect(headX + 1.2, eyeY - 0.5, 0.8, 0.8);
+  ctx.fillRect(headX + 4.3, eyeY - 0.5, 0.8, 0.8);
+
+  // Determined calligraphic eyebrows
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.15;
+  ctx.beginPath();
+  ctx.moveTo(headX - 0.4, eyeY - 2.3);
+  ctx.lineTo(headX + 2.4, eyeY - 1.6);
+  ctx.moveTo(headX + 3.4, eyeY - 1.6);
+  ctx.lineTo(headX + 5.7, eyeY - 2.2);
+  ctx.stroke();
+
+  // 8. Hair & Iconic Class Headpiece
+  // Back sweeping hair locks
+  ctx.beginPath();
+  ctx.moveTo(headX - 4, headY - 5);
+  ctx.quadraticCurveTo(headX - 10, headY + 1, headX - 11 - (isDash ? 4 : 0), headY + 9);
+  ctx.quadraticCurveTo(headX - 6, headY + 7, headX - 4, headY + 2);
+  ctx.closePath();
+  fillStrokePath(ctx, p.hair, 1.3);
+
+  // Hair crown cap
+  ctx.beginPath();
+  ctx.moveTo(headX - 6.5, headY - 1);
+  ctx.quadraticCurveTo(headX - 6, headY - 8.5, headX + 1, headY - 7.5);
+  ctx.quadraticCurveTo(headX + 6.8, headY - 6.5, headX + 6.4, headY - 2);
+  ctx.quadraticCurveTo(headX + 1, headY - 4.2, headX - 6.5, headY - 1);
+  ctx.closePath();
+  fillStrokePath(ctx, p.hair, 1.4);
+
+  if (classId === 'warrior') {
+    // High martial topknot + antique brass hairpin
+    ctx.beginPath();
+    ctx.ellipse(headX - 1, headY - 9.2, 3.6, 3.0, -0.1, 0, Math.PI * 2);
+    fillStrokePath(ctx, p.hair, 1.3);
+    ctx.strokeStyle = p.trim;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(headX - 7.5, headY - 8.5);
+    ctx.lineTo(headX + 5.5, headY - 10.2);
+    ctx.stroke();
+    ctx.fillStyle = p.trim;
+    ctx.beginPath();
+    ctx.arc(headX - 7.5, headY - 8.5, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (classId === 'mage') {
+    // Jade Daoist lotus crown (guan) + hairpin
+    ctx.beginPath();
+    ctx.moveTo(headX - 4.5, headY - 6.5);
+    ctx.lineTo(headX - 3, headY - 12.2);
+    ctx.lineTo(headX + 0.5, headY - 10.2);
+    ctx.lineTo(headX + 3.5, headY - 12.2);
+    ctx.lineTo(headX + 4.5, headY - 6.5);
+    ctx.closePath();
+    fillStrokePath(ctx, p.trim, 1.3);
+    ctx.strokeStyle = '#dfc073';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(headX - 6.5, headY - 8.5);
+    ctx.lineTo(headX + 6.5, headY - 8.5);
+    ctx.stroke();
+  } else if (classId === 'thief') {
+    // Sleek assassin topknot + forehead crest band
+    ctx.beginPath();
+    ctx.ellipse(headX - 2, headY - 8.5, 3.2, 2.5, -0.25, 0, Math.PI * 2);
+    fillStrokePath(ctx, p.hair, 1.3);
+    ctx.strokeStyle = p.trim;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(headX - 5.8, headY - 3.6);
+    ctx.quadraticCurveTo(headX + 1, headY - 4.8, headX + 6, headY - 3.4);
+    ctx.stroke();
+  } else {
+    // Bowman iconic woven bamboo conical hat (douli) matching wuxiaVista.ts
+    const hatY = headY - 4.5;
+    const hatGrad = ctx.createLinearGradient(headX - 15, hatY, headX + 15, hatY - 7);
+    hatGrad.addColorStop(0, '#6e5734');
+    hatGrad.addColorStop(0.55, '#b89b66');
+    hatGrad.addColorStop(1, '#dfc48b');
+
+    ctx.beginPath();
+    ctx.moveTo(headX - 15.5, hatY + 1.5);
+    ctx.lineTo(headX + 0.5, hatY - 8.5);
+    ctx.lineTo(headX + 16, hatY + 1.5);
+    ctx.quadraticCurveTo(headX + 0.5, hatY + 4.2, headX - 15.5, hatY + 1.5);
+    ctx.closePath();
+    fillStrokePath(ctx, hatGrad, 1.6);
+
+    // Woven bamboo ribs
+    ctx.strokeStyle = 'rgba(14, 10, 8, 0.36)';
+    ctx.lineWidth = 0.85;
+    for (const dx of [-8, -3, 3, 9]) {
+      ctx.beginPath();
+      ctx.moveTo(headX + 0.5, hatY - 7.8);
+      ctx.lineTo(headX + dx, hatY + 2.1);
+      ctx.stroke();
+    }
+    // Warm lantern rim on right slope of douli
+    ctx.strokeStyle = WARM_RIM;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(headX + 0.8, hatY - 8);
+    ctx.lineTo(headX + 15, hatY + 1.1);
+    ctx.stroke();
+  }
+
+  // 9. Front arm & wide martial sleeve (dynamic per pose)
+  ctx.beginPath();
+  if (isAttack) {
+    // Extended martial strike forward-right
+    ctx.moveTo(shoulderX + 3, shoulderY + 2);
+    ctx.lineTo(shoulderX + 16, shoulderY + 5);
+    ctx.lineTo(shoulderX + 15, shoulderY + 11);
+    ctx.lineTo(shoulderX + 2, shoulderY + 9);
+  } else if (isDash) {
+    ctx.moveTo(shoulderX + 2, shoulderY + 2);
+    ctx.lineTo(shoulderX + 12, shoulderY + 7);
+    ctx.lineTo(shoulderX + 9, shoulderY + 12);
+    ctx.lineTo(shoulderX, shoulderY + 8);
+  } else {
+    // Poised guard sleeve
+    ctx.moveTo(shoulderX + 3, shoulderY + 2);
+    ctx.quadraticCurveTo(shoulderX + 11, shoulderY + 8, shoulderX + 10, shoulderY + 16);
+    ctx.lineTo(shoulderX + 3, shoulderY + 15);
+    ctx.quadraticCurveTo(shoulderX + 4, shoulderY + 10, shoulderX + 1, shoulderY + 7);
+  }
+  ctx.closePath();
+  fillStrokePath(ctx, p.robeLight, 1.45);
+
+  // Front cuff / bracer & fist
+  const handX = isAttack ? shoulderX + 16.5 : isDash ? shoulderX + 11 : shoulderX + 8.5;
+  const handY = isAttack ? shoulderY + 7.5 : isDash ? shoulderY + 9.5 : shoulderY + 14.5;
+  ctx.beginPath();
+  ctx.arc(handX, handY, 2.3, 0, Math.PI * 2);
+  fillStrokePath(ctx, '#f0cfa6', 1.2);
+
+  // 10. Warm lantern rim-lighting along front-right silhouette edge
+  ctx.strokeStyle = WARM_RIM;
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  ctx.moveTo(shoulderX + 8.5, shoulderY + 2);
+  ctx.lineTo(hipX + 7.5, hipY - 2);
+  ctx.lineTo(hemRightX - 1, hemY - 2);
+  ctx.stroke();
+
+  // 11. Attack frame calligraphic ink-brush slash arc + gold qi edge
+  if (isAttack) {
+    ctx.beginPath();
+    ctx.moveTo(46, 10);
+    ctx.quadraticCurveTo(63, 30, 44, 54);
+    ctx.quadraticCurveTo(56, 32, 43, 14);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(14, 10, 8, 0.82)';
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(244, 214, 138, 0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(47, 11);
+    ctx.quadraticCurveTo(61.5, 30, 45, 53);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+};
+
+// Painterly 64x68 Gear Overlays (white/silver shaded for Phaser .setTint and Paperdoll multiply)
+const paintSumiGearCape = (ctx: CanvasRenderingContext2D): void => {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  const g = ctx.createLinearGradient(8, 24, 30, 56);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.55, '#d6dce6');
+  g.addColorStop(1, '#8c96a6');
+  ctx.beginPath();
+  ctx.moveTo(24, 26);
+  ctx.quadraticCurveTo(13, 32, 8, 52);
+  ctx.quadraticCurveTo(16, 56, 22, 51);
+  ctx.quadraticCurveTo(25, 42, 29, 31);
+  ctx.closePath();
+  fillStrokePath(ctx, g, 1.5);
+
+  // Mantle fold strokes
+  ctx.strokeStyle = 'rgba(14, 10, 8, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(23, 30);
+  ctx.quadraticCurveTo(16, 40, 13, 50);
+  ctx.moveTo(26, 32);
+  ctx.quadraticCurveTo(21, 42, 18, 51);
+  ctx.stroke();
+
+  ctx.strokeStyle = WARM_RIM;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(23, 27);
+  ctx.quadraticCurveTo(14, 34, 9.5, 50);
+  ctx.stroke();
+  ctx.restore();
+};
+
+const paintSumiGearTop = (ctx: CanvasRenderingContext2D, classId: ClassId): void => {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  const g = ctx.createLinearGradient(22, 26, 42, 44);
+  g.addColorStop(0, '#cbd5e1');
+  g.addColorStop(0.5, '#ffffff');
+  g.addColorStop(1, '#e2e8f0');
+
+  if (classId === 'warrior') {
+    // Lamellar pauldrons & engraved cuirass
+    ctx.beginPath();
+    ctx.moveTo(21, 28);
+    ctx.quadraticCurveTo(32, 24, 42, 28);
+    ctx.lineTo(40, 42);
+    ctx.lineTo(24, 42);
+    ctx.closePath();
+    fillStrokePath(ctx, g, 1.4);
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(24, 33);
+    ctx.lineTo(40, 33);
+    ctx.moveTo(25, 38);
+    ctx.lineTo(39, 38);
+    ctx.stroke();
+  } else if (classId === 'mage') {
+    // Embroidered cloud-collar mantle (yunjian)
+    ctx.beginPath();
+    ctx.moveTo(21, 29);
+    ctx.quadraticCurveTo(32, 24, 43, 29);
+    ctx.quadraticCurveTo(38, 36, 32, 39);
+    ctx.quadraticCurveTo(26, 36, 21, 29);
+    ctx.closePath();
+    fillStrokePath(ctx, g, 1.4);
+  } else if (classId === 'thief') {
+    // Fitted assassin harness & shoulder guards
+    ctx.beginPath();
+    ctx.moveTo(22, 28);
+    ctx.lineTo(41, 28);
+    ctx.lineTo(39, 41);
+    ctx.lineTo(24, 41);
+    ctx.closePath();
+    fillStrokePath(ctx, g, 1.3);
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(24, 29);
+    ctx.lineTo(38, 40);
+    ctx.moveTo(39, 29);
+    ctx.lineTo(25, 40);
+    ctx.stroke();
+  } else {
+    // Ranger layered vest & shoulder clasp
+    ctx.beginPath();
+    ctx.moveTo(22, 28);
+    ctx.quadraticCurveTo(32, 25, 41, 28);
+    ctx.lineTo(40, 42);
+    ctx.lineTo(24, 42);
+    ctx.closePath();
+    fillStrokePath(ctx, g, 1.35);
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(32, 27);
+    ctx.lineTo(32, 41);
+    ctx.stroke();
+  }
+  ctx.restore();
+};
+
+const paintSumiGearHead = (ctx: CanvasRenderingContext2D, classId: ClassId): void => {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  const g = ctx.createLinearGradient(22, 6, 42, 16);
+  g.addColorStop(0, '#cbd5e1');
+  g.addColorStop(0.5, '#ffffff');
+  g.addColorStop(1, '#e2e8f0');
+
+  if (classId === 'warrior') {
+    // Winged war-crest diadem
+    ctx.beginPath();
+    ctx.moveTo(22, 12);
+    ctx.lineTo(26, 6);
+    ctx.lineTo(32, 10);
+    ctx.lineTo(38, 6);
+    ctx.lineTo(42, 12);
+    ctx.quadraticCurveTo(32, 14, 22, 12);
+    ctx.closePath();
+    fillStrokePath(ctx, g, 1.35);
+  } else if (classId === 'mage') {
+    // Tall celestial Daoist lotus crown
+    ctx.beginPath();
+    ctx.moveTo(25, 12);
+    ctx.lineTo(27, 4);
+    ctx.lineTo(32, 7.5);
+    ctx.lineTo(37, 4);
+    ctx.lineTo(39, 12);
+    ctx.quadraticCurveTo(32, 14, 25, 12);
+    ctx.closePath();
+    fillStrokePath(ctx, g, 1.35);
+  } else if (classId === 'thief') {
+    // Shadow brow-plate & crescent crest
+    ctx.beginPath();
+    ctx.moveTo(24, 13);
+    ctx.quadraticCurveTo(32, 8, 40, 13);
+    ctx.lineTo(38, 15.5);
+    ctx.quadraticCurveTo(32, 12.5, 26, 15.5);
+    ctx.closePath();
+    fillStrokePath(ctx, g, 1.3);
+  } else {
+    // Plumed ranger crest atop douli
+    ctx.beginPath();
+    ctx.moveTo(29, 7);
+    ctx.quadraticCurveTo(38, 2, 46, 8);
+    ctx.quadraticCurveTo(38, 9, 31, 10);
+    ctx.closePath();
+    fillStrokePath(ctx, g, 1.3);
+  }
+  ctx.restore();
+};
+
+// Painterly 40x40 Held Wuxia Weapons (white/silver shaded for Phaser tinting)
+const paintSumiWeapon = (ctx: CanvasRenderingContext2D, kind: WuxiaWeaponKind): void => {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  const bladeGrad = ctx.createLinearGradient(8, 32, 36, 4);
+  bladeGrad.addColorStop(0, '#cbd5e1');
+  bladeGrad.addColorStop(0.55, '#ffffff');
+  bladeGrad.addColorStop(1, '#f8fafc');
+
+  if (kind === 'sword') {
+    // Sleek double-edged Wuxia Jian
+    ctx.beginPath();
+    ctx.moveTo(13, 27);
+    ctx.lineTo(34, 4);
+    ctx.lineTo(36, 6);
+    ctx.lineTo(16, 30);
+    ctx.closePath();
+    fillStrokePath(ctx, bladeGrad, 1.4);
+
+    // Crossguard & hilt
+    ctx.beginPath();
+    ctx.moveTo(9, 24);
+    ctx.lineTo(19, 32);
+    ctx.lineTo(17, 34);
+    ctx.lineTo(7, 26);
+    ctx.closePath();
+    fillStrokePath(ctx, '#fef08a', 1.2);
+
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.moveTo(12, 29);
+    ctx.lineTo(6, 35);
+    ctx.stroke();
+
+    // Flowing silk pommel tassel
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(6, 35);
+    ctx.quadraticCurveTo(2, 37, 4, 39);
+    ctx.stroke();
+  } else if (kind === 'heavy_sword') {
+    // Broad Xuantie heavy iron greatsword
+    ctx.beginPath();
+    ctx.moveTo(11, 25);
+    ctx.lineTo(32, 3);
+    ctx.lineTo(37, 4);
+    ctx.lineTo(36, 9);
+    ctx.lineTo(17, 31);
+    ctx.closePath();
+    fillStrokePath(ctx, bladeGrad, 1.6);
+
+    // Central fuller spine
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(15, 27);
+    ctx.lineTo(33, 7);
+    ctx.stroke();
+
+    // Heavy guard & grip
+    ctx.beginPath();
+    ctx.moveTo(8, 22);
+    ctx.lineTo(20, 33);
+    ctx.lineTo(18, 35);
+    ctx.lineTo(6, 24);
+    ctx.closePath();
+    fillStrokePath(ctx, '#fef08a', 1.3);
+
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(12, 29);
+    ctx.lineTo(5, 36);
+    ctx.stroke();
+  } else if (kind === 'staff') {
+    // Ringed bamboo/spirit staff
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 5.4;
+    ctx.beginPath();
+    ctx.moveTo(5, 36);
+    ctx.lineTo(35, 5);
+    ctx.stroke();
+
+    ctx.strokeStyle = bladeGrad;
+    ctx.lineWidth = 3.2;
+    ctx.beginPath();
+    ctx.moveTo(5, 36);
+    ctx.lineTo(35, 5);
+    ctx.stroke();
+
+    // Bamboo nodes / gold rings
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = 1.6;
+    for (const t of [0.25, 0.5, 0.78]) {
+      const rx = 5 + 30 * t;
+      const ry = 36 - 31 * t;
+      ctx.beginPath();
+      ctx.moveTo(rx - 2, ry - 2);
+      ctx.lineTo(rx + 2, ry + 2);
+      ctx.stroke();
+    }
+  } else if (kind === 'flute') {
+    // Slender jade Xiao flute + hanging silk tassel
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 4.6;
+    ctx.beginPath();
+    ctx.moveTo(7, 29);
+    ctx.lineTo(35, 11);
+    ctx.stroke();
+
+    ctx.strokeStyle = bladeGrad;
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.moveTo(7, 29);
+    ctx.lineTo(35, 11);
+    ctx.stroke();
+
+    // Hanging silk tassel
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(11, 27);
+    ctx.quadraticCurveTo(9, 33, 12, 38);
+    ctx.stroke();
+  } else {
+    // Fanned triad of silver meridian needles
+    const needles: readonly [number, number, number, number][] = [
+      [12, 26, 33, 6],
+      [15, 30, 37, 13],
+      [10, 32, 34, 22],
+    ];
+    for (const [x1, y1, x2, y2] of needles) {
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+};
+
+const CLASS_DEFAULT_WEAPON_KIND: Record<ClassId, WuxiaWeaponKind> = {
+  warrior: 'heavy_sword',
+  mage: 'flute',
+  thief: 'needles',
+  bowman: 'sword',
+};
+
+// ==================== SUMI-E CULTIST MOBS (56x60, FACING LEFT) ====================
+
+const paintSumiMob = (ctx: CanvasRenderingContext2D, variant: 0 | 1 | 2): void => {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // Neutral warm ivory/silver shading so Phaser .setTint(biomeColor) colors each sect cleanly
+  const robeGrad = ctx.createLinearGradient(14, 22, 46, 54);
+  robeGrad.addColorStop(0, '#faf6ee');
+  robeGrad.addColorStop(0.55, '#ddd4c4');
+  robeGrad.addColorStop(1, '#a99e8d');
+
+  const darkCloth = '#7a7063';
+  const sashLight = '#fffaf0';
+  const metalGrad = ctx.createLinearGradient(4, 14, 22, 38);
+  metalGrad.addColorStop(0, '#ffffff');
+  metalGrad.addColorStop(1, '#cbd5e1');
+
+  // 1. Boots / legs (feet grounded at y = 55)
+  ctx.beginPath();
+  ctx.moveTo(20, 44);
+  ctx.lineTo(16, 55);
+  ctx.lineTo(24, 55);
+  ctx.lineTo(26, 45);
+  ctx.closePath();
+  fillStrokePath(ctx, '#26211d', 1.4);
+
+  ctx.beginPath();
+  ctx.moveTo(31, 44);
+  ctx.lineTo(34, 55);
+  ctx.lineTo(41, 55);
+  ctx.lineTo(37, 44);
+  ctx.closePath();
+  fillStrokePath(ctx, '#1e1916', 1.4);
+
+  // 2. Flowing back sash / cloak tail (trailing right)
+  ctx.beginPath();
+  ctx.moveTo(37, 26);
+  ctx.quadraticCurveTo(49, 32, 52, 45);
+  ctx.quadraticCurveTo(44, 44, 37, 36);
+  ctx.closePath();
+  fillStrokePath(ctx, darkCloth, 1.4);
+
+  // 3. Layered sect robe body
+  ctx.beginPath();
+  ctx.moveTo(21, 24);
+  ctx.quadraticCurveTo(29, 21, 38, 25);
+  ctx.lineTo(43, 49);
+  ctx.quadraticCurveTo(29, 52, 16, 49);
+  ctx.closePath();
+  fillStrokePath(ctx, robeGrad, 1.6);
+
+  // Crossed collar & waist sash
+  ctx.strokeStyle = sashLight;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(23, 24);
+  ctx.lineTo(32, 34);
+  ctx.moveTo(35, 24);
+  ctx.lineTo(29, 32);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.roundRect(19, 36, 20, 3.8, 1.4);
+  fillStrokePath(ctx, sashLight, 1.3);
+
+  // Robe vertical ink fold creases
+  ctx.strokeStyle = 'rgba(14, 10, 8, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(24, 40);
+  ctx.lineTo(21, 49);
+  ctx.moveTo(33, 40);
+  ctx.lineTo(36, 49);
+  ctx.stroke();
+
+  // 4. Head & Variant Silhouette
+  if (variant === 0) {
+    // Hooded Cult Disciple
+    ctx.beginPath();
+    ctx.moveTo(20, 23);
+    ctx.quadraticCurveTo(18, 10, 29, 8);
+    ctx.quadraticCurveTo(40, 10, 39, 24);
+    ctx.closePath();
+    fillStrokePath(ctx, robeGrad, 1.6);
+
+    // Shadowed cowl face interior
+    ctx.beginPath();
+    ctx.ellipse(26, 17.5, 5.2, 5.5, 0, 0, Math.PI * 2);
+    fillStrokePath(ctx, '#181310', 1.2);
+
+    // Glowing cult eyes looking left
+    ctx.fillStyle = '#fff0b8';
+    ctx.fillRect(22.5, 16.5, 2, 1.7);
+    ctx.fillRect(26.5, 16.5, 2, 1.7);
+
+    // Curved short saber (dao) held forward-left
+    ctx.beginPath();
+    ctx.moveTo(15, 34);
+    ctx.quadraticCurveTo(7, 25, 6, 12);
+    ctx.quadraticCurveTo(12, 18, 17, 31);
+    ctx.closePath();
+    fillStrokePath(ctx, metalGrad, 1.5);
+  } else if (variant === 1) {
+    // Conical Bamboo-Hat (Douli) Sect Assassin with twin daggers
+    ctx.beginPath();
+    ctx.ellipse(28, 18, 5.2, 5.4, 0, 0, Math.PI * 2);
+    fillStrokePath(ctx, '#1b1512', 1.3);
+
+    // Glowing eyes under hat rim
+    ctx.fillStyle = '#fff0b8';
+    ctx.fillRect(24, 17.5, 1.9, 1.6);
+    ctx.fillRect(27.8, 17.5, 1.9, 1.6);
+
+    // Wide conical woven bamboo douli hat
+    const hatGrad = ctx.createLinearGradient(10, 16, 48, 8);
+    hatGrad.addColorStop(0, '#faf3e4');
+    hatGrad.addColorStop(0.6, '#d6c6a8');
+    hatGrad.addColorStop(1, '#9c8c72');
+    ctx.beginPath();
+    ctx.moveTo(9, 16.5);
+    ctx.lineTo(28.5, 6.5);
+    ctx.lineTo(48, 16.5);
+    ctx.quadraticCurveTo(28.5, 19.5, 9, 16.5);
+    ctx.closePath();
+    fillStrokePath(ctx, hatGrad, 1.6);
+
+    // Twin curved assassin daggers (front-left & back-right)
+    ctx.beginPath();
+    ctx.moveTo(18, 33);
+    ctx.lineTo(4, 27);
+    ctx.lineTo(7, 33);
+    ctx.lineTo(18, 36);
+    ctx.closePath();
+    fillStrokePath(ctx, metalGrad, 1.4);
+
+    ctx.beginPath();
+    ctx.moveTo(39, 34);
+    ctx.lineTo(52, 31);
+    ctx.lineTo(49, 36);
+    ctx.lineTo(39, 37);
+    ctx.closePath();
+    fillStrokePath(ctx, metalGrad, 1.3);
+  } else {
+    // Heavy Armored Temple Enforcer with polearm/halberd
+    // Broad lamellar pauldrons
+    ctx.beginPath();
+    ctx.ellipse(21, 27, 6.5, 4.2, -0.3, 0, Math.PI * 2);
+    fillStrokePath(ctx, '#efeae0', 1.5);
+    ctx.beginPath();
+    ctx.ellipse(37, 27, 6.5, 4.2, 0.3, 0, Math.PI * 2);
+    fillStrokePath(ctx, '#cfc6b6', 1.5);
+
+    // Crested iron helm
+    ctx.beginPath();
+    ctx.ellipse(28, 17, 6, 6.2, 0, 0, Math.PI * 2);
+    fillStrokePath(ctx, '#201a17', 1.5);
+    ctx.beginPath();
+    ctx.moveTo(21, 14);
+    ctx.lineTo(24, 7);
+    ctx.lineTo(28, 12);
+    ctx.lineTo(33, 7);
+    ctx.lineTo(36, 14);
+    ctx.closePath();
+    fillStrokePath(ctx, '#f5efe4', 1.4);
+
+    // Fierce glowing eyes
+    ctx.fillStyle = '#ff9d7a';
+    ctx.fillRect(23.5, 16.8, 2, 1.7);
+    ctx.fillRect(27.5, 16.8, 2, 1.7);
+
+    // Tall crescent halberd / guandao on left
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 3.2;
+    ctx.beginPath();
+    ctx.moveTo(11, 54);
+    ctx.lineTo(11, 13);
+    ctx.stroke();
+    ctx.strokeStyle = '#d6ccbc';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(11, 54);
+    ctx.lineTo(11, 13);
+    ctx.stroke();
+
+    // Halberd crescent blade
+    ctx.beginPath();
+    ctx.moveTo(11, 6);
+    ctx.quadraticCurveTo(3, 12, 5, 22);
+    ctx.quadraticCurveTo(9, 19, 13, 18);
+    ctx.closePath();
+    fillStrokePath(ctx, metalGrad, 1.5);
+  }
+
+  // Front arm/sleeve gripping weapon
+  ctx.beginPath();
+  ctx.moveTo(21, 27);
+  ctx.lineTo(13, 33);
+  ctx.lineTo(16, 37);
+  ctx.lineTo(24, 33);
+  ctx.closePath();
+  fillStrokePath(ctx, '#f2ece2', 1.4);
+
+  // Subtle warm lantern rim along left-facing front silhouette
+  ctx.strokeStyle = WARM_RIM_SOFT;
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.moveTo(20, 25);
+  ctx.lineTo(17, 48);
+  ctx.stroke();
+
+  ctx.restore();
+};
+
+// ==================== SUMI-E HALL MASTER MINI-BOSSES (84x90, FACING LEFT) ====================
+
+const paintSumiMiniBoss = (ctx: CanvasRenderingContext2D, variant: 0 | 1 | 2): void => {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  const robeGrad = ctx.createLinearGradient(20, 26, 68, 82);
+  robeGrad.addColorStop(0, '#fcf8f0');
+  robeGrad.addColorStop(0.5, '#dfd6c5');
+  robeGrad.addColorStop(1, '#a39785');
+
+  const mantleGrad = ctx.createLinearGradient(44, 24, 80, 74);
+  mantleGrad.addColorStop(0, '#e8dfd0');
+  mantleGrad.addColorStop(1, '#857a6b');
+
+  const goldTrim = '#f5e2a8';
+  const metalGrad = ctx.createLinearGradient(6, 16, 28, 56);
+  metalGrad.addColorStop(0, '#ffffff');
+  metalGrad.addColorStop(1, '#cbd5e1');
+
+  // Variant 2: Radiant spoked celestial halo-wheel behind shoulders
+  if (variant === 2) {
+    ctx.strokeStyle = goldTrim;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(43, 34, 23, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(43, 34, 25, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      ctx.strokeStyle = goldTrim;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(43 + Math.cos(a) * 16, 34 + Math.sin(a) * 16);
+      ctx.lineTo(43 + Math.cos(a) * 26, 34 + Math.sin(a) * 26);
+      ctx.stroke();
+    }
+  }
+
+  // 1. Billowing multi-layered grandmaster mantle (sweeping right)
+  ctx.beginPath();
+  ctx.moveTo(46, 30);
+  ctx.quadraticCurveTo(68, 36, 78, 66);
+  ctx.quadraticCurveTo(68, 74, 54, 68);
+  ctx.quadraticCurveTo(50, 52, 42, 42);
+  ctx.closePath();
+  fillStrokePath(ctx, mantleGrad, 1.8);
+
+  // 2. Grounded boots (y = 84)
+  ctx.beginPath();
+  ctx.moveTo(28, 68);
+  ctx.lineTo(22, 84);
+  ctx.lineTo(34, 84);
+  ctx.lineTo(36, 70);
+  ctx.closePath();
+  fillStrokePath(ctx, '#1e1916', 1.6);
+
+  ctx.beginPath();
+  ctx.moveTo(46, 68);
+  ctx.lineTo(50, 84);
+  ctx.lineTo(61, 84);
+  ctx.lineTo(55, 68);
+  ctx.closePath();
+  fillStrokePath(ctx, '#171311', 1.6);
+
+  // 3. Imposing layered Hall Master battle robe
+  ctx.beginPath();
+  ctx.moveTo(27, 32);
+  ctx.quadraticCurveTo(41, 27, 56, 33);
+  ctx.lineTo(64, 75);
+  ctx.quadraticCurveTo(42, 80, 21, 75);
+  ctx.closePath();
+  fillStrokePath(ctx, robeGrad, 1.8);
+
+  // Ornate gilded waist sash & hanging imperial tabard
+  ctx.beginPath();
+  ctx.roundRect(25, 50, 33, 5.5, 2);
+  fillStrokePath(ctx, goldTrim, 1.5);
+
+  ctx.beginPath();
+  ctx.moveTo(36, 55.5);
+  ctx.lineTo(33, 74);
+  ctx.lineTo(47, 74);
+  ctx.lineTo(44, 55.5);
+  ctx.closePath();
+  fillStrokePath(ctx, '#efe6d5', 1.4);
+
+  // Crossed collar & gilded trim
+  ctx.strokeStyle = goldTrim;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(31, 32);
+  ctx.lineTo(45, 49);
+  ctx.moveTo(51, 32);
+  ctx.lineTo(41, 44);
+  ctx.stroke();
+
+  // Ornate shoulder pauldrons
+  ctx.beginPath();
+  ctx.ellipse(27, 36, 8.5, 5, -0.32, 0, Math.PI * 2);
+  fillStrokePath(ctx, '#f8f2e6', 1.6);
+  ctx.beginPath();
+  ctx.ellipse(54, 36, 8.5, 5, 0.32, 0, Math.PI * 2);
+  fillStrokePath(ctx, '#cfc5b4', 1.6);
+
+  // 4. Head, Mask & Ornate Crown
+  ctx.beginPath();
+  ctx.ellipse(40, 23, 8, 8.2, 0, 0, Math.PI * 2);
+  fillStrokePath(ctx, variant === 1 ? '#221c1a' : '#191412', 1.6);
+
+  if (variant === 0) {
+    // Twin-pronged gilded Hall Master hairpin crown
+    ctx.beginPath();
+    ctx.moveTo(29, 17);
+    ctx.lineTo(26, 6);
+    ctx.lineTo(35, 13);
+    ctx.lineTo(40, 7);
+    ctx.lineTo(46, 13);
+    ctx.lineTo(54, 6);
+    ctx.lineTo(51, 17);
+    ctx.closePath();
+    fillStrokePath(ctx, goldTrim, 1.5);
+  } else if (variant === 1) {
+    // Demon-mask brow horns & gold crest
+    ctx.beginPath();
+    ctx.moveTo(32, 16);
+    ctx.quadraticCurveTo(26, 7, 33, 4);
+    ctx.lineTo(38, 14);
+    ctx.lineTo(43, 14);
+    ctx.lineTo(48, 4);
+    ctx.quadraticCurveTo(54, 7, 48, 16);
+    ctx.closePath();
+    fillStrokePath(ctx, goldTrim, 1.5);
+  } else {
+    // Grandmaster Daoist diadem
+    ctx.beginPath();
+    ctx.moveTo(31, 16);
+    ctx.lineTo(34, 7);
+    ctx.lineTo(40, 11);
+    ctx.lineTo(46, 7);
+    ctx.lineTo(49, 16);
+    ctx.closePath();
+    fillStrokePath(ctx, goldTrim, 1.5);
+  }
+
+  // Intense glowing boss eyes looking left
+  ctx.fillStyle = '#ff6b57';
+  ctx.fillRect(34, 22, 2.8, 2.2);
+  ctx.fillRect(39.5, 22, 2.8, 2.2);
+  ctx.fillStyle = '#fff5d6';
+  ctx.fillRect(34.5, 22.4, 1.1, 1.1);
+  ctx.fillRect(40, 22.4, 1.1, 1.1);
+
+  // 5. Signature Hall Master Weapons (facing left)
+  if (variant === 0) {
+    // Heavy gleaming broadsword / dao held diagonally forward-left
+    ctx.beginPath();
+    ctx.moveTo(22, 49);
+    ctx.quadraticCurveTo(10, 32, 8, 12);
+    ctx.quadraticCurveTo(17, 22, 26, 45);
+    ctx.closePath();
+    fillStrokePath(ctx, metalGrad, 1.7);
+    ctx.beginPath();
+    ctx.arc(23, 48, 3.8, 0, Math.PI * 2);
+    fillStrokePath(ctx, goldTrim, 1.3);
+  } else if (variant === 1) {
+    // Wicked triple-blade iron soul-claws on front hand
+    for (const dy of [-5, 0, 5]) {
+      ctx.beginPath();
+      ctx.moveTo(22, 44 + dy * 0.5);
+      ctx.quadraticCurveTo(10, 41 + dy, 4, 48 + dy * 1.2);
+      ctx.quadraticCurveTo(12, 46 + dy * 0.8, 23, 47 + dy * 0.4);
+      ctx.closePath();
+      fillStrokePath(ctx, metalGrad, 1.3);
+    }
+  } else {
+    // Floating gilded chakram wheel at front hand
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 4.6;
+    ctx.beginPath();
+    ctx.arc(14, 44, 9.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = goldTrim;
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.arc(14, 44, 9.5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Front sleeve/arm
+  ctx.beginPath();
+  ctx.moveTo(28, 37);
+  ctx.lineTo(17, 45);
+  ctx.lineTo(22, 51);
+  ctx.lineTo(32, 45);
+  ctx.closePath();
+  fillStrokePath(ctx, '#f7f1e6', 1.5);
+
+  // Warm lantern rim on left-facing silhouette
+  ctx.strokeStyle = WARM_RIM;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(26, 35);
+  ctx.lineTo(22, 74);
+  ctx.stroke();
+
+  ctx.restore();
+};
+
+// ==================== SUMI-E SUPREME CULT LEADER (104x112, FACING LEFT) ====================
+
+const paintSumiEndBoss = (ctx: CanvasRenderingContext2D): void => {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  const robeGrad = ctx.createLinearGradient(22, 30, 82, 102);
+  robeGrad.addColorStop(0, '#fffcf5');
+  robeGrad.addColorStop(0.5, '#e2d9c8');
+  robeGrad.addColorStop(1, '#9c907e');
+
+  const capeGrad = ctx.createLinearGradient(54, 28, 100, 96);
+  capeGrad.addColorStop(0, '#ece3d4');
+  capeGrad.addColorStop(0.6, '#b5aa98');
+  capeGrad.addColorStop(1, '#6e6457');
+
+  const goldTrim = '#fae6a8';
+  const metalGrad = ctx.createLinearGradient(6, 12, 30, 68);
+  metalGrad.addColorStop(0, '#ffffff');
+  metalGrad.addColorStop(1, '#cbd5e1');
+
+  // 0. Swirling celestial ink-and-gold sovereign ribbon behind shoulders
+  ctx.strokeStyle = 'rgba(250, 230, 168, 0.72)';
+  ctx.lineWidth = 2.6;
+  ctx.beginPath();
+  ctx.moveTo(22, 44);
+  ctx.bezierCurveTo(18, 16, 86, 14, 88, 48);
+  ctx.stroke();
+
+  // 1. Towering twin-tail imperial mantle billowing right
+  ctx.beginPath();
+  ctx.moveTo(56, 34);
+  ctx.quadraticCurveTo(86, 40, 98, 82);
+  ctx.quadraticCurveTo(84, 94, 68, 86);
+  ctx.lineTo(62, 62);
+  ctx.closePath();
+  fillStrokePath(ctx, capeGrad, 2);
+
+  // 2. Grounded sovereign armored boots (y = 105)
+  ctx.beginPath();
+  ctx.moveTo(35, 86);
+  ctx.lineTo(28, 105);
+  ctx.lineTo(43, 105);
+  ctx.lineTo(45, 88);
+  ctx.closePath();
+  fillStrokePath(ctx, '#1b1613', 1.8);
+
+  ctx.beginPath();
+  ctx.moveTo(57, 86);
+  ctx.lineTo(61, 105);
+  ctx.lineTo(75, 105);
+  ctx.lineTo(68, 86);
+  ctx.closePath();
+  fillStrokePath(ctx, '#14100e', 1.8);
+
+  // 3. Layered imperial grandmaster battle robes
+  ctx.beginPath();
+  ctx.moveTo(33, 38);
+  ctx.quadraticCurveTo(51, 31, 69, 39);
+  ctx.lineTo(79, 94);
+  ctx.quadraticCurveTo(52, 100, 24, 94);
+  ctx.closePath();
+  fillStrokePath(ctx, robeGrad, 2);
+
+  // Embroidered crimson/gold center tabard & waist dragon-belt
+  ctx.beginPath();
+  ctx.roundRect(30, 62, 42, 7, 2.2);
+  fillStrokePath(ctx, goldTrim, 1.6);
+
+  ctx.beginPath();
+  ctx.moveTo(44, 69);
+  ctx.lineTo(40, 93);
+  ctx.lineTo(60, 93);
+  ctx.lineTo(56, 69);
+  ctx.closePath();
+  fillStrokePath(ctx, '#f2e8d5', 1.5);
+
+  ctx.strokeStyle = goldTrim;
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(37, 39);
+  ctx.lineTo(54, 61);
+  ctx.moveTo(63, 39);
+  ctx.lineTo(50, 54);
+  ctx.stroke();
+
+  // Winged imperial pauldrons
+  ctx.beginPath();
+  ctx.moveTo(20, 40);
+  ctx.quadraticCurveTo(31, 32, 41, 41);
+  ctx.quadraticCurveTo(33, 49, 23, 46);
+  ctx.closePath();
+  fillStrokePath(ctx, '#faf5ea', 1.8);
+
+  ctx.beginPath();
+  ctx.moveTo(61, 41);
+  ctx.quadraticCurveTo(72, 32, 82, 41);
+  ctx.quadraticCurveTo(74, 49, 63, 46);
+  ctx.closePath();
+  fillStrokePath(ctx, '#d4cab8', 1.8);
+
+  // 4. Sovereign Head & Multi-Spired Imperial Crown (Mianguan / Dragon Diadem)
+  ctx.beginPath();
+  ctx.ellipse(50, 28, 9.5, 9.8, 0, 0, Math.PI * 2);
+  fillStrokePath(ctx, '#181311', 1.8);
+
+  ctx.beginPath();
+  ctx.moveTo(37, 21);
+  ctx.lineTo(33, 8);
+  ctx.lineTo(42, 15);
+  ctx.lineTo(50, 4);
+  ctx.lineTo(58, 15);
+  ctx.lineTo(67, 8);
+  ctx.lineTo(63, 21);
+  ctx.closePath();
+  fillStrokePath(ctx, goldTrim, 1.7);
+
+  // Glowing sovereign eyes
+  ctx.fillStyle = '#fff0a6';
+  ctx.fillRect(42.5, 26.5, 3.4, 2.5);
+  ctx.fillRect(49.5, 26.5, 3.4, 2.5);
+
+  // 5. Commanding Sovereign Glaive / Imperial Blade held forward-left
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 4.6;
+  ctx.beginPath();
+  ctx.moveTo(22, 98);
+  ctx.lineTo(14, 24);
+  ctx.stroke();
+  ctx.strokeStyle = goldTrim;
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(22, 98);
+  ctx.lineTo(14, 24);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(14, 8);
+  ctx.quadraticCurveTo(3, 18, 6, 36);
+  ctx.quadraticCurveTo(13, 30, 19, 28);
+  ctx.closePath();
+  fillStrokePath(ctx, metalGrad, 1.8);
+
+  // Front armored arm gripping polearm
+  ctx.beginPath();
+  ctx.moveTo(34, 44);
+  ctx.lineTo(16, 54);
+  ctx.lineTo(22, 62);
+  ctx.lineTo(39, 54);
+  ctx.closePath();
+  fillStrokePath(ctx, '#f8f2e6', 1.6);
+
+  // Warm lantern rim on left silhouette
+  ctx.strokeStyle = WARM_RIM;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(31, 42);
+  ctx.lineTo(25, 93);
+  ctx.stroke();
+
+  ctx.restore();
 };
 
 const SLASH_ARC_GRID: PixelGrid = [
@@ -716,143 +1731,6 @@ const RUNE_BOOK_GRID: PixelGrid = [
   '.BBBBBB.',
 ];
 
-// Wuxia Cultist Mobs (16x18 humanoid sect disciples facing left toward hero, pixelSize 3 -> 48x54)
-const MOB_SLIME_GRID: PixelGrid = [
-  'W.....MMMMMM....',
-  'W....MMMMMMMM...',
-  'W...MMKKKKKKMM..',
-  'W...MKEKKKEKMM..',
-  'W....MKKKKKKM...',
-  'WW...MMMMMMMM...',
-  'WW..MMDDDDDDMM..',
-  '.K.MMMDDDDDDMMM.',
-  '...MMMWWWWWWWMM.',
-  '...MMMMMMMMMMMM.',
-  '....MMDDDDDDMM..',
-  '....MMMMMMMMMM..',
-  '....MMDDDDDDMM..',
-  '.....MM....MM...',
-  '.....KK....KK...',
-  '....KKK....KKK..',
-  '................',
-  '................',
-];
-
-const MOB_MUSH_GRID: PixelGrid = [
-  '......CCCCCC....',
-  '....CCCCCCCCCC..',
-  '..CCCWCCCCCCWCCC',
-  '.CCCCCCCCCCCCCCC',
-  '....KKKKKKKKKK..',
-  '....KEKKKEKKKK..',
-  '....KKKKKKKKKK..',
-  '..W.MMMMMMMMMM..',
-  '.W..MMDDDDDDMM..',
-  'W..MMMDDDDDDMMM.',
-  '....MMWWWWWWMMW.',
-  '....MMMMMMMMMM..',
-  '....MMDDDDDDMM..',
-  '.....MM....MM...',
-  '.....KK....KK...',
-  '....KKK....KKK..',
-  '................',
-  '................',
-];
-
-const MOB_HORNED_GRID: PixelGrid = [
-  'W.....KKKKKK....',
-  'WW...KWWWWWWK...',
-  'WW...KKEKKEKK...',
-  'WW...KKKKKKKK...',
-  'W...MMMMMMMMMM..',
-  'K..MMMDDDDDDMMM.',
-  'K.MMDDDDDDDDDDMM',
-  'K...MMWWWWWWMM..',
-  'K...MMMMMMMMMM..',
-  'K...MMDDDDDDMM..',
-  'K...MMMMMMMMMM..',
-  'K....MMDDDDMM...',
-  'K....KK....KK...',
-  'K....KK....KK...',
-  '....KKK....KKK..',
-  '................',
-  '................',
-  '................',
-];
-
-// Cult Hall Master Mini-Boss variants (humanoid, facing left)
-const MINIBOSS_GRID: PixelGrid = [
-  '..Y........Y..',
-  '..YY.YYYY.YY..',
-  '.W..KKKKKK....',
-  '.W..KEKKEK....',
-  '.W.MMMMMMMM...',
-  '.WWMMDDDDMMM..',
-  'WW.MWWWWWWM.MM',
-  '.K.MMMMMMMMMMM',
-  '....MMDDDDMMMM',
-  '....MMMMMMM.MM',
-  '....MMWWWM..MM',
-  '....KK..KK...M',
-  '...KKK..KKK...',
-  '...KKK..KKK...',
-];
-
-// Variant 1: Twin-Claw / Soul-Hook Masked Elder
-const MINIBOSS_CLAW_GRID: PixelGrid = [
-  '.....KKKK.....',
-  '....KYYYYK....',
-  '...KKKKKKKK...',
-  '...KKEKKEKK...',
-  '..MMMMMMMMMM..',
-  'WWWWMMDDDDMMWW',
-  'K..MMMMMMMM..K',
-  '...MMMMMMMM...',
-  '...MMWWWWMM...',
-  '..MMMDDDDMMM..',
-  '..MM..WW..MM..',
-  '.....KK.KK....',
-  '....KK...KK...',
-  '...KKK...KKK..',
-];
-
-// Variant 2: Golden-Wheel / Whip Sect Grandmaster
-const MINIBOSS_WHEEL_GRID: PixelGrid = [
-  '....YYYYYY....',
-  '...YYKKKKYY...',
-  '..YYKKKKKKYY..',
-  '..Y.KEKKEK.Y..',
-  '..MMMMMMMMMM..',
-  '.MMDDDDDDDDMM.',
-  'WMMMMMMMMMMMMW',
-  'WW..MMWWMM..WW',
-  '....MMMMMM....',
-  '...MMMMMMMM...',
-  '...MMYYYYMM...',
-  '....KK..KK....',
-  '...KKK..KKK...',
-  '..KKKK..KKKK..',
-];
-
-const ENDBOSS_GRID: PixelGrid = [
-  '....Y..YY..Y....',
-  '....YYYYYYYY....',
-  '...YMMMMMMMMY...',
-  '.Y..KKKKKKKK....',
-  '.Y..KKEKKKEK....',
-  'WY.MMMMMMMMMM...',
-  'WY.MMRRRRRRMM.M.',
-  'WWMMMWWWWWWWMMMM',
-  '.KMMDDDDDDDDMMMM',
-  '..MMMMMMMMMM.MMM',
-  '..MMRRRRRRMM.MMM',
-  '..MMMWWWWMMM..MM',
-  '...MMMMMMMM...MM',
-  '...KKK..KKK....M',
-  '..KKKK..KKKK....',
-  '..KKKK..KKKK....',
-];
-
 const COIN_GRID: PixelGrid = [
   '.YYYY.',
   'YYWWYY',
@@ -890,76 +1768,79 @@ export const renderHeroPaperdollCanvas = (
   const w = canvas.width;
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
-  ctx.imageSmoothingEnabled = false;
+  ctx.imageSmoothingEnabled = true;
 
   const style = getGearVisualStyle(classId, equipped);
-  const heroCfg = HERO_GRIDS[classId];
-  const cols = heroCfg.grid[0]?.length ?? 20;
-  const rows = heroCfg.grid.length || 20;
-  const pixelSize = Math.max(2, Math.floor(Math.min(w / (cols + 4), h / (rows + 4))));
-  const heroOffsetX = Math.round((w - cols * pixelSize) / 2);
-  const heroOffsetY = Math.round((h - rows * pixelSize) / 2);
+  const srcW = 64;
+  const srcH = 68;
+  const scale = Math.min((w * 0.88) / srcW, (h * 0.88) / srcH);
+  const drawW = srcW * scale;
+  const drawH = srcH * scale;
+  const drawX = (w - drawW) * 0.5;
+  const drawY = (h - drawH) * 0.52;
 
-  // Warm grounded contact shadow + subtle lantern backlight
-  const shadowCx = heroOffsetX + Math.round(cols * 0.5) * pixelSize;
-  const shadowCy = heroOffsetY + (rows - 1) * pixelSize;
-  const shGrad = ctx.createRadialGradient(shadowCx, shadowCy, 2, shadowCx, shadowCy, pixelSize * 6.5);
+  // Grounded ink contact shadow
+  const shadowCx = w * 0.5;
+  const shadowCy = drawY + drawH * 0.91;
+  ctx.save();
+  ctx.translate(shadowCx, shadowCy);
+  ctx.scale(1, 0.34);
+  const shGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, drawW * 0.42);
   shGrad.addColorStop(0, 'rgba(10, 7, 5, 0.72)');
-  shGrad.addColorStop(1, 'transparent');
+  shGrad.addColorStop(1, 'rgba(10, 7, 5, 0)');
   ctx.fillStyle = shGrad;
-  ctx.fillRect(0, 0, w, h);
+  ctx.beginPath();
+  ctx.arc(0, 0, drawW * 0.42, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 
+  // Optional weapon qi glow behind hero
   if (style.weaponGlowCss) {
-    const cx = heroOffsetX + Math.round(cols * 0.78) * pixelSize;
-    const cy = heroOffsetY + Math.round(rows * 0.5) * pixelSize;
-    const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, pixelSize * 6);
+    const gx = drawX + drawW * 0.74;
+    const gy = drawY + drawH * 0.48;
+    const grad = ctx.createRadialGradient(gx, gy, 2, gx, gy, drawW * 0.38);
     grad.addColorStop(0, `${style.weaponGlowCss}55`);
     grad.addColorStop(1, 'transparent');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
   }
 
-  // 1. Cape layer behind body
+  // 1. Equipped Cape behind body
   if (style.hasCape) {
-    drawGridToContext(ctx, GEAR_CAPE_GRID, GEAR_SHADE_PALETTE, pixelSize, heroOffsetX, heroOffsetY, style.capeCss);
+    drawTintedLayer(ctx, srcW, srcH, style.capeCss, drawX, drawY, drawW, drawH, (octx) => {
+      paintSumiGearCape(octx);
+    });
   }
 
-  // 2. Base character sprite
-  drawGridToContext(ctx, heroCfg.grid, heroCfg.palette, pixelSize, heroOffsetX, heroOffsetY, null);
+  // 2. Base Sumi-e Hero sprite
+  ctx.save();
+  ctx.translate(drawX, drawY);
+  ctx.scale(scale, scale);
+  paintSumiHero(ctx, classId, 'idle');
+  ctx.restore();
 
   // 3. Equipped Armor Top
   if (style.hasTop) {
-    drawGridToContext(
-      ctx,
-      GEAR_TOP_GRIDS[classId],
-      GEAR_SHADE_PALETTE,
-      pixelSize,
-      heroOffsetX,
-      heroOffsetY,
-      style.topCss
-    );
+    drawTintedLayer(ctx, srcW, srcH, style.topCss, drawX, drawY, drawW, drawH, (octx) => {
+      paintSumiGearTop(octx, classId);
+    });
   }
 
   // 4. Equipped Headgear
   if (style.hasHead) {
-    drawGridToContext(
-      ctx,
-      GEAR_HEAD_GRIDS[classId],
-      GEAR_SHADE_PALETTE,
-      pixelSize,
-      heroOffsetX,
-      heroOffsetY,
-      style.headCss
-    );
+    drawTintedLayer(ctx, srcW, srcH, style.headCss, drawX, drawY, drawW, drawH, (octx) => {
+      paintSumiGearHead(octx, classId);
+    });
   }
 
-  // 5. Held Weapon in right hand
+  // 5. Held Weapon in front right hand
   if (style.hasWeapon) {
-    const wepGrid = GEAR_WEAPON_GRIDS[classId];
-    const wepPixel = Math.max(2, Math.round(pixelSize * 0.85));
-    const wepX = heroOffsetX + Math.round(cols * 0.68) * pixelSize;
-    const wepY = heroOffsetY + Math.round(rows * 0.16) * pixelSize;
-    drawGridToContext(ctx, wepGrid, GEAR_SHADE_PALETTE, wepPixel, wepX, wepY, style.weaponCss);
+    const wepSize = 40 * scale;
+    const wepX = drawX + drawW * 0.56;
+    const wepY = drawY + drawH * 0.22;
+    drawTintedLayer(ctx, 40, 40, style.weaponCss, wepX, wepY, wepSize, wepSize, (octx) => {
+      paintSumiWeapon(octx, CLASS_DEFAULT_WEAPON_KIND[classId]);
+    });
   }
 };
 
@@ -1152,15 +2033,36 @@ const ASCENDED_HALO_STELLAR_GRID: PixelGrid = [
 ];
 
 export const registerPixelTextures = (scene: Phaser.Scene): void => {
-  // Base heroes (20x20 at pixelSize 3 -> 60x60)
+  // Sumi-e ink-brush painted heroes (64x68, 4 animation frames per class + matching gear overlays)
   for (const classId of CLASS_IDS) {
-    const cfg = HERO_GRIDS[classId];
-    drawPixelGrid(scene, `hero_${classId}`, cfg.grid, cfg.palette, 3);
-    drawPixelGrid(scene, `gear_head_${classId}`, GEAR_HEAD_GRIDS[classId], GEAR_SHADE_PALETTE, 3);
-    drawPixelGrid(scene, `gear_top_${classId}`, GEAR_TOP_GRIDS[classId], GEAR_SHADE_PALETTE, 3);
-    drawPixelGrid(scene, `gear_wep_${classId}`, GEAR_WEAPON_GRIDS[classId], GEAR_SHADE_PALETTE, 3);
+    registerCanvasTexture(scene, `hero_${classId}`, 64, 68, (ctx) => {
+      paintSumiHero(ctx, classId, 'idle');
+    });
+    registerCanvasTexture(scene, `hero_${classId}_idle`, 64, 68, (ctx) => {
+      paintSumiHero(ctx, classId, 'idle');
+    });
+    registerCanvasTexture(scene, `hero_${classId}_walk`, 64, 68, (ctx) => {
+      paintSumiHero(ctx, classId, 'walk');
+    });
+    registerCanvasTexture(scene, `hero_${classId}_attack`, 64, 68, (ctx) => {
+      paintSumiHero(ctx, classId, 'attack');
+    });
+    registerCanvasTexture(scene, `hero_${classId}_dash`, 64, 68, (ctx) => {
+      paintSumiHero(ctx, classId, 'dash');
+    });
+    registerCanvasTexture(scene, `gear_head_${classId}`, 64, 68, (ctx) => {
+      paintSumiGearHead(ctx, classId);
+    });
+    registerCanvasTexture(scene, `gear_top_${classId}`, 64, 68, (ctx) => {
+      paintSumiGearTop(ctx, classId);
+    });
+    registerCanvasTexture(scene, `gear_wep_${classId}`, 40, 40, (ctx) => {
+      paintSumiWeapon(ctx, CLASS_DEFAULT_WEAPON_KIND[classId]);
+    });
   }
-  drawPixelGrid(scene, 'gear_cape', GEAR_CAPE_GRID, GEAR_SHADE_PALETTE, 3);
+  registerCanvasTexture(scene, 'gear_cape', 64, 68, (ctx) => {
+    paintSumiGearCape(ctx);
+  });
 
   // Combat VFX sprites
   drawPixelGrid(
@@ -1201,56 +2103,50 @@ export const registerPixelTextures = (scene: Phaser.Scene): void => {
     3
   );
 
-  // Sect Cultist mobs (16x18 at pixelSize 3 -> 48x54, white-tinted base for sect robes)
-  drawPixelGrid(
-    scene,
-    'mob_0',
-    MOB_SLIME_GRID,
-    { K: '#14100e', M: '#ffffff', D: '#c4b8a6', W: '#f0e6d2', E: '#ecd492' },
-    3
-  );
-  drawPixelGrid(
-    scene,
-    'mob_1',
-    MOB_MUSH_GRID,
-    { K: '#14100e', C: '#e6d8be', W: '#d6be8a', M: '#ffffff', D: '#c4b8a6', E: '#ecd492' },
-    3
-  );
-  drawPixelGrid(
-    scene,
-    'mob_2',
-    MOB_HORNED_GRID,
-    { K: '#14100e', M: '#ffffff', D: '#c4b8a6', W: '#f0e6d2', E: '#c23b2f' },
-    3
-  );
+  // Sumi-e Sect Cultist mobs (56x60, facing left, warm ivory/silver shaded for biome tinting)
+  registerCanvasTexture(scene, 'mob_0', 56, 60, (ctx) => {
+    paintSumiMob(ctx, 0);
+  });
+  registerCanvasTexture(scene, 'mob_1', 56, 60, (ctx) => {
+    paintSumiMob(ctx, 1);
+  });
+  registerCanvasTexture(scene, 'mob_2', 56, 60, (ctx) => {
+    paintSumiMob(ctx, 2);
+  });
 
-  // Sect Hall Master Mini-Boss variants & Supreme Cult Leader
-  const miniPalette = {
-    K: '#0f172a',
-    Y: '#facc15',
-    M: '#ffffff',
-    W: '#f1f5f9',
-    D: '#94a3b8',
-    E: '#ef4444',
-  };
-  drawPixelGrid(scene, 'miniboss', MINIBOSS_GRID, miniPalette, 6);
-  drawPixelGrid(scene, 'miniboss_0', MINIBOSS_GRID, miniPalette, 6);
-  drawPixelGrid(scene, 'miniboss_1', MINIBOSS_CLAW_GRID, miniPalette, 6);
-  drawPixelGrid(scene, 'miniboss_2', MINIBOSS_WHEEL_GRID, miniPalette, 6);
-  drawPixelGrid(
-    scene,
-    'endboss',
-    ENDBOSS_GRID,
-    { K: '#0f172a', Y: '#fde047', M: '#ffffff', R: '#ef4444', W: '#f8fafc', D: '#64748b', E: '#fef08a' },
-    7
-  );
+  // Sumi-e Hall Master Mini-Bosses (84x90) & Supreme Cult Leader (104x112), facing left
+  registerCanvasTexture(scene, 'miniboss', 84, 90, (ctx) => {
+    paintSumiMiniBoss(ctx, 0);
+  });
+  registerCanvasTexture(scene, 'miniboss_0', 84, 90, (ctx) => {
+    paintSumiMiniBoss(ctx, 0);
+  });
+  registerCanvasTexture(scene, 'miniboss_1', 84, 90, (ctx) => {
+    paintSumiMiniBoss(ctx, 1);
+  });
+  registerCanvasTexture(scene, 'miniboss_2', 84, 90, (ctx) => {
+    paintSumiMiniBoss(ctx, 2);
+  });
+  registerCanvasTexture(scene, 'endboss', 104, 112, (ctx) => {
+    paintSumiEndBoss(ctx);
+  });
 
-  // Wuxia held weapons (pixelSize 3 -> 36x36, aligned with gear_wep_*)
-  drawPixelGrid(scene, 'wep_wuxia_sword', WEP_WUXIA_SWORD_GRID, GEAR_SHADE_PALETTE, 3);
-  drawPixelGrid(scene, 'wep_wuxia_staff', WEP_WUXIA_STAFF_GRID, GEAR_SHADE_PALETTE, 3);
-  drawPixelGrid(scene, 'wep_wuxia_heavy_sword', WEP_WUXIA_HEAVY_SWORD_GRID, GEAR_SHADE_PALETTE, 3);
-  drawPixelGrid(scene, 'wep_wuxia_flute', WEP_WUXIA_FLUTE_GRID, GEAR_SHADE_PALETTE, 3);
-  drawPixelGrid(scene, 'wep_wuxia_needles', WEP_WUXIA_NEEDLES_GRID, GEAR_SHADE_PALETTE, 3);
+  // Painterly Wuxia held weapons (40x40, white/silver shaded for Phaser tinting)
+  registerCanvasTexture(scene, 'wep_wuxia_sword', 40, 40, (ctx) => {
+    paintSumiWeapon(ctx, 'sword');
+  });
+  registerCanvasTexture(scene, 'wep_wuxia_staff', 40, 40, (ctx) => {
+    paintSumiWeapon(ctx, 'staff');
+  });
+  registerCanvasTexture(scene, 'wep_wuxia_heavy_sword', 40, 40, (ctx) => {
+    paintSumiWeapon(ctx, 'heavy_sword');
+  });
+  registerCanvasTexture(scene, 'wep_wuxia_flute', 40, 40, (ctx) => {
+    paintSumiWeapon(ctx, 'flute');
+  });
+  registerCanvasTexture(scene, 'wep_wuxia_needles', 40, 40, (ctx) => {
+    paintSumiWeapon(ctx, 'needles');
+  });
 
   // Projectiles & Wuxia Martial Arts (crisp drawPixelGrid sprites oriented facing RIGHT +X)
   // Shared Archetype: Palm Qi Strike (Guo Jing, Yang Guo, Tianshan, Toad Stance)

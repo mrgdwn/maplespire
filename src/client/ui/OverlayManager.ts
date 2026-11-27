@@ -90,6 +90,7 @@ import {
   parsePlayerProfile,
 } from '../../shared/utils.ts';
 import { renderHeroPaperdollCanvas } from '../fx/pixelArt.ts';
+import { musicFX } from '../fx/music.ts';
 import { soundFX } from '../fx/sound.ts';
 import { mountWuxiaVista, type VistaController } from '../fx/wuxiaVista.ts';
 import { createWuxiaIcon, slotToIconId, type WuxiaIconId } from './icons.ts';
@@ -281,6 +282,7 @@ export class OverlayManager {
   private campVista: VistaController | null = null;
   private codexDrawerOpen: boolean = false;
   private utilityMenuOpen: boolean = false;
+  private spireGuideOpen: boolean = false;
   private bankedRerolls: number = 2;
   private isDraftMinimized: boolean = false;
   private autoDraftMode: AutoDraftMode = loadAutoDraftMode();
@@ -301,6 +303,14 @@ export class OverlayManager {
       },
       leaderboard: [],
     };
+
+    const unlockAudio = (): void => {
+      musicFX.unlock();
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+    window.addEventListener('pointerdown', unlockAudio, { passive: true });
+    window.addEventListener('keydown', unlockAudio);
 
     window.addEventListener('keydown', (e: KeyboardEvent) => {
       if (this.mode !== 'dungeon') return;
@@ -864,6 +874,7 @@ export class OverlayManager {
 
   public renderCamp(): void {
     this.mode = 'camp';
+    musicFX.setMood('camp');
     this.clearModal();
     this.releaseMenuKeys();
     this.destroyCampVista();
@@ -914,12 +925,45 @@ export class OverlayManager {
     });
     topbar.appendChild(loginBtn);
 
-    const muteBtn = this.el('button', 'hd-icon-btn', soundFX.isMuted() ? 'Muted' : 'Audio');
-    muteBtn.title = 'Toggle sound';
-    muteBtn.addEventListener('click', () => {
-      muteBtn.textContent = soundFX.toggleMute() ? 'Muted' : 'Audio';
+    const audioGroup = this.el('div', 'hd-audio-group');
+
+    const bgmMutedInit = musicFX.isMuted();
+    const bgmBtn = this.el(
+      'button',
+      `hd-icon-btn hd-audio-btn${bgmMutedInit ? ' is-muted' : ''}`,
+      bgmMutedInit ? 'BGM Off' : 'BGM'
+    );
+    bgmBtn.type = 'button';
+    bgmBtn.title = 'Toggle background music';
+    bgmBtn.setAttribute('aria-pressed', String(!bgmMutedInit));
+    bgmBtn.addEventListener('click', () => {
+      musicFX.unlock();
+      const muted = musicFX.toggleMute();
+      bgmBtn.textContent = muted ? 'BGM Off' : 'BGM';
+      bgmBtn.classList.toggle('is-muted', muted);
+      bgmBtn.setAttribute('aria-pressed', String(!muted));
     });
-    topbar.appendChild(muteBtn);
+    audioGroup.appendChild(bgmBtn);
+
+    const sfxMutedInit = soundFX.isMuted();
+    const sfxBtn = this.el(
+      'button',
+      `hd-icon-btn hd-audio-btn${sfxMutedInit ? ' is-muted' : ''}`,
+      sfxMutedInit ? 'SFX Off' : 'SFX'
+    );
+    sfxBtn.type = 'button';
+    sfxBtn.title = 'Toggle sound effects';
+    sfxBtn.setAttribute('aria-pressed', String(!sfxMutedInit));
+    sfxBtn.addEventListener('click', () => {
+      const muted = soundFX.toggleMute();
+      sfxBtn.textContent = muted ? 'SFX Off' : 'SFX';
+      sfxBtn.classList.toggle('is-muted', muted);
+      sfxBtn.setAttribute('aria-pressed', String(!muted));
+      if (!muted) soundFX.playRouletteTick();
+    });
+    audioGroup.appendChild(sfxBtn);
+
+    topbar.appendChild(audioGroup);
     wrap.appendChild(topbar);
 
     if (this.activeTab === 'home') {
@@ -989,10 +1033,13 @@ export class OverlayManager {
     titleBlock.appendChild(this.el('div', 'hd-title__sub', 'Nine Heavens · Daily Spire'));
     wrap.appendChild(titleBlock);
 
-    // Single-line Daily Spire Ribbon
+    // Single-line Daily Spire Ribbon + collapsible inline Spire Guide
+    const briefingWrap = this.el('div', 'daily-briefing-wrap');
     const briefing = this.el('div', 'daily-briefing daily-briefing--slim hd-win');
 
-    const decreeSpan = this.el('span', 'daily-briefing__item daily-briefing__name', decree.name);
+    const decreeSpan = this.el('span', 'daily-briefing__item daily-briefing__decree');
+    decreeSpan.appendChild(this.el('span', 'daily-briefing__key', 'Decree:'));
+    decreeSpan.appendChild(this.el('span', 'daily-briefing__name', decree.name));
     decreeSpan.title = `Sect Decree — ${decree.name}: ${decree.summary}`;
     briefing.appendChild(decreeSpan);
 
@@ -1009,6 +1056,7 @@ export class OverlayManager {
     briefing.appendChild(this.el('span', 'daily-briefing__sep', '·'));
 
     const chestPills = this.el('div', 'daily-chest-pills');
+    chestPills.appendChild(this.el('span', 'daily-briefing__key', 'Chests:'));
     for (const floor of DAILY_CHEST_FLOORS) {
       const claimed = chestsClaimedToday.includes(floor);
       const pill = this.el(
@@ -1024,7 +1072,79 @@ export class OverlayManager {
     }
     briefing.appendChild(chestPills);
 
-    wrap.appendChild(briefing);
+    const helpBtn = this.el(
+      'button',
+      `daily-briefing__help${this.spireGuideOpen ? ' is-open' : ''}`,
+      '?'
+    );
+    helpBtn.type = 'button';
+    helpBtn.title = 'Spire Guide — Decree, Bounty, Chests & Secret Synergies';
+    helpBtn.setAttribute('aria-label', 'Toggle Spire Guide');
+    helpBtn.setAttribute('aria-expanded', String(this.spireGuideOpen));
+    briefing.appendChild(helpBtn);
+
+    briefingWrap.appendChild(briefing);
+
+    const guidePanel = this.el(
+      'div',
+      `spire-guide hd-win${this.spireGuideOpen ? '' : ' hidden'}`
+    );
+    guidePanel.setAttribute('role', 'region');
+    guidePanel.setAttribute('aria-label', 'Spire Guide');
+
+    const guideHead = this.el('div', 'spire-guide__head');
+    guideHead.appendChild(this.el('span', 'spire-guide__title', 'Spire Guide'));
+    const guideClose = this.el('button', 'spire-guide__close', '×');
+    guideClose.type = 'button';
+    guideClose.setAttribute('aria-label', 'Close Spire Guide');
+    guideHead.appendChild(guideClose);
+    guidePanel.appendChild(guideHead);
+
+    const guideList = this.el('div', 'spire-guide__grid');
+    const guideRows: readonly { label: string; text: string }[] = [
+      {
+        label: `Daily Decree — ${decree.name}`,
+        text: decree.summary,
+      },
+      {
+        label: `Mastery Bounty (${bountyDone ? 'Done' : `+${bounty.shardReward} Shards`})`,
+        text: bounty.description,
+      },
+      {
+        label: 'Daily Chests (F10 · F20 · F30)',
+        text: 'Clear Floor 10, 20, and 30 in a Daily Run for Gold, Shards, and Rare/Legendary relics.',
+      },
+      {
+        label: 'Secret Synergies (3 Arts + 3 Qi)',
+        text: 'Fill 3 Active Arts and 3 Inner Qi slots — matching pairs awaken Secret Synergies.',
+      },
+    ];
+    for (const row of guideRows) {
+      const item = this.el('div', 'spire-guide__item');
+      item.appendChild(this.el('div', 'spire-guide__label', row.label));
+      item.appendChild(this.el('div', 'spire-guide__desc', row.text));
+      guideList.appendChild(item);
+    }
+    guidePanel.appendChild(guideList);
+    briefingWrap.appendChild(guidePanel);
+
+    const setGuideOpen = (open: boolean): void => {
+      this.spireGuideOpen = open;
+      guidePanel.classList.toggle('hidden', !open);
+      helpBtn.classList.toggle('is-open', open);
+      helpBtn.setAttribute('aria-expanded', String(open));
+    };
+
+    helpBtn.addEventListener('click', () => {
+      soundFX.playRouletteTick();
+      setGuideOpen(!this.spireGuideOpen);
+    });
+    guideClose.addEventListener('click', () => {
+      soundFX.playRouletteTick();
+      setGuideOpen(false);
+    });
+
+    wrap.appendChild(briefingWrap);
 
     const heroStage = this.el('div', 'hd-hero');
     const heroCanvas = document.createElement('canvas');
@@ -1501,6 +1621,26 @@ export class OverlayManager {
     }
 
     const screen = this.el('div', 'equip-screen');
+
+    // ==================== 0. 4-LINEAGE MARTIAL STYLE SWITCHER ====================
+    const lineageBar = this.el('div', 'equip-lineage-bar');
+    for (const clsDef of CLASS_CATALOG) {
+      const clsProg = p.classes[clsDef.id];
+      const isSelected = clsDef.id === selId;
+      const btn = this.el('button', `equip-lineage-pill${isSelected ? ' is-active' : ''}`);
+      btn.type = 'button';
+      btn.title = `${clsDef.name} (${clsDef.attackStyleLabel}) — ${clsDef.firstJobPassiveName}: ${clsDef.firstJobPassiveDesc}`;
+      btn.appendChild(this.el('span', 'equip-lineage-pill__name', clsDef.name));
+      btn.appendChild(this.el('span', 'equip-lineage-pill__lv', `Lv.${clsProg.level}`));
+      btn.addEventListener('click', () => {
+        if (clsDef.id === selId) return;
+        soundFX.playRouletteTick();
+        this.selectedInspectItemId = null;
+        void this.sendCampAction({ action: 'select_class', classId: clsDef.id });
+      });
+      lineageBar.appendChild(btn);
+    }
+    screen.appendChild(lineageBar);
 
     // ==================== A. SYMMETRICAL 4-SLOT HERO STAGE ====================
     const stage = this.el('div', 'equip-stage');
@@ -2483,7 +2623,7 @@ export class OverlayManager {
     menuBtn.setAttribute('aria-label', 'Run options menu');
     menuBtn.setAttribute('aria-haspopup', 'menu');
     menuBtn.setAttribute('aria-expanded', 'false');
-    menuBtn.title = 'Options (Auto, Audio, Retreat)';
+    menuBtn.title = 'Options (Auto, Music, SFX, Retreat)';
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.toggleUtilityMenu();
@@ -2528,19 +2668,39 @@ export class OverlayManager {
     });
     popover.appendChild(autoDraftBtn);
 
-    const muteBtn = this.el(
+    const bgmMuted = musicFX.isMuted();
+    const bgmBtn = this.el(
       'button',
-      'hud-utility-item',
-      soundFX.isMuted() ? 'Audio: Muted' : 'Audio: ON'
+      `hud-utility-item${bgmMuted ? '' : ' hud-utility-item--on'}`,
+      bgmMuted ? 'Music: Muted' : 'Music: ON'
     );
-    muteBtn.id = 'hud-mute-btn';
-    muteBtn.setAttribute('type', 'button');
-    muteBtn.setAttribute('role', 'menuitem');
-    muteBtn.addEventListener('click', () => {
-      const muted = soundFX.toggleMute();
-      muteBtn.textContent = muted ? 'Audio: Muted' : 'Audio: ON';
+    bgmBtn.id = 'hud-bgm-btn';
+    bgmBtn.setAttribute('type', 'button');
+    bgmBtn.setAttribute('role', 'menuitem');
+    bgmBtn.addEventListener('click', () => {
+      musicFX.unlock();
+      const muted = musicFX.toggleMute();
+      bgmBtn.textContent = muted ? 'Music: Muted' : 'Music: ON';
+      bgmBtn.classList.toggle('hud-utility-item--on', !muted);
     });
-    popover.appendChild(muteBtn);
+    popover.appendChild(bgmBtn);
+
+    const sfxMuted = soundFX.isMuted();
+    const sfxBtn = this.el(
+      'button',
+      `hud-utility-item${sfxMuted ? '' : ' hud-utility-item--on'}`,
+      sfxMuted ? 'SFX: Muted' : 'SFX: ON'
+    );
+    sfxBtn.id = 'hud-sfx-btn';
+    sfxBtn.setAttribute('type', 'button');
+    sfxBtn.setAttribute('role', 'menuitem');
+    sfxBtn.addEventListener('click', () => {
+      const muted = soundFX.toggleMute();
+      sfxBtn.textContent = muted ? 'SFX: Muted' : 'SFX: ON';
+      sfxBtn.classList.toggle('hud-utility-item--on', !muted);
+      if (!muted) soundFX.playRouletteTick();
+    });
+    popover.appendChild(sfxBtn);
 
     const retreatBtn = this.el(
       'button',

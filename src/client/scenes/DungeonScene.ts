@@ -40,6 +40,7 @@ import type {
 } from '../../shared/types.ts';
 import { getDailySectDecree, getUtcDateKey, mulberry32 } from '../../shared/utils.ts';
 import { getGearVisualStyle, registerPixelTextures } from '../fx/pixelArt.ts';
+import { musicFX } from '../fx/music.ts';
 import { soundFX } from '../fx/sound.ts';
 import type {
   DungeonBridge,
@@ -717,6 +718,10 @@ type EnemyEntity = {
   heavyTelegraphGfx: Phaser.GameObjects.Arc | null;
   archetype: 'bruiser' | 'ranged' | 'flanker' | 'boss';
   preferredDist: number;
+  isTotem: boolean;
+  totemOwnerId: number | null;
+  totemSummonTimer: number;
+  totemGlowRing: Phaser.GameObjects.Arc | null;
 };
 
 type ProjectileEntity = {
@@ -798,6 +803,10 @@ export class DungeonScene extends Scene {
   private heroTopSprite: Phaser.GameObjects.Image | null = null;
   private heroHelmSprite: Phaser.GameObjects.Image | null = null;
   private heroWeaponSprite: Phaser.GameObjects.Image | null = null;
+  private heroClassId: ClassId = 'warrior';
+  private heroAnimState: 'idle' | 'walk' | 'attack' | 'dash' = 'idle';
+  private heroAttackAnimTimer: number = 0;
+  private heroDashAnimTimer: number = 0;
   private weaponAngle: number = 0;
   private weaponSwingOffsetX: number = 0;
   private weaponSwingOffsetY: number = 0;
@@ -1027,6 +1036,69 @@ export class DungeonScene extends Scene {
       ctx.fillStyle = cornerGrad;
       ctx.fillRect(0, 0, w, h);
     });
+
+    this.ensureCanvasTexture('blood_qi_totem', 36, 68, (ctx, w, h) => {
+      const cx = Math.round(w / 2);
+      // Crimson-brass base aura
+      const aura = ctx.createRadialGradient(cx, h * 0.45, 2, cx, h * 0.45, 18);
+      aura.addColorStop(0, 'rgba(220, 38, 38, 0.55)');
+      aura.addColorStop(0.55, 'rgba(245, 158, 11, 0.28)');
+      aura.addColorStop(1, 'rgba(220, 38, 38, 0)');
+      ctx.fillStyle = aura;
+      ctx.fillRect(0, 0, w, h);
+
+      // Stone plinth base
+      ctx.fillStyle = '#29201c';
+      ctx.fillRect(cx - 10, h - 9, 20, 8);
+      ctx.fillStyle = '#c49f54';
+      ctx.fillRect(cx - 9, h - 10, 18, 2);
+
+      // Brass pole & spear finial
+      ctx.fillStyle = '#b48a3c';
+      ctx.fillRect(cx - 2, 10, 4, h - 18);
+      ctx.fillStyle = '#fde68a';
+      ctx.beginPath();
+      ctx.moveTo(cx, 2);
+      ctx.lineTo(cx + 4, 11);
+      ctx.lineTo(cx - 4, 11);
+      ctx.closePath();
+      ctx.fill();
+
+      // Ornate crossbar
+      ctx.fillStyle = '#c49f54';
+      ctx.fillRect(cx - 13, 14, 26, 3);
+      ctx.fillStyle = '#fde68a';
+      ctx.fillRect(cx - 14, 13, 3, 5);
+      ctx.fillRect(cx + 11, 13, 3, 5);
+
+      // Crimson-vermilion war banner cloth
+      const bannerGrad = ctx.createLinearGradient(cx, 17, cx, 52);
+      bannerGrad.addColorStop(0, '#991b1b');
+      bannerGrad.addColorStop(0.5, '#dc2626');
+      bannerGrad.addColorStop(1, '#7f1d1d');
+      ctx.fillStyle = bannerGrad;
+      ctx.beginPath();
+      ctx.moveTo(cx - 10, 17);
+      ctx.lineTo(cx + 10, 17);
+      ctx.lineTo(cx + 9, 49);
+      ctx.lineTo(cx, 54);
+      ctx.lineTo(cx - 9, 49);
+      ctx.closePath();
+      ctx.fill();
+
+      // Antique brass trim & glowing blood-qi rune seal
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(cx - 8, 19, 16, 26);
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, 32, 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(cx - 1, 25, 2, 14);
+      ctx.fillRect(cx - 5, 31, 10, 2);
+    });
   }
 
   private ensureHd2dBiomeTextures(biome: BiomeDefinition): void {
@@ -1047,8 +1119,9 @@ export class DungeonScene extends Scene {
   private createWorldLayers(): void {
     const w = this.scale.width || 1024;
     const h = this.scale.height || 768;
-    const groundY = this.groundY || Math.round(h * 0.68);
-    const floorH = Math.max(140, h - groundY);
+    this.groundY = Math.round(h * 0.78);
+    const groundY = this.groundY;
+    const floorH = Math.max(96, h - groundY);
 
     this.ensureHd2dSharedTextures();
     this.ensureHd2dBiomeTextures(this.activeBiome);
@@ -1126,6 +1199,10 @@ export class DungeonScene extends Scene {
     this.weaponAngle = 0;
     this.weaponSwingOffsetX = 0;
     this.weaponSwingOffsetY = 0;
+    this.heroClassId = classId;
+    this.heroAnimState = 'idle';
+    this.heroAttackAnimTimer = 0;
+    this.heroDashAnimTimer = 0;
 
     const equipped = this.runConfig?.profile.classes[classId].equipped ?? {
       weapon: null,
@@ -1148,8 +1225,11 @@ export class DungeonScene extends Scene {
       .setVisible(gearStyle.hasCape)
       .setDepth(5);
 
+    const idleTex = this.textures.exists(`hero_${classId}_idle`)
+      ? `hero_${classId}_idle`
+      : `hero_${classId}`;
     this.heroSprite = this.add
-      .image(this.heroX, this.groundY - 28, `hero_${classId}`)
+      .image(this.heroX, this.groundY - 28, idleTex)
       .setDepth(6);
 
     this.heroTopSprite = this.add
@@ -1194,6 +1274,43 @@ export class DungeonScene extends Scene {
     this.syncHeroWuxiaWeapon();
   }
 
+  private applyHeroAnimTexture(state: 'idle' | 'walk' | 'attack' | 'dash'): void {
+    if (!this.heroSprite || !this.heroSprite.active) return;
+    const cls = this.runConfig?.classId ?? this.heroClassId;
+    const stateKey = `hero_${cls}_${state}`;
+    const idleKey = `hero_${cls}_idle`;
+    const baseKey = `hero_${cls}`;
+    const nextKey = this.textures.exists(stateKey)
+      ? stateKey
+      : this.textures.exists(idleKey)
+        ? idleKey
+        : baseKey;
+    if (this.heroSprite.texture.key !== nextKey && this.textures.exists(nextKey)) {
+      this.heroSprite.setTexture(nextKey);
+    }
+    this.heroAnimState = state;
+  }
+
+  private updateHeroAnimState(dtSec: number): void {
+    if (this.heroAttackAnimTimer > 0) {
+      this.heroAttackAnimTimer = Math.max(0, this.heroAttackAnimTimer - dtSec);
+    }
+    if (this.heroDashAnimTimer > 0) {
+      this.heroDashAnimTimer = Math.max(0, this.heroDashAnimTimer - dtSec);
+    }
+    const desired: 'idle' | 'walk' | 'attack' | 'dash' =
+      this.heroDashAnimTimer > 0
+        ? 'dash'
+        : this.heroAttackAnimTimer > 0
+          ? 'attack'
+          : this.phase === 'walking'
+            ? 'walk'
+            : 'idle';
+    if (this.heroAnimState !== desired) {
+      this.applyHeroAnimTexture(desired);
+    }
+  }
+
   private syncHeroWuxiaWeapon(activeStyle?: WuxiaArtStyle | null): void {
     if (!this.heroWeaponSprite || !this.runConfig) return;
     const equipped = this.runConfig.profile.classes[this.runConfig.classId].equipped;
@@ -1230,9 +1347,9 @@ export class DungeonScene extends Scene {
 
   private refreshLayout(width: number, height: number): void {
     this.cameras.resize(width, height);
-    this.groundY = Math.round(height * 0.68);
+    this.groundY = Math.round(height * 0.78);
     this.heroX = Math.max(90, Math.round(width * 0.18));
-    const floorH = Math.max(140, height - this.groundY);
+    const floorH = Math.max(96, height - this.groundY);
 
     if (this.skyImage) {
       this.skyImage.setPosition(width / 2, height / 2).setDisplaySize(width, height);
@@ -1263,10 +1380,13 @@ export class DungeonScene extends Scene {
       this.updateCompanionVisuals();
     }
     for (const e of this.enemies) {
-      const ey = this.groundY - (e.isBoss && !e.isMiniBoss ? 44 : e.isBoss ? 34 : 24);
+      const ey = this.groundY - (e.isTotem ? 28 : e.isBoss && !e.isMiniBoss ? 52 : e.isBoss ? 40 : 24);
       e.sprite.y = ey;
       e.sprite.x = Math.max(this.heroX + 74, Math.min(width - 55, e.sprite.x));
       e.shadow.setPosition(e.sprite.x, this.groundY - 4);
+      if (e.totemGlowRing) {
+        e.totemGlowRing.setPosition(e.sprite.x, ey);
+      }
     }
   }
 
@@ -1313,6 +1433,7 @@ export class DungeonScene extends Scene {
       e.flawRing?.destroy();
       e.flawText?.destroy();
       e.heavyTelegraphGfx?.destroy();
+      e.totemGlowRing?.destroy();
     }
     this.enemies = [];
 
@@ -1346,7 +1467,11 @@ export class DungeonScene extends Scene {
 
   public stopToIdle(): void {
     this.phase = 'idle';
+    this.heroAttackAnimTimer = 0;
+    this.heroDashAnimTimer = 0;
+    this.applyHeroAnimTexture('idle');
     this.clearCombatEntities();
+    musicFX.setMood('camp');
   }
 
   public startRun(payload: RunStartPayload): void {
@@ -1358,6 +1483,7 @@ export class DungeonScene extends Scene {
 
     const clsLevel = payload.profile.classes[payload.classId].level;
     this.createHeroDisplay(payload.classId, clsLevel);
+    musicFX.setMood('combat');
 
     this.floor = 1;
     this.waveIndex = 1;
@@ -1545,7 +1671,7 @@ export class DungeonScene extends Scene {
 
     this.totalWavesOnFloor = floorNum <= 1 ? 1 : 2;
     this.phase = 'walking';
-    this.walkTimer = 0.9;
+    this.walkTimer = floorNum <= 3 ? 0.55 : 0.7;
     this.spawnFloatingText(this.scale.width / 2, this.groundY - 140, `FLOOR ${floorNum}`, '#ecd492', 26);
     this.emitHud();
   }
@@ -1596,6 +1722,7 @@ export class DungeonScene extends Scene {
             : 3.36 * Math.pow(1.025, this.floor - 30);
 
     if (isCultLeader || isMiniBoss) {
+      musicFX.setMood('boss');
       const isEndBoss = isCultLeader;
       const bossTier = Math.max(1, Math.floor(this.floor / 10));
       const cultLeaderHp =
@@ -1698,6 +1825,7 @@ export class DungeonScene extends Scene {
       return;
     }
 
+    musicFX.setMood('combat');
     const isFinalWave = this.waveIndex === this.totalWavesOnFloor;
     const isEliteFloor = this.floor > 1 && (this.floor % 10 === 7 || this.floor % 10 === 9);
     const mobCount =
@@ -1833,6 +1961,10 @@ export class DungeonScene extends Scene {
         heavyTelegraphGfx: null,
         archetype,
         preferredDist,
+        isTotem: false,
+        totemOwnerId: null,
+        totemSummonTimer: 99,
+        totemGlowRing: null,
       });
     }
   }
@@ -1959,6 +2091,104 @@ export class DungeonScene extends Scene {
       heavyTelegraphGfx: null,
       archetype: 'boss',
       preferredDist: this.heroX + 74,
+      isTotem: false,
+      totemOwnerId: null,
+      totemSummonTimer: isEndBoss && !isSplitClone ? 10.5 + this.rng() * 1.5 : 99,
+      totemGlowRing: null,
+    });
+  }
+
+  private spawnBloodQiTotem(boss: EnemyEntity): void {
+    if (this.enemies.some((o) => o.isTotem && o.hp > 0)) return;
+    const totemHp = Math.max(1, Math.round(boss.maxHp * 0.12));
+    const tx = Math.max(this.heroX + 108, boss.sprite.x - 58);
+    const ty = this.groundY - 28;
+
+    const shadow = this.add
+      .image(tx, this.groundY - 4, 'hd2d_shadow')
+      .setScale(0.75, 0.7)
+      .setDepth(4.1);
+    const totemGlowRing = this.add
+      .circle(tx, ty, 30, 0xdc2626, 0.18)
+      .setStrokeStyle(2.5, 0xf59e0b, 0.9)
+      .setDepth(5.4);
+    const sprite = this.add.image(tx, ty, 'blood_qi_totem').setDepth(6.2);
+    const hpBg = this.add
+      .rectangle(tx, ty - 44, 54, 6, 0x120e0c)
+      .setStrokeStyle(1, 0xf59e0b, 0.9)
+      .setVisible(true)
+      .setDepth(8);
+    const hpFill = this.add
+      .rectangle(tx, ty - 44, 54, 6, 0xdc2626)
+      .setVisible(true)
+      .setDepth(9);
+    const nameText = this.add
+      .text(tx, ty - 56, 'Blood-Qi Totem', {
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#f59e0b',
+        stroke: '#0d0a08',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setVisible(true)
+      .setDepth(9);
+
+    soundFX.playBossTelegraph();
+    this.spawnQiShockwaveRing(tx, ty, 0xdc2626, 95, 240);
+    this.spawnFloatingText(tx, ty - 74, 'BLOOD-QI TOTEM!', '#f59e0b', 14);
+
+    this.enemies.push({
+      id: this.nextEnemyId++,
+      sprite,
+      shadow,
+      hpBg,
+      hpFill,
+      nameText,
+      name: 'Blood-Qi Totem',
+      isBoss: false,
+      isMiniBoss: false,
+      isSplitClone: false,
+      hp: totemHp,
+      maxHp: totemHp,
+      hitShield: 0,
+      atk: 0,
+      atkIntervalSec: 99,
+      atkTimer: 99,
+      speed: 0,
+      armorShred: 0,
+      burnStacks: 0,
+      burnTimer: 0,
+      bleedStacks: 0,
+      bleedTimer: 0,
+      chillTimer: 0,
+      rootTimer: 0,
+      stunTimer: 0,
+      smokeTimer: 0,
+      smokeActiveTimer: 0,
+      permafrostTimer: 0,
+      overheatTimer: 0,
+      enrageTimer: 0,
+      enrageStacks: 0,
+      volatileTimer: 0,
+      mitosisDone: true,
+      lastGoldenThreshold: 100,
+      mutations: [],
+      mechanic: null,
+      flawTimer: 0,
+      flawCooldown: 99,
+      flawRing: null,
+      flawText: null,
+      heavyChargeTimer: 0,
+      heavyCooldown: 99,
+      heavyTelegraphGfx: null,
+      archetype: 'bruiser',
+      preferredDist: tx,
+      isTotem: true,
+      totemOwnerId: boss.id,
+      totemSummonTimer: 99,
+      totemGlowRing,
     });
   }
 
@@ -1970,12 +2200,14 @@ export class DungeonScene extends Scene {
       return;
     }
 
+    const realDt = Math.min(0.05, deltaMs / 1000);
     const dt = Math.min(0.05, (deltaMs / 1000) * this.speedMult);
     this.elapsedRunMs += deltaMs * this.speedMult;
     this.updateAmbientMotes(dt);
 
     if (this.phase === 'walking') {
       this.walkTimer -= dt;
+      this.updateHeroAnimState(realDt);
       if (this.farMountainsTile) this.farMountainsTile.tilePositionX += 14 * dt;
       if (this.midPagodaTile) this.midPagodaTile.tilePositionX += 46 * dt;
       if (this.floorTile) this.floorTile.tilePositionX += 116 * dt;
@@ -2002,6 +2234,7 @@ export class DungeonScene extends Scene {
     }
 
     if (this.phase === 'combat') {
+      this.updateHeroAnimState(realDt);
       if (this.heroSprite && !this.tweens.isTweening(this.heroSprite)) {
         const combatY = this.groundY - 28 + Math.sin(this.elapsedRunMs * 0.005) * 1.8;
         this.heroSprite.y = Phaser.Math.Linear(this.heroSprite.y, combatY, Math.min(1, dt * 12));
@@ -2499,7 +2732,7 @@ export class DungeonScene extends Scene {
   }
 
   private applyEnemyKnockback(e: EnemyEntity, pushPx: number): void {
-    if (e.mutations.includes('juggernaut') || e.hp <= 0 || pushPx <= 0) return;
+    if (e.isTotem || e.mutations.includes('juggernaut') || e.hp <= 0 || pushPx <= 0) return;
     const maxW = this.scale.width || 1024;
     const wallEdge = maxW - 70;
     e.sprite.x = Math.min(maxW - 55, e.sprite.x + pushPx);
@@ -2734,6 +2967,10 @@ export class DungeonScene extends Scene {
   }
 
   private playHeroAttackAnimation(classId: ClassId, scaleMult = 1): void {
+    this.heroAttackAnimTimer = Math.max(this.heroAttackAnimTimer, 0.18);
+    if (this.heroDashAnimTimer <= 0) {
+      this.applyHeroAnimTexture('attack');
+    }
     if (this.heroSprite) {
       this.tweens.killTweensOf(this.heroSprite);
       this.heroSprite.setPosition(this.heroX, this.groundY - 28).setScale(1, 1).setRotation(0);
@@ -2807,7 +3044,8 @@ export class DungeonScene extends Scene {
         },
       });
       if (!isUnarmed) {
-        this.spawnSlashVfx(this.heroX + 48, this.groundY - 28, 0xfef08a, 1.2 * scaleMult);
+        this.spawnSlashVfx(this.heroX + 48, this.groundY - 28, 0xf59e0b, 1.32 * scaleMult);
+        this.spawnSlashVfx(this.heroX + 54, this.groundY - 26, 0xdc2626, 1.02 * scaleMult);
       }
     } else if (classId === 'mage') {
       this.weaponAngle = -0.35;
@@ -2964,7 +3202,7 @@ export class DungeonScene extends Scene {
           ? 'mage'
           : stanceStyle === 'six_pulse'
             ? 'bowman'
-            : 'warrior';
+            : this.runConfig.classId;
     this.playHeroAttackAnimation(animStyleClass, 1);
 
     const rollHit = (dmgMult: number, forceCrit: boolean = false): { dmg: number; isCrit: boolean } => {
@@ -3174,6 +3412,112 @@ export class DungeonScene extends Scene {
     if (this.hasEquippedLegendary('mage_wep_abyssal') && this.rng() < 0.2) {
       for (const e of this.enemies) {
         e.sprite.x = Phaser.Math.Linear(e.sprite.x, target.sprite.x, 0.55);
+      }
+    }
+
+    // Distinct class signature basic attack procs
+    const heroClass = this.runConfig.classId;
+    if (heroClass === 'warrior' && this.attackCount % 3 === 0) {
+      // Blade: heavier golden-cinnabar cleave arc + extra stagger on every 3rd strike
+      this.spawnSlashVfx(this.heroX + 56, this.groundY - 28, 0xf59e0b, 1.55);
+      this.spawnSlashVfx(target.sprite.x, target.sprite.y, 0xdc2626, 1.35);
+      this.cameras.main.shake(60, 0.003);
+      const cleaveDmg = Math.max(1, Math.round(this.stats.atk * 0.35 * this.stats.allDamageMult));
+      for (const e of [...this.enemies]) {
+        if (e.hp > 0 && Math.abs(e.sprite.x - target.sprite.x) <= 115) {
+          e.stunTimer = Math.max(e.stunTimer, 0.45);
+          this.applyEnemyKnockback(e, 20);
+          if (e.id !== target.id) {
+            this.damageEnemy(e, cleaveDmg, false, 'CLEAVE', true);
+          }
+        }
+      }
+    } else if (heroClass === 'mage' && this.attackCount % 3 === 0) {
+      // Scholar: shimmering meridian resonance bolt that chains to 1 nearby enemy
+      const chainCandidate = this.enemies.find(
+        (o) => o.id !== target.id && o.hp > 0 && Math.abs(o.sprite.x - target.sprite.x) <= 240
+      );
+      this.spawnQiShockwaveRing(target.sprite.x, target.sprite.y, 0x38bdf8, 64, 180);
+      if (chainCandidate) {
+        this.spawnLightningVfx(
+          target.sprite.x,
+          target.sprite.y - 8,
+          chainCandidate.sprite.x,
+          chainCandidate.sprite.y - 8,
+          0x67e8f9
+        );
+        this.spawnHitSpark(chainCandidate.sprite.x, chainCandidate.sprite.y, false, 0x67e8f9);
+        const chainHit = rollHit(0.65);
+        this.damageEnemy(chainCandidate, chainHit.dmg, chainHit.isCrit, 'RESONANCE', true);
+      } else if (target.hp > 0) {
+        this.spawnHitSpark(target.sprite.x, target.sprite.y - 6, false, 0x67e8f9);
+        const echoHit = rollHit(0.35);
+        this.damageEnemy(target, echoHit.dmg, echoHit.isCrit, 'RESONANCE', true);
+      }
+    } else if (heroClass === 'thief' && this.attackCount % 4 === 0) {
+      // Shadow: rapid shadow double-strike afterimage on every 4th strike
+      this.spawnHeroAfterimage(0xa855f7);
+      this.spawnSlashVfx(this.heroX + 42, this.groundY - 30, 0xc084fc, 1.15);
+      this.time.delayedCall(85, () => {
+        if (this.phase !== 'combat' || !this.stats || !this.runConfig) return;
+        const shadowTarget = target.hp > 0 ? target : this.getClosestEnemy();
+        if (!shadowTarget) return;
+        this.spawnHeroAfterimage(0x38bdf8);
+        this.spawnSlashVfx(this.heroX + 48, this.groundY - 26, 0xa855f7, 1.1);
+        soundFX.playSwordSlash();
+        const shadowHit = rollHit(0.7);
+        const svy =
+          (shadowTarget.sprite.y - startY) /
+          Math.max(0.08, (shadowTarget.sprite.x - startX) / vx);
+        this.spawnProjectile(
+          projTexture,
+          startX + 6,
+          startY - 4,
+          vx + 90,
+          svy,
+          shadowHit.dmg,
+          shadowHit.isCrit,
+          1,
+          false,
+          false,
+          false,
+          shadowTarget.id,
+          false,
+          false,
+          'SHADOW',
+          0xc084fc,
+          basicEvolveScale,
+          0xa855f7
+        );
+      });
+    } else if (heroClass === 'bowman' && this.attackCount % 3 === 0) {
+      // Archer: crisp twin-feather spread on every 3rd strike
+      this.spawnHitSpark(startX, startY, false, 0xfef08a);
+      const featherTex = this.textures.exists('proj_hawk_feather')
+        ? 'proj_hawk_feather'
+        : 'proj_arrow';
+      for (const vyDelta of [-42, 42]) {
+        const featherHit = rollHit(0.65);
+        this.spawnProjectile(
+          featherTex,
+          startX,
+          startY,
+          vx + 70,
+          baseVy + vyDelta,
+          featherHit.dmg,
+          featherHit.isCrit,
+          2,
+          false,
+          false,
+          false,
+          target.id,
+          false,
+          false,
+          'FEATHER',
+          0xfef08a,
+          1.05,
+          0x6ee7b7
+        );
       }
     }
 
@@ -3511,7 +3855,7 @@ export class DungeonScene extends Scene {
       ] ?? 0;
 
     // Permafrost Armor hit-shield check
-    if (enemy.hitShield > 0 && labelTag !== 'SHATTER') {
+    if (enemy.hitShield > 0 && labelTag !== 'SHATTER' && labelTag !== 'TOTEM_SHATTER') {
       const shieldBreak = 1 + duguStacks;
       enemy.hitShield = Math.max(0, enemy.hitShield - shieldBreak);
       this.spawnFloatingText(
@@ -3527,6 +3871,14 @@ export class DungeonScene extends Scene {
     }
 
     let dmg = rawDamage;
+    if (
+      enemy.isBoss &&
+      !enemy.isMiniBoss &&
+      labelTag !== 'TOTEM_SHATTER' &&
+      this.enemies.some((o) => o.isTotem && o.hp > 0)
+    ) {
+      dmg *= 0.75;
+    }
     if ((enemy.isBoss || enemy.isMiniBoss) && duguStacks > 0) {
       dmg *= 1 + 0.15 * duguStacks;
     }
@@ -3714,7 +4066,7 @@ export class DungeonScene extends Scene {
           ? 0.1
           : 0.2
         : 0;
-    if (!enemy.isBoss && execThreshold > 0 && enemy.hp > 0 && enemy.hp / enemy.maxHp <= execThreshold) {
+    if (!enemy.isBoss && !enemy.isTotem && execThreshold > 0 && enemy.hp > 0 && enemy.hp / enemy.maxHp <= execThreshold) {
       enemy.hp = 0;
       this.spawnFloatingText(enemy.sprite.x, enemy.sprite.y - 40, 'EXECUTE!', '#d9534f', 15);
     }
@@ -3758,7 +4110,49 @@ export class DungeonScene extends Scene {
     enemy.flawText = null;
     enemy.heavyTelegraphGfx?.destroy();
     enemy.heavyTelegraphGfx = null;
+    enemy.totemGlowRing?.destroy();
+    enemy.totemGlowRing = null;
     this.enemies.splice(idx, 1);
+
+    // Blood-Qi Totem shatter: 8% maxHP true burst + 1.0s stun on Cult Leader
+    if (enemy.isTotem) {
+      const boss =
+        this.enemies.find((o) => o.id === enemy.totemOwnerId && o.hp > 0) ??
+        this.enemies.find((o) => o.isBoss && !o.isMiniBoss && o.hp > 0);
+      if (boss) {
+        const burstDmg = Math.max(1, Math.round(boss.maxHp * 0.08));
+        boss.stunTimer = Math.max(boss.stunTimer, 1.0);
+        soundFX.playMeridianShatter();
+        this.cameras.main.shake(130, 0.007);
+        this.spawnQiShockwaveRing(ex, ey, 0xf59e0b, 165, 260);
+        this.spawnQiShockwaveRing(boss.sprite.x, boss.sprite.y, 0xdc2626, 145, 240);
+        this.spawnFloatingText(
+          boss.sprite.x,
+          boss.sprite.y - 84,
+          'TOTEM SHATTERED!',
+          '#fde047',
+          18
+        );
+        this.damageEnemy(boss, burstDmg, true, 'TOTEM_SHATTER', true);
+      }
+    }
+
+    // If Cult Leader falls, clean up any remaining Blood-Qi Totems it summoned
+    if (enemy.isBoss && !enemy.isMiniBoss) {
+      for (let ti = this.enemies.length - 1; ti >= 0; ti -= 1) {
+        const totem = this.enemies[ti];
+        if (totem && totem.isTotem && totem.totemOwnerId === enemy.id) {
+          totem.shadow.destroy();
+          totem.sprite.destroy();
+          totem.hpBg.destroy();
+          totem.hpFill.destroy();
+          totem.nameText.destroy();
+          totem.statusBadge?.destroy();
+          totem.totemGlowRing?.destroy();
+          this.enemies.splice(ti, 1);
+        }
+      }
+    }
 
     if (wasChilled && this.hasEquippedLegendary('mage_wep_glacial') && this.stats) {
       this.spawnQiShockwaveRing(ex, ey, 0x67e8f9, 130, 220);
@@ -3836,6 +4230,38 @@ export class DungeonScene extends Scene {
     if (e.stunTimer > 0) e.stunTimer = Math.max(0, e.stunTimer - dt);
     if (e.smokeActiveTimer > 0) e.smokeActiveTimer = Math.max(0, e.smokeActiveTimer - dt);
 
+    // Blood-Qi Totem stationary behavior & crimson-brass glow pulse
+    if (e.isTotem) {
+      const ty = this.groundY - 28;
+      e.sprite.y = ty;
+      e.shadow.setPosition(e.sprite.x, this.groundY - 4);
+      if (e.totemGlowRing) {
+        const pulse = 1 + Math.sin(this.elapsedRunMs * 0.012) * 0.14;
+        e.totemGlowRing.setPosition(e.sprite.x, ty).setScale(pulse);
+      }
+      const barY = ty - 44;
+      e.hpBg.setVisible(true).setPosition(e.sprite.x, barY);
+      e.hpFill.setVisible(true).setPosition(e.sprite.x, barY);
+      e.hpFill.width = 54 * Math.max(0, Math.min(1, e.hp / Math.max(1, e.maxHp)));
+      e.nameText.setVisible(true).setPosition(e.sprite.x, barY - 12);
+      return;
+    }
+
+    // Cult Leader periodic Blood-Qi Totem summon (every ~12s, max 1 active)
+    if (
+      e.isBoss &&
+      !e.isMiniBoss &&
+      !e.isSplitClone &&
+      e.stunTimer <= 0 &&
+      e.sprite.x <= (this.scale.width || 1024) - 40
+    ) {
+      e.totemSummonTimer -= dt;
+      if (e.totemSummonTimer <= 0) {
+        e.totemSummonTimer = 12;
+        this.spawnBloodQiTotem(e);
+      }
+    }
+
     // Boss biome shared mechanics
     if (e.isBoss && e.mechanic) {
       if (e.mechanic === 'permafrost_armor') {
@@ -3876,19 +4302,24 @@ export class DungeonScene extends Scene {
 
     // Boss telegraphed heavy strike wind-up
     if (e.isBoss) {
+      const isCultLeader = !e.isMiniBoss;
       if (e.heavyChargeTimer > 0) {
         if (e.stunTimer <= 0) {
           e.heavyChargeTimer = Math.max(0, e.heavyChargeTimer - dt);
         }
         if (e.heavyTelegraphGfx) {
           e.heavyTelegraphGfx.setPosition(e.sprite.x, e.sprite.y);
-          const inPerfectWindow = e.heavyChargeTimer <= 0.45;
-          const pulse = 1 + Math.sin(this.elapsedRunMs * (inPerfectWindow ? 0.032 : 0.018)) * 0.18;
+          const inPerfectWindow = e.heavyChargeTimer <= 0.55;
+          const pulse = 1 + Math.sin(this.elapsedRunMs * (inPerfectWindow ? 0.036 : 0.02)) * 0.2;
           e.heavyTelegraphGfx.setScale(pulse);
+          e.heavyTelegraphGfx.setFillStyle(
+            isCultLeader ? 0xdc2626 : 0xef4444,
+            inPerfectWindow ? 0.36 : isCultLeader ? 0.26 : 0.2
+          );
           e.heavyTelegraphGfx.setStrokeStyle(
-            inPerfectWindow ? 4.5 : 3.5,
-            inPerfectWindow ? 0xfde047 : 0xef4444,
-            0.95
+            inPerfectWindow ? 5 : isCultLeader ? 4 : 3.5,
+            inPerfectWindow ? 0xfde047 : isCultLeader ? 0xdc2626 : 0xef4444,
+            0.98
           );
         }
         if (e.heavyChargeTimer <= 0) {
@@ -3897,20 +4328,32 @@ export class DungeonScene extends Scene {
           e.heavyCooldown = 6.5 + this.rng() * 1.5;
           soundFX.playHeavyCleave();
           this.cameras.main.shake(150, 0.009);
-          this.spawnQiShockwaveRing(this.heroX + 16, this.groundY - 28, 0xef4444, 130, 220);
-          this.spawnSlashVfx(this.heroX + 18, this.groundY - 28, 0xef4444, 1.55);
+          this.spawnQiShockwaveRing(this.heroX + 16, this.groundY - 28, 0xdc2626, 130, 220);
+          this.spawnSlashVfx(this.heroX + 18, this.groundY - 28, 0xdc2626, 1.55);
           this.damageHero(Math.round(e.atk * 1.75), e);
         }
       } else if (e.stunTimer <= 0 && e.sprite.x <= (this.scale.width || 1024) - 40) {
         e.heavyCooldown -= dt;
         if (e.heavyCooldown <= 0) {
-          e.heavyChargeTimer = 1.2;
+          e.heavyChargeTimer = 1.25;
           e.heavyTelegraphGfx = this.add
-            .circle(e.sprite.x, e.sprite.y, e.isMiniBoss ? 44 : 56, 0xef4444, 0.2)
-            .setStrokeStyle(3.5, 0xef4444, 0.95)
+            .circle(
+              e.sprite.x,
+              e.sprite.y,
+              isCultLeader ? 60 : 44,
+              isCultLeader ? 0xdc2626 : 0xef4444,
+              isCultLeader ? 0.26 : 0.2
+            )
+            .setStrokeStyle(isCultLeader ? 4 : 3.5, isCultLeader ? 0xdc2626 : 0xef4444, 0.95)
             .setDepth(10.5);
           soundFX.playBossTelegraph();
-          this.spawnFloatingText(e.sprite.x, e.sprite.y - 78, 'HEAVY STRIKE!', '#d9534f', 15);
+          this.spawnFloatingText(
+            e.sprite.x,
+            e.sprite.y - 78,
+            isCultLeader ? 'CRIMSON CHARGE! [SPACE]' : 'HEAVY STRIKE!',
+            '#d9534f',
+            15
+          );
         }
       }
     }
@@ -4013,6 +4456,9 @@ export class DungeonScene extends Scene {
       const parts: string[] = [];
       if (e.hitShield > 0) parts.push(`[SH ${e.hitShield}]`);
       if (e.enrageStacks > 0) parts.push(`[EN x${e.enrageStacks}]`);
+      if (e.isBoss && !e.isMiniBoss && this.enemies.some((o) => o.isTotem && o.hp > 0)) {
+        parts.push('[WARD -25%]');
+      }
       if (parts.length > 0) {
         e.statusBadge
           .setText(parts.join(' '))
@@ -5099,6 +5545,12 @@ export class DungeonScene extends Scene {
     if (labelTag === 'SHATTER') {
       return { text: `MERIDIAN SHATTER! ${finalDmg}`, color: '#ecd492', size: 18, stroke: '#7a1c17' };
     }
+    if (labelTag === 'DEFLECT') {
+      return { text: `DEFLECT COUNTER! ${finalDmg}`, color: '#fde047', size: 17, stroke: '#120e0c' };
+    }
+    if (labelTag === 'TOTEM_SHATTER') {
+      return { text: `TOTEM BURST! ${finalDmg}`, color: '#fde047', size: 17, stroke: '#7a1c17' };
+    }
     const callouts: readonly string[] = [
       'MERIDIAN PIERCE!',
       'CRITICAL STRIKE!',
@@ -5309,6 +5761,9 @@ export class DungeonScene extends Scene {
   public triggerDash(): void {
     if (this.phase !== 'combat' || !this.stats || this.dashCooldown > 0) return;
 
+    this.heroDashAnimTimer = 0.26;
+    this.applyHeroAnimTexture('dash');
+
     const cdMult = 1 - this.stats.cooldownReductionPct / 100;
     this.dashCooldown = Math.max(2.0, 5 * cdMult);
     const hasSilentStep = this.hasEquippedLegendary('thief_top_silentstep');
@@ -5317,29 +5772,38 @@ export class DungeonScene extends Scene {
       this.attackTimer += 0.5;
     }
 
-    // Qinggong Perfect Dodge check: boss in final 0.45s of heavyChargeTimer
+    // Qinggong Perfect Deflect check: boss in final 0.55s of heavyChargeTimer
     const perfectBoss = this.enemies.find(
-      (e) => e.isBoss && e.hp > 0 && e.heavyChargeTimer > 0 && e.heavyChargeTimer <= 0.45
+      (e) => e.isBoss && e.hp > 0 && e.heavyChargeTimer > 0 && e.heavyChargeTimer <= 0.55
     );
     if (perfectBoss) {
       perfectBoss.heavyChargeTimer = 0;
       perfectBoss.heavyCooldown = 6.5 + this.rng() * 1.5;
       perfectBoss.heavyTelegraphGfx?.destroy();
       perfectBoss.heavyTelegraphGfx = null;
+      perfectBoss.stunTimer = Math.max(perfectBoss.stunTimer, 1.5);
 
-      this.hitstopTimer = Math.max(this.hitstopTimer, 0.055);
+      this.addUltimateGauge(25);
+      this.hitstopTimer = Math.max(this.hitstopTimer, 0.065);
       this.cameras.main.flash(180, 253, 224, 71);
-      this.cameras.main.shake(120, 0.007);
+      this.cameras.main.shake(130, 0.008);
       soundFX.playPerfectDodge();
       this.spawnHeroAfterimage(0xfde047);
-      this.spawnFloatingText(this.heroX + 28, this.groundY - 110, 'PERFECT DODGE!', '#ecd492', 18);
-      this.spawnSlashVfx(perfectBoss.sprite.x, perfectBoss.sprite.y, 0xfde047, 1.75);
+      this.spawnQiShockwaveRing(perfectBoss.sprite.x, perfectBoss.sprite.y, 0xfde047, 185, 280);
+      this.spawnFloatingText(
+        this.heroX + 34,
+        this.groundY - 114,
+        'PERFECT DEFLECT!',
+        '#fde047',
+        19
+      );
+      this.spawnSlashVfx(perfectBoss.sprite.x, perfectBoss.sprite.y, 0xfde047, 1.8);
 
       const counterDmg = Math.max(
         1,
-        Math.round(this.stats.atk * 2.5 * this.stats.allDamageMult * this.stats.critDmg)
+        Math.round(this.stats.atk * 2.2 * this.stats.allDamageMult)
       );
-      this.damageEnemy(perfectBoss, counterDmg, true, 'PERFECT DODGE', true);
+      this.damageEnemy(perfectBoss, counterDmg, true, 'DEFLECT', true);
       if (perfectBoss.hp > 0) {
         this.openFlawWindow(perfectBoss, 2.6);
       }
@@ -5770,7 +6234,11 @@ export class DungeonScene extends Scene {
   private finishRun(outcome: RunOutcome, overrideFloorReached?: number): void {
     if (outcome === 'died') soundFX.playDefeat();
     this.phase = 'idle';
+    this.heroAttackAnimTimer = 0;
+    this.heroDashAnimTimer = 0;
+    this.applyHeroAnimTexture('idle');
     this.clearCombatEntities();
+    musicFX.setMood('camp');
 
     if (!this.runConfig) return;
     this.callbacks?.onRunEnded({

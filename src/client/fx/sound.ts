@@ -1,10 +1,30 @@
+const SFX_MUTE_STORAGE_KEY = 'wuxiaspire_sfx_muted_v1';
+
 const PENTATONIC_FLUTE_NOTES: readonly number[] = [
   523.25, 587.33, 659.25, 783.99, 880,
 ];
 
+function readStoredSfxMute(): boolean {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return false;
+    return window.localStorage.getItem(SFX_MUTE_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeStoredSfxMute(muted: boolean): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    window.localStorage.setItem(SFX_MUTE_STORAGE_KEY, muted ? '1' : '0');
+  } catch {
+    // Ignore storage failures in restricted iFrames
+  }
+}
+
 class SoundSynth {
   private ctx: AudioContext | null = null;
-  private muted: boolean = false;
+  private muted: boolean = readStoredSfxMute();
   private noiseBuffer: AudioBuffer | null = null;
   private lastPlayedAt: Map<string, number> = new Map();
 
@@ -12,7 +32,9 @@ class SoundSynth {
     if (this.muted) return null;
     if (this.ctx) {
       if (this.ctx.state === 'suspended') {
-        void this.ctx.resume();
+        void this.ctx.resume().catch(() => {
+          // Ignore autoplay rejection until next user gesture
+        });
       }
       return this.ctx;
     }
@@ -70,13 +92,14 @@ class SoundSynth {
     osc.frequency.setValueAtTime(Math.max(20, freqStart), now);
     osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), now + duration);
 
-    gain.gain.setValueAtTime(Math.max(0.001, gainLevel), now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    gain.gain.setValueAtTime(0.0008, now);
+    gain.gain.linearRampToValueAtTime(Math.max(0.001, gainLevel), now + Math.min(0.006, duration * 0.2));
+    gain.gain.exponentialRampToValueAtTime(0.0008, now + duration);
 
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(now);
-    osc.stop(now + duration);
+    osc.stop(now + duration + 0.01);
   }
 
   private playNoiseBurst(
@@ -121,7 +144,41 @@ class SoundSynth {
     const maxOffset = Math.max(0, buffer.duration - duration - 0.01);
     const offset = maxOffset > 0 ? Math.random() * maxOffset : 0;
     source.start(now, offset);
-    source.stop(now + duration);
+    source.stop(now + duration + 0.01);
+  }
+
+  private playBronzeChime(
+    baseFreq: number,
+    duration: number,
+    gainLevel: number,
+    delay: number = 0
+  ): void {
+    // Antique bronze coin / jade bell harmonic partials
+    this.playTone(baseFreq, baseFreq * 0.996, duration, 'sine', gainLevel, delay);
+    this.playTone(baseFreq * 2.0, baseFreq * 1.992, duration * 0.72, 'triangle', gainLevel * 0.42, delay);
+    this.playTone(baseFreq * 2.76, baseFreq * 2.75, duration * 0.45, 'sine', gainLevel * 0.26, delay);
+  }
+
+  private playTempleGong(
+    fundamental: number,
+    duration: number,
+    gainLevel: number,
+    delay: number = 0
+  ): void {
+    // Resonant bronze temple gong with inharmonic shimmer partials
+    this.playTone(fundamental, fundamental * 0.96, duration, 'sine', gainLevel, delay);
+    this.playTone(fundamental * 1.52, fundamental * 1.48, duration * 0.85, 'triangle', gainLevel * 0.55, delay + 0.01);
+    this.playTone(fundamental * 2.38, fundamental * 2.33, duration * 0.65, 'sine', gainLevel * 0.34, delay + 0.015);
+    this.playTone(fundamental * 3.17, fundamental * 3.12, duration * 0.45, 'sine', gainLevel * 0.18, delay + 0.02);
+    this.playNoiseBurst(
+      Math.min(0.42, duration * 0.5),
+      fundamental * 4.2,
+      1.6,
+      gainLevel * 0.48,
+      'bandpass',
+      delay,
+      fundamental * 1.8
+    );
   }
 
   public isMuted(): boolean {
@@ -130,95 +187,129 @@ class SoundSynth {
 
   public toggleMute(): boolean {
     this.muted = !this.muted;
+    writeStoredSfxMute(this.muted);
     return this.muted;
   }
 
   public playSwing(): void {
     if (!this.canPlay('swing', 45)) return;
-    this.playTone(this.jitter(260, 0.1), this.jitter(90, 0.1), 0.1, 'sawtooth', 0.075);
-    this.playNoiseBurst(0.08, this.jitter(1900, 0.12), 1.6, 0.04, 'bandpass', 0, this.jitter(900, 0.1));
+    // Crisp bamboo/silk air cut
+    this.playTone(this.jitter(240, 0.1), this.jitter(95, 0.1), 0.1, 'triangle', 0.065);
+    this.playNoiseBurst(
+      0.09,
+      this.jitter(2100, 0.12),
+      1.8,
+      0.055,
+      'bandpass',
+      0,
+      this.jitter(920, 0.1)
+    );
   }
 
   public playSpell(): void {
     if (!this.canPlay('spell', 45)) return;
     this.playTone(this.jitter(480, 0.09), this.jitter(880, 0.09), 0.14, 'triangle', 0.07);
+    this.playTone(this.jitter(720, 0.08), this.jitter(1174, 0.08), 0.12, 'sine', 0.035, 0.015);
   }
 
   public playArrow(): void {
     if (!this.canPlay('arrow', 45)) return;
-    this.playTone(this.jitter(620, 0.1), this.jitter(220, 0.1), 0.08, 'square', 0.05);
+    // Taut bowstring twang + bamboo shaft air whistle
+    this.playTone(this.jitter(540, 0.09), this.jitter(230, 0.09), 0.08, 'triangle', 0.055);
+    this.playNoiseBurst(
+      0.065,
+      this.jitter(2800, 0.1),
+      2.6,
+      0.045,
+      'bandpass',
+      0.005,
+      this.jitter(1400, 0.1)
+    );
   }
 
   public playCrit(): void {
     if (!this.canPlay('crit', 50)) return;
-    this.playTone(this.jitter(540, 0.09), this.jitter(1080, 0.09), 0.09, 'square', 0.085);
-    this.playTone(this.jitter(820, 0.09), this.jitter(1360, 0.09), 0.11, 'triangle', 0.08, 0.035);
-    this.playTone(this.jitter(1640, 0.08), this.jitter(2180, 0.08), 0.1, 'sine', 0.045, 0.04);
-    this.playNoiseBurst(0.065, this.jitter(3600, 0.1), 2.2, 0.06, 'highpass');
+    // Resonant steel chime + bright silk flash
+    this.playBronzeChime(this.jitter(880, 0.07), 0.18, 0.075, 0);
+    this.playTone(this.jitter(1318.5, 0.08), this.jitter(1760, 0.08), 0.12, 'triangle', 0.055, 0.025);
+    this.playNoiseBurst(0.065, this.jitter(3800, 0.1), 2.4, 0.06, 'highpass');
   }
 
   public playHit(): void {
     if (!this.canPlay('hit', 45)) return;
-    this.playTone(this.jitter(155, 0.1), this.jitter(62, 0.1), 0.09, 'sawtooth', 0.075);
-    this.playTone(this.jitter(95, 0.08), 45, 0.07, 'sine', 0.055);
-    this.playNoiseBurst(0.055, this.jitter(950, 0.12), 1.2, 0.055, 'lowpass');
+    // Solid martial impact thud
+    this.playTone(this.jitter(145, 0.1), this.jitter(52, 0.1), 0.095, 'triangle', 0.08);
+    this.playTone(this.jitter(98, 0.08), 44, 0.08, 'sine', 0.075);
+    this.playNoiseBurst(0.055, this.jitter(880, 0.12), 1.2, 0.055, 'lowpass');
   }
 
   public playDash(): void {
     if (!this.canPlay('dash', 55)) return;
+    // Crisp bamboo/silk Qinggong wind-step swish
     this.playNoiseBurst(
-      0.12,
-      this.jitter(1400, 0.1),
-      1.8,
-      0.07,
+      0.13,
+      this.jitter(1250, 0.1),
+      2.0,
+      0.075,
       'bandpass',
       0,
-      this.jitter(2800, 0.1)
+      this.jitter(3100, 0.1)
     );
-    this.playTone(this.jitter(340, 0.1), this.jitter(620, 0.1), 0.09, 'sine', 0.04);
+    this.playNoiseBurst(0.09, this.jitter(3600, 0.1), 2.8, 0.035, 'highpass', 0.015);
+    this.playTone(this.jitter(340, 0.09), this.jitter(640, 0.09), 0.1, 'sine', 0.038);
   }
 
   public playCoin(): void {
     if (!this.canPlay('coin', 45)) return;
-    this.playTone(this.jitter(980, 0.08), this.jitter(1420, 0.08), 0.07, 'square', 0.05);
-    this.playTone(this.jitter(1320, 0.08), this.jitter(1760, 0.08), 0.09, 'square', 0.05, 0.05);
+    // Antique bronze coin chime with warm harmonic overtones
+    this.playBronzeChime(this.jitter(1174.66, 0.05), 0.14, 0.058, 0);
+    this.playBronzeChime(this.jitter(1567.98, 0.05), 0.19, 0.052, 0.052);
   }
 
   public playDraft(): void {
-    this.playTone(440, 554, 0.09, 'triangle', 0.07);
-    this.playTone(659, 880, 0.14, 'triangle', 0.07, 0.06);
+    // Crisp scroll silk swish + warm pentatonic jade chime
+    this.playNoiseBurst(0.09, 1800, 2.2, 0.04, 'bandpass', 0, 3200);
+    this.playBronzeChime(587.33, 0.16, 0.06, 0.01);
+    this.playBronzeChime(880.0, 0.24, 0.065, 0.075);
   }
 
   public playRouletteTick(): void {
     if (!this.canPlay('rouletteTick', 30)) return;
-    this.playTone(this.jitter(720, 0.08), this.jitter(480, 0.08), 0.04, 'square', 0.04);
+    // Crisp wooden temple-block / bamboo clack
+    this.playTone(this.jitter(840, 0.07), this.jitter(540, 0.07), 0.042, 'sine', 0.05);
+    this.playNoiseBurst(0.022, this.jitter(1900, 0.1), 3.4, 0.03, 'bandpass');
   }
 
   public playBossRoar(): void {
     if (!this.canPlay('bossRoar', 120)) return;
-    this.playTone(this.jitter(140, 0.08), this.jitter(46, 0.08), 0.38, 'sawtooth', 0.115);
-    this.playTone(this.jitter(105, 0.08), this.jitter(38, 0.08), 0.4, 'square', 0.075, 0.04);
+    // Resonant deep war-gong + taiko rumble
+    this.playTone(this.jitter(112, 0.06), this.jitter(42, 0.06), 0.44, 'sine', 0.13);
+    this.playTempleGong(this.jitter(132, 0.05), 0.65, 0.095, 0.02);
     this.playNoiseBurst(
-      0.36,
-      this.jitter(420, 0.1),
-      1.5,
-      0.09,
+      0.38,
+      this.jitter(360, 0.1),
+      1.4,
+      0.085,
       'lowpass',
-      0.02,
-      180
+      0.01,
+      140
     );
   }
 
   public playVictory(): void {
-    this.playTone(523, 523, 0.1, 'square', 0.07, 0);
-    this.playTone(659, 659, 0.1, 'square', 0.07, 0.1);
-    this.playTone(784, 784, 0.1, 'square', 0.07, 0.2);
-    this.playTone(1046, 1046, 0.28, 'square', 0.08, 0.3);
+    // Resonant temple gong + ascending D-pentatonic jade chime fanfare
+    this.playTempleGong(146.83, 0.95, 0.085, 0);
+    this.playBronzeChime(587.33, 0.24, 0.065, 0.04);
+    this.playBronzeChime(698.46, 0.24, 0.065, 0.14);
+    this.playBronzeChime(880.0, 0.28, 0.07, 0.24);
+    this.playBronzeChime(1174.66, 0.48, 0.08, 0.34);
   }
 
   public playDefeat(): void {
-    this.playTone(330, 293, 0.18, 'sawtooth', 0.07, 0);
-    this.playTone(261, 180, 0.35, 'sawtooth', 0.08, 0.18);
+    // Somber temple bell toll + descending pentatonic sigh
+    this.playTempleGong(110.0, 0.72, 0.08, 0);
+    this.playTone(349.23, 293.66, 0.22, 'triangle', 0.06, 0.06);
+    this.playTone(261.63, 196.0, 0.42, 'sine', 0.075, 0.24);
   }
 
   public playSwordSlash(): void {
@@ -335,39 +426,34 @@ class SoundSynth {
 
   public playBossTelegraph(): void {
     if (!this.canPlay('bossTelegraph', 100)) return;
-    this.playTone(this.jitter(92, 0.08), this.jitter(245, 0.08), 0.34, 'sawtooth', 0.075);
+    // Ominous rising bronze singing-bowl / war-horn swell
+    this.playTone(this.jitter(98, 0.07), this.jitter(220, 0.07), 0.34, 'triangle', 0.08);
     this.playTone(
-      this.jitter(138, 0.08),
-      this.jitter(368, 0.08),
+      this.jitter(147, 0.07),
+      this.jitter(330, 0.07),
       0.34,
-      'triangle',
+      'sine',
       0.065,
       0.02
     );
-    this.playNoiseBurst(0.32, 320, 2.0, 0.045, 'bandpass', 0, 1200);
+    this.playNoiseBurst(0.32, 340, 2.2, 0.045, 'bandpass', 0, 1280);
   }
 
   public playHeavyCleave(): void {
     if (!this.canPlay('heavyCleave', 55)) return;
-    this.playTone(this.jitter(390, 0.09), this.jitter(165, 0.09), 0.22, 'sawtooth', 0.085);
-    this.playTone(
-      this.jitter(610, 0.09),
-      this.jitter(280, 0.09),
-      0.18,
-      'square',
-      0.055,
-      0.01
-    );
+    // Heavy saber wind-cleave + deep taiko impact + steel ring
+    this.playTone(this.jitter(320, 0.09), this.jitter(120, 0.09), 0.22, 'triangle', 0.085);
+    this.playTone(this.jitter(124, 0.08), this.jitter(46, 0.08), 0.2, 'sine', 0.095, 0.005);
     this.playTone(
       this.jitter(1180, 0.09),
-      this.jitter(960, 0.09),
-      0.2,
-      'triangle',
+      this.jitter(940, 0.09),
+      0.22,
+      'sine',
       0.045,
       0.015
     );
     this.playNoiseBurst(0.2, this.jitter(460, 0.1), 1.3, 0.1, 'lowpass', 0, 130);
-    this.playNoiseBurst(0.09, this.jitter(2400, 0.1), 2.5, 0.06, 'bandpass');
+    this.playNoiseBurst(0.095, this.jitter(2400, 0.1), 2.5, 0.06, 'bandpass');
   }
 }
 
